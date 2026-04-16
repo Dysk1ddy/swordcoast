@@ -1,0 +1,94 @@
+{
+  "sample_rate": 22050,
+  "generator": "tools/generate_sound_effects.py",
+  "effects": [
+    {
+      "key": "fight_victory",
+      "filename": "fight_victory.wav",
+      "title": "Triumph Stinger",
+      "duration_seconds": 1.45,
+      "sample_rate": 22050,
+      "description": "Bright rising fanfare for winning a fight."
+    },
+    {
+      "key": "dice_roll",
+      "filename": "dice_roll.wav",
+      "title": "Bone Dice Rattle",
+      "duration_seconds": 1.05,
+      "sample_rate": 22050,
+      "description": "A rattling dice tumble with a firm final stop."
+    },
+    {
+      "key": "game_over",
+      "filename": "game_over.wav",
+      "title": "Fallen Banner",
+      "duration_seconds": 1.9,
+      "sample_rate": 22050,
+      "description": "A dark descending sting for defeat and game over."
+    },
+    {
+      "key": "skill_success",
+      "filename": "skill_success.wav",
+      "title": "Surefooted Success",
+      "duration_seconds": 0.8,
+      "sample_rate": 22050,
+      "description": "A confident upward chime for a passed skill check."
+    },
+    {
+      "key": "skill_fail",
+      "filename": "skill_fail.wav",
+      "title": "Misstep",
+      "duration_seconds": 0.85,
+      "sample_rate": 22050,
+      "description": "A short sinking sting for a failed skill check."
+    },
+    {
+      "key": "buy_item",
+      "filename": "buy_item.wav",
+      "title": "Coin Purse",
+      "duration_seconds": 0.75,
+      "sample_rate": 22050,
+      "description": "A bright coin-and-ledger purchase cue."
+    },
+    {
+      "key": "sell_item",
+      "filename": "sell_item.wav",
+      "title": "Merchant Sale",
+      "duration_seconds": 0.7,
+      "sample_rate": 22050,
+      "description": "A lower coin clink for a completed sale."
+    },
+    {
+      "key": "player_attack",
+      "filename": "player_attack.wav",
+      "title": "Heroic Slash",
+      "duration_seconds": 0.55,
+      "sample_rate": 22050,
+      "description": "A sharp heroic weapon swing impact."
+    },
+    {
+      "key": "enemy_attack",
+      "filename": "enemy_attack.wav",
+      "title": "Hostile Strike",
+      "duration_seconds": 0.62,
+      "sample_rate": 22050,
+      "description": "A rougher hostile hit with more weight."
+    },
+    {
+      "key": "player_heal",
+      "filename": "player_heal.wav",
+      "title": "Restorative Light",
+      "duration_seconds": 1.1,
+      "sample_rate": 22050,
+      "description": "A warm magical swell for player-side healing."
+    },
+    {
+      "key": "enemy_heal",
+      "filename": "enemy_heal.wav",
+      "title": "Unsettling Renewal",
+      "duration_seconds": 1.1,
+      "sample_rate": 22050,
+      "description": "A colder eerie swell for enemy healing."
+    }
+  ]
+}

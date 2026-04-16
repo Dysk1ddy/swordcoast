@@ -1,0 +1,1742 @@
+from __future__ import annotations
+
+from ..content import create_enemy, create_irielle_ashwake, create_nim_ardentglass
+from .encounter import Encounter
+
+
+class StoryAct2ScaffoldMixin:
+    ACT2_BRANCH_FLAGS = (
+        "agatha_truth_secured",
+        "stonehollow_dig_cleared",
+        "woodland_survey_cleared",
+    )
+    ACT2_BRANCH_LABELS = {
+        "agatha_truth_secured": "Conyberry and Agatha's circuit",
+        "stonehollow_dig_cleared": "Stonehollow Dig",
+        "woodland_survey_cleared": "Neverwinter Wood survey line",
+    }
+    ACT2_METRIC_NAMES = {
+        "act2_town_stability": "Town Stability",
+        "act2_route_control": "Route Control",
+        "act2_whisper_pressure": "Whisper Pressure",
+    }
+    ACT2_METRIC_LIMITS = {
+        "act2_town_stability": 5,
+        "act2_route_control": 5,
+        "act2_whisper_pressure": 5,
+    }
+    ACT2_METRIC_LABELS = {
+        "act2_town_stability": ("Fractured", "Shaken", "Strained", "Holding", "Steady", "United"),
+        "act2_route_control": ("Lost", "Thin", "Contested", "Firm", "Dominant", "Commanding"),
+        "act2_whisper_pressure": ("Quieted", "Faint", "Present", "Growing", "Severe", "Overwhelming"),
+    }
+    ACT2_SPONSOR_LABELS = {
+        "exchange": "Halia's Exchange bloc",
+        "lionshield": "Linene's disciplined supply line",
+        "wardens": "Elira and Daran's cautious wardens",
+        "council": "a divided but cooperative council",
+    }
+
+    def act2_pick_enemy(self, templates, *, name: str | None = None):
+        return create_enemy(self.rng.choice(tuple(templates)), name=name)
+
+    def act2_branch_progress(self) -> int:
+        assert self.state is not None
+        return sum(1 for flag in self.ACT2_BRANCH_FLAGS if self.state.flags.get(flag))
+
+    def act2_unresolved_early_leads(self) -> list[str]:
+        assert self.state is not None
+        return [flag for flag in self.ACT2_BRANCH_FLAGS if not self.state.flags.get(flag)]
+
+    def act2_named_companion(self, name: str):
+        finder = getattr(self, "find_companion", None)
+        if not callable(finder):
+            return None
+        companion = finder(name)
+        if companion is None or companion.dead:
+            return None
+        return companion
+
+    def act2_company_has(self, name: str) -> bool:
+        return self.act2_named_companion(name) is not None
+
+    def act2_metric_value(self, metric_key: str) -> int:
+        assert self.state is not None
+        if metric_key not in self.state.flags:
+            self.act2_initialize_metrics()
+        return int(self.state.flags.get(metric_key, 0))
+
+    def act2_metric_label(self, metric_key: str) -> str:
+        value = max(0, min(self.act2_metric_value(metric_key), self.ACT2_METRIC_LIMITS[metric_key]))
+        return self.ACT2_METRIC_LABELS[metric_key][value]
+
+    def act2_shift_metric(self, metric_key: str, delta: int, reason: str) -> None:
+        assert self.state is not None
+        if not delta:
+            return
+        current = self.act2_metric_value(metric_key)
+        limit = self.ACT2_METRIC_LIMITS[metric_key]
+        updated = max(0, min(limit, current + delta))
+        if updated == current:
+            return
+        self.state.flags[metric_key] = updated
+        direction = "rises" if updated > current else "falls"
+        self.say(
+            f"{self.ACT2_METRIC_NAMES[metric_key]} {direction} to {self.act2_metric_label(metric_key)} ({reason})."
+        )
+
+    def act2_adjust_named_companion(self, name: str, delta: int, reason: str) -> None:
+        companion = self.act2_named_companion(name)
+        if companion is None:
+            return
+        self.adjust_companion_disposition(companion, delta, reason)
+
+    def act2_initialize_metrics(self, *, force: bool = False) -> None:
+        assert self.state is not None
+        if self.state.flags.get("act2_metrics_initialized") and not force:
+            return
+        town = 2
+        route = 2
+        whisper = 2
+        if self.state.flags.get("steward_vow_made"):
+            town += 1
+        if self.state.flags.get("phandalin_council_seen"):
+            town += 1
+        if self.state.flags.get("elira_helped"):
+            town += 1
+            whisper -= 1
+        if self.state.flags.get("miners_exchange_dispute_resolved"):
+            route += 1
+        if self.state.flags.get("miners_exchange_ledgers_checked"):
+            route += 1
+        early_recruit = self.state.flags.get("early_companion_recruited")
+        if early_recruit == "Kaelis Starling":
+            route += 1
+        elif early_recruit == "Rhogar Valeguard":
+            town += 1
+        if self.act2_company_has("Bryn Underbough"):
+            route += 1
+        if self.act2_company_has("Tolan Ironshield"):
+            town += 1
+        if self.act2_company_has("Kaelis Starling"):
+            route += 1
+        if self.act2_company_has("Elira Dawnmantle"):
+            whisper -= 1
+        self.state.flags["act2_town_stability"] = max(0, min(5, town))
+        self.state.flags["act2_route_control"] = max(0, min(5, route))
+        self.state.flags["act2_whisper_pressure"] = max(0, min(5, whisper))
+        self.state.flags.setdefault("act2_sponsor", "council")
+        self.state.flags.setdefault("act2_captive_outcome", "uncertain")
+        self.state.flags["act2_metrics_initialized"] = True
+
+    def act2_campaign_snapshot_lines(self) -> list[str]:
+        assert self.state is not None
+        lines = [
+            f"- Town Stability: {self.act2_metric_label('act2_town_stability')} ({self.act2_metric_value('act2_town_stability')}/5)",
+            f"- Route Control: {self.act2_metric_label('act2_route_control')} ({self.act2_metric_value('act2_route_control')}/5)",
+            f"- Whisper Pressure: {self.act2_metric_label('act2_whisper_pressure')} ({self.act2_metric_value('act2_whisper_pressure')}/5)",
+            f"- Expedition sponsor: {self.ACT2_SPONSOR_LABELS.get(str(self.state.flags.get('act2_sponsor', 'council')), 'a loose council')}",
+        ]
+        delayed_lead = str(self.state.flags.get("act2_neglected_lead", "")).strip()
+        if delayed_lead and delayed_lead != "none":
+            resolved = bool(self.state.flags.get(delayed_lead))
+            status = "recovered late" if resolved else "still unresolved"
+            lines.append(f"- Delayed lead: {self.ACT2_BRANCH_LABELS[delayed_lead]} ({status})")
+        first_late_route = str(self.state.flags.get("act2_first_late_route", "")).strip()
+        if first_late_route == "broken_prospect":
+            lines.append("- Late-route priority: Broken Prospect went first, and the prisoners paid for the delay.")
+        elif first_late_route == "south_adit":
+            lines.append("- Late-route priority: South Adit went first, and the route race tightened elsewhere.")
+        return lines
+
+    def show_act2_campaign_status(self, *, banner: bool = True) -> None:
+        if banner:
+            self.banner("Act II Pressures")
+        self.say(
+            "Act 2 now tracks how well Phandalin holds together, how much of the expedition map your side controls, and how loudly the mine's wrong music is leaking into the campaign."
+        )
+        for line in self.act2_campaign_snapshot_lines():
+            self.output_fn(line)
+
+    def act2_commit_to_midpoint(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("act2_midpoint_locked"):
+            return
+        unresolved = self.act2_unresolved_early_leads()
+        if not unresolved:
+            self.state.flags["act2_neglected_lead"] = "none"
+            self.say(
+                "Because you did not leave a lead behind, the town enters sabotage night bruised but unusually prepared."
+            )
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "all three outer leads were accounted for before the Quiet Choir struck",
+            )
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "every major approach was at least understood before the town had to react",
+            )
+        else:
+            neglected = unresolved[0]
+            self.state.flags["act2_neglected_lead"] = neglected
+            self.add_journal(
+                f"The party let {self.ACT2_BRANCH_LABELS[neglected]} drift while Phandalin braced for sabotage. The consequences landed before the lead could be recovered."
+            )
+            if neglected == "agatha_truth_secured":
+                self.state.flags["agatha_circuit_defiled"] = True
+                self.say(
+                    "Without Agatha's warning in hand, the Quiet Choir gets another night to work unchallenged around Conyberry. The town walks into the midpoint with less truth than it needed."
+                )
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    1,
+                    "Agatha's circuit was left unanswered long enough for the Choir to stain it",
+                )
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "the southern adit remains rumor instead of confirmed routework",
+                )
+            elif neglected == "woodland_survey_cleared":
+                self.state.flags["midpoint_infiltrator_seeded"] = True
+                self.say(
+                    "Because the woodland saboteurs stayed active, the Quiet Choir gets knives, smoke, and lookout marks inside the town's first serious meeting."
+                )
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    -1,
+                    "the unbroken wood line fed panic straight into Phandalin",
+                )
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "survey crews kept losing time and stores to the same hidden hands",
+                )
+            else:
+                self.state.flags["stonehollow_notes_lost"] = True
+                self.say(
+                    "Stonehollow being left for later means maps and testimony arrive late, incomplete, or not at all. People still push toward the cave, but they do it with worse numbers in their hands."
+                )
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "Stonehollow's cleanest survey notes were not secured in time",
+                )
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    1,
+                    "the deeper dig had longer to sit under bad resonance without interruption",
+                )
+        self.state.flags["act2_midpoint_locked"] = True
+
+    def act2_mark_late_route_choice(self, route_key: str) -> None:
+        assert self.state is not None
+        if self.state.flags.get("act2_first_late_route"):
+            return
+        self.state.flags["act2_first_late_route"] = route_key
+        if route_key == "broken_prospect":
+            self.add_journal(
+                "You chose to secure the approach before the prison line. The route improves, but everyone knows the captives are still below."
+            )
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "your side secured the prospect approach before rival claimants could plant themselves there",
+            )
+            self.state.flags["act2_captive_outcome"] = "captives_endangered"
+        else:
+            self.add_journal(
+                "You went for the prisoners before the cleaner cave approach. More people may live, but the claims race hardens while you are below."
+            )
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "word spreads that you chose living prisoners over mining rights",
+            )
+            self.act2_shift_metric(
+                "act2_whisper_pressure",
+                -1,
+                "the South Adit line is broken before the Choir can finish all its work there",
+            )
+
+    def act2_record_epilogue_flags(self) -> None:
+        assert self.state is not None
+        town = self.act2_metric_value("act2_town_stability")
+        route = self.act2_metric_value("act2_route_control")
+        whisper = self.act2_metric_value("act2_whisper_pressure")
+        self.state.flags["act3_phandalin_state"] = "united" if town >= 4 else "holding" if town >= 2 else "fractured"
+        self.state.flags["act3_claims_balance"] = "secured" if route >= 4 else "contested" if route >= 2 else "chaotic"
+        self.state.flags["act3_whisper_state"] = "contained" if whisper <= 1 else "lingering" if whisper <= 3 else "carried_out"
+
+    def start_act2_scaffold(self) -> None:
+        assert self.state is not None
+        self.state.current_act = 2
+        self.state.flags["act2_started"] = True
+        self.state.flags["act2_scaffold_enabled"] = True
+        self.act2_initialize_metrics()
+        self.state.current_scene = "act2_claims_council"
+        self.add_journal(
+            "Act 2 begins with a claims war around Wave Echo Cave, a town trying to stay intact, and a cult using the mine's old song as a listening tool."
+        )
+
+    def scene_act1_complete(self) -> None:
+        assert self.state is not None
+        while True:
+            self.banner("Act I Complete")
+            self.say(
+                "Phandalin survives Act I, but the victory only tears the lid off a deeper problem. Act 2 now tracks town stability, route control, sponsor politics, "
+                "companion side decisions, and how much of the Quiet Choir's whisper-pressure you let leak into the region.",
+                typed=True,
+            )
+            choice = self.choose(
+                "What next?",
+                [
+                    "Continue into the Act II scaffold",
+                    "Review the party",
+                    "Return to the title screen",
+                ],
+                allow_meta=False,
+            )
+            if choice == 1:
+                self.start_act2_scaffold()
+                return
+            if choice == 2:
+                self.show_party()
+                continue
+            self.state = None
+            return
+
+    def scene_act2_claims_council(self) -> None:
+        assert self.state is not None
+        self.banner("Stonehill Claims Council")
+        self.say(
+            "A night after Varyn falls, Stonehill Inn turns into a claims chamber. Mud-stained maps cover tables meant for ale, miners and merchants try to sound rational "
+            "about a mine they have not yet entered, and every survivor from Act 1 understands that what comes next will decide whether Phandalin grows, hardens, or tears itself apart.",
+            typed=True,
+        )
+        self.show_act2_campaign_status(banner=False)
+        self.speaker(
+            "Halia Thornton",
+            "Routes decide ownership. Ownership decides which story gets believed.",
+        )
+        self.speaker(
+            "Linene Graywind",
+            "Routes decide whether people come home at all. Start there."
+        )
+        self.speaker(
+            "Elira Dawnmantle",
+            "If the dead are already trying to warn us, greed is not the only thing bidding on this cave."
+        )
+        if self.act2_company_has("Bryn Underbough"):
+            self.speaker(
+                "Bryn Underbough",
+                "Every room with ledgers and lanterns ends up being about exits eventually. Best decide whose you trust."
+            )
+        if not self.has_quest("recover_pact_waymap"):
+            self.grant_quest("recover_pact_waymap")
+        if not self.has_quest("seek_agathas_truth"):
+            self.grant_quest("seek_agathas_truth")
+        if not self.has_quest("hold_the_claims_meet"):
+            self.grant_quest("hold_the_claims_meet")
+        sponsor_choice = self.scenario_choice(
+            "Who do you let set the expedition's first rhythm?",
+            [
+                self.quoted_option("INVESTIGATION", "Halia gets first claim on the routework. Fast maps matter more than soft hands."),
+                self.quoted_option("PERSUASION", "Linene's supply discipline sets the pace. If we move, we move cleanly."),
+                self.quoted_option("RELIGION", "Elira and Daran keep the expedition cautious. We do not feed this place more lives than we must."),
+            ],
+            allow_meta=False,
+        )
+        if sponsor_choice == 1:
+            self.player_speaker("Halia gets first claim on the routework. Fast maps matter more than soft hands.")
+            self.state.flags["act2_sponsor"] = "exchange"
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "Halia's money and survey crews move faster than most moral arguments",
+            )
+            self.act2_shift_metric(
+                "act2_whisper_pressure",
+                1,
+                "more bodies and greed hit the route before anyone knows what the cave is doing back",
+            )
+            if self.state.flags.get("miners_exchange_dispute_resolved"):
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "Halia already trusts your judgment after Act 1's guild dispute",
+                )
+        elif sponsor_choice == 2:
+            self.player_speaker("Linene's supply discipline sets the pace. If we move, we move cleanly.")
+            self.state.flags["act2_sponsor"] = "lionshield"
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "Linene's quartermaster logic gives Phandalin something firmer than rumors to stand on",
+            )
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "organized supply lines keep the approach from dissolving into freelancing",
+            )
+            if self.state.flags.get("early_companion_recruited") == "Rhogar Valeguard":
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "Rhogar's earlier presence already taught the town to respect disciplined guardwork",
+                )
+        else:
+            self.player_speaker("Elira and Daran keep the expedition cautious. We do not feed this place more lives than we must.")
+            self.state.flags["act2_sponsor"] = "wardens"
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "people hear that someone is still prioritizing their lives over the cave's profits",
+            )
+            self.act2_shift_metric(
+                "act2_whisper_pressure",
+                -1,
+                "fewer reckless crews run straight into the mine's stranger influence",
+            )
+            if self.state.flags.get("elira_helped"):
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "Elira's standing in town lets the cautious plan sound like confidence instead of fear",
+                )
+        read_choice = self.scenario_choice(
+            "Before the first teams leave, what do you insist on reading clearly?",
+            [
+                self.quoted_option("INSIGHT", "Tell me whose argument is really serving the cave instead of the town."),
+                self.quoted_option("INVESTIGATION", "Lay out every surviving route fragment. I want the old Pact logic, not the rumors."),
+                self.quoted_option("PERSUASION", "If you all want this town to survive the mine, stop speaking like rivals for one night."),
+            ],
+            allow_meta=False,
+        )
+        if read_choice == 1:
+            self.player_speaker("Tell me whose argument is really serving the cave instead of the town.")
+            if self.skill_check(self.state.player, "Insight", 13, context="to read the hidden pressure in the claims room"):
+                self.add_clue(
+                    "Somebody keeps steering attention away from the southern workings and toward routes that generate noise instead of answers."
+                )
+                self.reward_party(xp=20, reason="reading the claims room cleanly")
+        elif read_choice == 2:
+            self.player_speaker("Lay out every surviving route fragment. I want the old Pact logic, not the rumors.")
+            if self.skill_check(self.state.player, "Investigation", 13, context="to reconstruct the surviving Pact route logic"):
+                self.add_clue(
+                    "Old Pact roads converged through Conyberry, Stonehollow, and a southern service adit linked to Wave Echo Cave."
+                )
+                self.reward_party(xp=25, reason="reassembling the Pact route fragments")
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "you forced the council to work from real survey logic instead of expedient guesswork",
+                )
+        else:
+            self.player_speaker("If you all want this town to survive the mine, stop speaking like rivals for one night.")
+            if self.skill_check(self.state.player, "Persuasion", 13, context="to keep the claims council from hardening too early"):
+                self.reward_party(xp=20, gold=10, reason="holding the first claims council together")
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "you made the first council sound like a town making policy instead of a feeding frenzy",
+                )
+        self.state.flags["phandelver_claims_council_seen"] = True
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_act2_expedition_hub(self) -> None:
+        assert self.state is not None
+        self.banner("Act II Expedition Hub")
+        self.say(
+            "Phandalin is still your base, but it now feels like a frontier port built around a wound in the world. Every trip changes the town's nerve, the race for Wave Echo, "
+            "and how much of the Choir's wrong music gets out into open air.",
+            typed=True,
+        )
+        for line in self.act2_campaign_snapshot_lines():
+            self.output_fn(line)
+        while True:
+            options: list[tuple[str, str]] = []
+            if not self.state.flags.get("agatha_truth_secured"):
+                label = "Follow Elira's Conyberry lead and seek Agatha's truth."
+                if self.state.flags.get("phandalin_sabotage_resolved"):
+                    label = "Recover Conyberry late and see what delaying Agatha's warning cost."
+                options.append(("agatha", self.action_option(label)))
+            if not self.state.flags.get("woodland_survey_cleared"):
+                label = "Break the survey sabotage line in Neverwinter Wood."
+                if self.state.flags.get("phandalin_sabotage_resolved"):
+                    label = "Recover the Neverwinter Wood line late after the saboteurs already bit into town."
+                options.append(("wood", self.action_option(label)))
+            if not self.state.flags.get("stonehollow_dig_cleared"):
+                label = "Enter Stonehollow Dig and recover the missing survey team."
+                if self.state.flags.get("phandalin_sabotage_resolved"):
+                    label = "Return to Stonehollow late and salvage whatever survey truth still survived."
+                options.append(("stonehollow", self.action_option(label)))
+            if self.act2_branch_progress() >= 2 and not self.state.flags.get("phandalin_sabotage_resolved"):
+                unresolved = self.act2_unresolved_early_leads()
+                if unresolved:
+                    label = f"Advance to sabotage night now and let {self.ACT2_BRANCH_LABELS[unresolved[0]]} go dark for a while."
+                else:
+                    label = "Advance to sabotage night with all three early leads secured."
+                options.append(("midpoint", self.action_option(label)))
+            if self.state.flags.get("phandalin_sabotage_resolved") and not self.state.flags.get("broken_prospect_cleared"):
+                if not self.state.flags.get("act2_first_late_route"):
+                    label = "Take the Broken Prospect route first and secure the cleaner cave approach."
+                elif self.state.flags.get("act2_first_late_route") == "south_adit":
+                    label = "Recover Broken Prospect after choosing the prison line first."
+                else:
+                    label = "Return to Broken Prospect."
+                options.append(("broken_prospect", self.action_option(label)))
+            if self.state.flags.get("phandalin_sabotage_resolved") and not self.state.flags.get("south_adit_cleared"):
+                if not self.state.flags.get("act2_first_late_route"):
+                    label = "Take the South Adit first and put the prisoners ahead of the route race."
+                elif self.state.flags.get("act2_first_late_route") == "broken_prospect":
+                    label = "Push into South Adit before the remaining captives vanish entirely."
+                else:
+                    label = "Return to South Adit."
+                options.append(("south_adit", self.action_option(label)))
+            if (
+                self.state.flags.get("broken_prospect_cleared")
+                and self.state.flags.get("south_adit_cleared")
+                and not self.state.flags.get("wave_echo_outer_cleared")
+            ):
+                options.append(("outer", self.action_option("Advance through Wave Echo's outer galleries.")))
+            if self.state.flags.get("wave_echo_outer_cleared") and not self.state.flags.get("black_lake_crossed"):
+                options.append(("causeway", self.action_option("Cross the Black Lake causeway.")))
+            if self.state.flags.get("black_lake_crossed") and not self.state.flags.get("caldra_defeated"):
+                options.append(("forge", self.action_option("Confront the Quiet Choir at the Forge of Spells.")))
+            if self.state.flags.get("caldra_defeated"):
+                options.append(("complete", self.action_option("Close out Act II and record what happened beneath the cave.")))
+            options.extend(
+                [
+                    ("status", self.action_option("Review the expedition pressures and current consequences.")),
+                    ("turn_in", self.action_option("Report at the council table and resolve ready quests.")),
+                    ("camp", self.action_option("Return to camp and manage the wider company.")),
+                    ("sidetrack", self.action_option("Follow a companion's Act 2 thread.")),
+                    ("rest", self.action_option("Take a short rest.")),
+                    ("party", self.action_option("Review the current party.")),
+                ]
+            )
+            choice = self.scenario_choice("Where do you push next?", [text for _, text in options], allow_meta=False)
+            selection_key, _ = options[choice - 1]
+            if selection_key == "agatha":
+                self.state.current_scene = "conyberry_agatha"
+                return
+            if selection_key == "wood":
+                self.state.current_scene = "neverwinter_wood_survey_camp"
+                return
+            if selection_key == "stonehollow":
+                self.state.current_scene = "stonehollow_dig"
+                return
+            if selection_key == "midpoint":
+                self.state.current_scene = "act2_midpoint_convergence"
+                return
+            if selection_key == "broken_prospect":
+                self.state.current_scene = "broken_prospect"
+                return
+            if selection_key == "south_adit":
+                self.state.current_scene = "south_adit"
+                return
+            if selection_key == "outer":
+                self.state.current_scene = "wave_echo_outer_galleries"
+                return
+            if selection_key == "causeway":
+                self.state.current_scene = "black_lake_causeway"
+                return
+            if selection_key == "forge":
+                self.state.current_scene = "forge_of_spells"
+                return
+            if selection_key == "complete":
+                self.state.current_scene = "act2_scaffold_complete"
+                return
+            if selection_key == "status":
+                self.show_act2_campaign_status()
+                continue
+            if selection_key == "turn_in":
+                self.run_act2_council_turnins()
+                continue
+            if selection_key == "camp":
+                self.open_camp_menu()
+                continue
+            if selection_key == "sidetrack":
+                self.run_act2_companion_sidetrack()
+                continue
+            if selection_key == "rest":
+                self.short_rest()
+                continue
+            self.show_party()
+
+    def run_act2_council_turnins(self) -> None:
+        assert self.state is not None
+        self.refresh_quest_statuses(announce=False)
+        ready_quests = [
+            "recover_pact_waymap",
+            "seek_agathas_truth",
+            "rescue_stonehollow_scholars",
+            "cut_woodland_saboteurs",
+            "hold_the_claims_meet",
+            "free_wave_echo_captives",
+            "sever_quiet_choir",
+        ]
+        turned_in_any = False
+        for quest_id in ready_quests:
+            if self.turn_in_quest(quest_id):
+                turned_in_any = True
+        if not turned_in_any:
+            self.say("Nobody at the council table has a fresh report to close out just yet.")
+
+    def run_act2_companion_sidetrack(self) -> None:
+        assert self.state is not None
+        companions = [member for member in self.state.all_companions() if not member.dead]
+        if not companions:
+            self.say("Nobody in camp is ready to open up right now.")
+            return
+        options = [f"{companion.name}: hear where the road is pressing on them." for companion in companions]
+        options.append("Back")
+        choice = self.choose("Whose thread do you spend time with?", options, allow_meta=False)
+        if choice == len(options):
+            return
+        companion = companions[choice - 1]
+        flag = f"{companion.companion_id or companion.name.lower().replace(' ', '_')}_act2_sidetrack_seen"
+        if self.state.flags.get(flag):
+            self.say(f"You already saw the decisive Act 2 turn in {companion.name}'s thread.")
+            return
+        if companion.companion_id == "bryn_underbough":
+            self.say(
+                "Bryn spreads copied claim ledgers across a crate and quietly names three figures who used to fence bad information for smugglers. "
+                "She can salt the numbers quietly or drag the whole scheme into lantern light."
+            )
+            sidetrack = self.scenario_choice(
+                "How do you let Bryn handle the false ledgers?",
+                [
+                    self.skill_tag("STEALTH", self.action_option("Let her quietly poison the false books with bad distances and dead routes.")),
+                    self.quoted_option("PERSUASION", "Expose the whole trick publicly and make the town watch who flinches."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_action("Let her quietly poison the false books with bad distances and dead routes.")
+                self.state.flags["bryn_false_ledgers_salted"] = True
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "Bryn quietly ruined the credibility of several bad route copies before rivals could use them",
+                )
+            else:
+                self.player_speaker("Expose the whole trick publicly and make the town watch who flinches.")
+                self.state.flags["bryn_false_ledgers_exposed"] = True
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "the town sees the claims game for what it is and trusts the council a little more for naming it",
+                )
+                if self.state.flags.get("act2_sponsor") == "exchange":
+                    self.act2_shift_metric(
+                        "act2_route_control",
+                        -1,
+                        "publicly embarrassing the Exchange bloc makes Halia's side less eager to share clean routework",
+                    )
+        elif companion.companion_id == "elira_dawnmantle":
+            self.say(
+                "Elira has rebuilt a miners' lantern with shrine silver, Tymoran script, and wick ash from the vigil after Ashfall Watch. "
+                "She can carry it into the field as a ward, or leave it in Phandalin so the town itself feels steadier."
+            )
+            sidetrack = self.scenario_choice(
+                "Where should Elira place the lantern's weight?",
+                [
+                    self.quoted_option("RELIGION", "Carry it with us. We will need a cleaner light below."),
+                    self.quoted_option("PERSUASION", "Leave it in town. Phandalin needs to feel held together when we are away."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_speaker("Carry it with us. We will need a cleaner light below.")
+                self.state.flags["elira_field_lantern"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "Elira turns a camp relic into a working ward against the Quiet Choir's cadence",
+                )
+            else:
+                self.player_speaker("Leave it in town. Phandalin needs to feel held together when we are away.")
+                self.state.flags["elira_town_lantern"] = True
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "Elira's lantern becomes a visible promise that the town is still being thought about first",
+                )
+        elif companion.companion_id == "kaelis_starling":
+            self.say(
+                "Kaelis walks you through old ranger cuts on the edge of Neverwinter Wood. One hidden trail could make the expedition faster. "
+                "Burning it would deny the same advantage to everyone else."
+            )
+            sidetrack = self.scenario_choice(
+                "What do you ask Kaelis to do with the hidden trail?",
+                [
+                    self.skill_tag("SURVIVAL", self.action_option("Keep the trail alive for us and a few people we trust.")),
+                    self.action_option("Collapse the approach and make sure nobody gets to use it cleanly again."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_action("Keep the trail alive for us and a few people we trust.")
+                self.state.flags["kaelis_hidden_trail"] = True
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "Kaelis preserves a ranger-grade bypass that only your side really understands",
+                )
+            else:
+                self.player_action("Collapse the approach and make sure nobody gets to use it cleanly again.")
+                self.state.flags["kaelis_trail_burned"] = True
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "denying the hidden trail makes surprise approaches into town and camp much harder",
+                )
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "you give up a fast path of your own to keep everyone else from enjoying it",
+                )
+        elif companion.companion_id == "rhogar_valeguard":
+            self.say(
+                "Rhogar asks the question like a confession: once the mine opens, should his oath sit with the town above or the holy threshold below? "
+                "He cannot stand in both places with the same body."
+            )
+            sidetrack = self.scenario_choice(
+                "Where do you ask Rhogar to place his oath?",
+                [
+                    self.quoted_option("PERSUASION", "Stand for the town first. The living have to survive the route before relics matter."),
+                    self.quoted_option("RELIGION", "Hold the old threshold. If the mine's sanctity breaks again, the town suffers anyway."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_speaker("Stand for the town first. The living have to survive the route before relics matter.")
+                self.state.flags["rhogar_square_oath"] = True
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "Rhogar's vow becomes a public thing people can lean on",
+                )
+            else:
+                self.player_speaker("Hold the old threshold. If the mine's sanctity breaks again, the town suffers anyway.")
+                self.state.flags["rhogar_threshold_oath"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "Rhogar's oathwork hardens one of the mine's older sacred seams against the Choir",
+                )
+        elif companion.companion_id == "tolan_ironshield":
+            self.say(
+                "Tolan finds a wagon hidden under a tarp near the claims stores. Half the load is usable brace-iron. Half is ore the cave has already started to wrongen. "
+                "He wants your call before anyone pretends those are the same problem."
+            )
+            sidetrack = self.scenario_choice(
+                "What do you ask Tolan to do with the find?",
+                [
+                    self.action_option("Strip the brace-iron and haul every practical piece into the expedition stockpile."),
+                    self.action_option("Dump the tainted ore into a sealed shaft and let profit go to keep the company cleaner."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_action("Strip the brace-iron and haul every practical piece into the expedition stockpile.")
+                self.state.flags["tolan_salvaged_braces"] = True
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "Tolan turns a bad wagon into usable structure before the cave can claim it",
+                )
+            else:
+                self.player_action("Dump the tainted ore into a sealed shaft and let profit go to keep the company cleaner.")
+                self.state.flags["tolan_buried_tainted_ore"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "you choose not to circulate stone that already sounds wrong in the hands",
+                )
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    1,
+                    "Tolan spreads the story that you threw profit away rather than gamble with cursed ore",
+                )
+        elif companion.companion_id == "nim_ardentglass":
+            self.say(
+                "Nim finally shows you the worst of his mentor's missing theorem: one set of notes might let you answer the Forge with a counter-pattern, "
+                "but only if he preserves pages he is no longer sure are safe to carry."
+            )
+            sidetrack = self.scenario_choice(
+                "What do you tell Nim to do with the theorem fragments?",
+                [
+                    self.quoted_option("ARCANA", "Preserve them. We may need every dangerous word before this ends."),
+                    self.action_option("Burn the corrupted pages and keep only what can still be trusted by daylight."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_speaker("Preserve them. We may need every dangerous word before this ends.")
+                self.state.flags["nim_countermeasure_notes"] = True
+                self.state.flags["act3_shard_notes_carried"] = True
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "Nim keeps the one body of notes that might let you answer the forge in its own language",
+                )
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    1,
+                    "keeping the theorem means carrying more of the mine's wrong logic with you",
+                )
+            else:
+                self.player_action("Burn the corrupted pages and keep only what can still be trusted by daylight.")
+                self.state.flags["nim_notes_burned"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "Nim gives up certainty to stop the cave from teaching through his satchel",
+                )
+        elif companion.companion_id == "irielle_ashwake":
+            self.say(
+                "Irielle can teach you the Quiet Choir's counter-cadence, but doing so means carrying part of the cult's pattern in your own memory. "
+                "She can also bury it and trust silence instead."
+            )
+            sidetrack = self.scenario_choice(
+                "How do you ask Irielle to handle the counter-cadence?",
+                [
+                    self.quoted_option("ARCANA", "Teach it to us. We use what they built against them."),
+                    self.quoted_option("WISDOM", "Bury it. We end this without carrying their song any farther than we must."),
+                ],
+                allow_meta=False,
+            )
+            if sidetrack == 1:
+                self.player_speaker("Teach it to us. We use what they built against them.")
+                self.state.flags["irielle_counter_cadence"] = True
+                self.state.flags["act3_choir_cadence_known"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    1,
+                    "the company now carries a usable fragment of the Choir's own pattern",
+                )
+            else:
+                self.player_speaker("Bury it. We end this without carrying their song any farther than we must.")
+                self.state.flags["irielle_silence_oath"] = True
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "Irielle refuses to let the counter-cadence become a new kind of contamination",
+                )
+        else:
+            self.say(f"{companion.name} lets more of their Act 2 burden show than usual.")
+        self.adjust_companion_disposition(companion, 1, f"you invested in {companion.name}'s Act 2 thread")
+        self.state.flags[flag] = True
+
+    def scene_conyberry_agatha(self) -> None:
+        assert self.state is not None
+        delayed = self.state.flags.get("act2_neglected_lead") == "agatha_truth_secured"
+        self.banner("Conyberry and Agatha's Circuit")
+        self.say(
+            "The road to Conyberry is all blown grass, old stone, and the feeling that too many footsteps ended here without ever becoming history. "
+            "Agatha does not rise like a monster out of a tale. She arrives like a grief the air was already carrying.",
+            typed=True,
+        )
+        if delayed and self.state.flags.get("agatha_circuit_defiled"):
+            self.say(
+                "Silver nails and chalk sigils at the edge of the circuit tell you the Quiet Choir reached here first. Whatever warning Agatha gives now will come through damage."
+            )
+        dc = 14
+        if self.act2_company_has("Elira Dawnmantle"):
+            dc -= 1
+            self.say("Elira's presence keeps the approach from sounding like another living theft of the dead.")
+        choice = self.scenario_choice(
+            "How do you approach the banshee's truth?",
+            [
+                self.quoted_option("PERSUASION", "We are not here to plunder your dead. We need the warning only you still remember."),
+                self.quoted_option("RELIGION", "Tell me what vow was broken here, and what the living are about to repeat."),
+                self.quoted_option("ARCANA", "If the cave's old song is changing, describe the change exactly."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_speaker("We are not here to plunder your dead. We need the warning only you still remember.")
+            success = self.skill_check(self.state.player, "Persuasion", dc, context="to keep Agatha listening instead of lashing out")
+        elif choice == 2:
+            self.player_speaker("Tell me what vow was broken here, and what the living are about to repeat.")
+            success = self.skill_check(self.state.player, "Religion", dc, context="to name the old wrong cleanly enough for the dead")
+        else:
+            self.player_speaker("If the cave's old song is changing, describe the change exactly.")
+            success = self.skill_check(self.state.player, "Arcana", dc, context="to understand Agatha's warning about the cave's altered resonance")
+        if success and not delayed:
+            self.say(
+                "Agatha gives you a clean, terrible truth: Wave Echo's old song is being tuned into something quieter and hungrier, and a southern adit once used for labor now carries the cult's cleanest path."
+            )
+            self.add_clue(
+                "Agatha confirms the Quiet Choir is using a southern service adit to reach deeper workings beneath Wave Echo Cave."
+            )
+            self.state.flags["agatha_truth_clear"] = True
+            self.reward_party(xp=60, reason="earning Agatha's full warning")
+            self.act2_shift_metric(
+                "act2_whisper_pressure",
+                -1,
+                "Agatha's warning gives the company a truer picture of what the mine is doing",
+            )
+            if choice == 3:
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "you translate Agatha's warning into usable route logic instead of just dread",
+                )
+        elif success:
+            self.say(
+                "Agatha still answers, but the warning reaches you through bruised magic: the southern adit is real, the Forge is being used as a listening lens, "
+                "and whatever touched her circuit has already made the truth harder to hold cleanly."
+            )
+            self.add_clue(
+                "Even damaged, Agatha confirms the southern adit matters and the Forge is being tuned into something that listens back."
+            )
+            self.state.flags["agatha_truth_clear"] = False
+            self.reward_party(xp=45, reason="salvaging Agatha's delayed warning")
+        else:
+            self.say(
+                "Agatha's scream never quite becomes violence, but the answer she leaves you is broken and cold: a warning about a 'quiet choir' and a road that should have stayed collapsed."
+            )
+            if not delayed:
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    1,
+                    "the company leaves Conyberry with fear and fragments instead of a clean warning",
+                )
+        self.state.flags["agatha_truth_secured"] = True
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_neverwinter_wood_survey_camp(self) -> None:
+        assert self.state is not None
+        delayed = self.state.flags.get("act2_neglected_lead") == "woodland_survey_cleared"
+        if not self.has_quest("cut_woodland_saboteurs"):
+            self.grant_quest("cut_woodland_saboteurs")
+        self.banner("Neverwinter Wood Survey Camp")
+        self.say(
+            "The camp is not destroyed so much as edited. Survey posts are cut low, stores are spoiled just enough to matter, "
+            "and the raiders still close enough to smell the damage they made.",
+            typed=True,
+        )
+        if delayed:
+            self.say(
+                "Because you let this line wait until after sabotage night, the saboteurs are no longer just cutting posts. They are cleaning up witnesses and burning the traces that tied them to Phandalin's riot."
+            )
+        enemies = [create_enemy("expedition_reaver"), create_enemy("cult_lookout")]
+        if delayed:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "gutter_zealot", "thunderroot_mound")))
+        elif len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("grimlock_tunneler", "gutter_zealot")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "gutter_zealot", "grimlock_tunneler")))
+        choice = self.scenario_choice(
+            "How do you break the sabotage line?",
+            [
+                self.skill_tag("STEALTH", self.action_option("Circle the camp and take the lookout first.")),
+                self.quoted_option("INTIMIDATION", "Drop your blades and explain who hired you."),
+                self.skill_tag("SURVIVAL", self.action_option("Read the cut survey lines and strike the hidden fallback trail.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = 0
+        if self.state.flags.get("kaelis_hidden_trail"):
+            hero_bonus += 1
+            self.say("Kaelis's hidden trail turns the approach into something closer to a controlled cut than a blind entry.")
+        if choice == 1:
+            self.player_action("Circle the camp and take the lookout first.")
+            if self.skill_check(self.state.player, "Stealth", 13, context="to get inside the raiders' outer watch"):
+                self.apply_status(enemies[1], "surprised", 1, source="your flanking approach")
+                hero_bonus += 2
+                self.state.flags["woodland_spy_taken"] = True
+        elif choice == 2:
+            self.player_speaker("Drop your blades and explain who hired you.")
+            if self.skill_check(self.state.player, "Intimidation", 13, context="to crack the saboteurs before steel is drawn"):
+                self.apply_status(enemies[0], "frightened", 1, source="your pressure")
+                hero_bonus += 1
+                self.state.flags["woodland_ringleader_broken"] = True
+        else:
+            self.player_action("Read the cut survey lines and strike the hidden fallback trail.")
+            if self.skill_check(self.state.player, "Survival", 13, context="to turn the damaged survey route against the saboteurs"):
+                hero_bonus += 2
+                enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
+                self.state.flags["woodland_fallback_trail_found"] = True
+        outcome = self.run_encounter(
+            Encounter(
+                title="Woodland Saboteurs",
+                description="Rival expedition muscle and Quiet Choir lookouts try to erase the route before it can be trusted.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=True,
+                parley_dc=13,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("The woodland sabotage line stays alive and the route back to Phandalin turns dangerous again.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You break contact and return to town with the wood still contested.")
+            return
+        self.state.flags["woodland_survey_cleared"] = True
+        self.reward_party(xp=40, gold=12, reason="securing the woodland survey route")
+        if delayed:
+            self.say(
+                "You break the saboteur line at last, but not before admitting to yourself that this victory is corrective, not preventative."
+            )
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "you finally stop the woodland cuts from feeding new bad information into the claims race",
+            )
+        else:
+            self.act2_shift_metric(
+                "act2_route_control",
+                2,
+                "the survey line can finally breathe without being edited by hostile hands",
+            )
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "stopping the woodland saboteurs keeps more fires and lies from reaching town",
+            )
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_stonehollow_dig(self) -> None:
+        assert self.state is not None
+        delayed = self.state.flags.get("act2_neglected_lead") == "stonehollow_dig_cleared"
+        if not self.has_quest("rescue_stonehollow_scholars"):
+            self.grant_quest("rescue_stonehollow_scholars")
+        self.banner("Stonehollow Dig")
+        self.say(
+            "Stonehollow is a half-legitimate dig site turned excavation wound. Survey strings hang through damp air, "
+            "collapsed supports choke the lower lane, and someone has been using the trapped scholars as unwilling map readers.",
+            typed=True,
+        )
+        if delayed:
+            self.say(
+                "Coming here late means the place has had longer to collapse inward on both bodies and evidence. The lower notes are not all going to be recoverable now."
+            )
+        enemies = [create_enemy("ochre_slime"), create_enemy("grimlock_tunneler")]
+        if delayed:
+            enemies.append(self.act2_pick_enemy(("spectral_foreman", "hookclaw_burrower")))
+        elif len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("stirge_swarm", "acidmaw_burrower", "carrion_lash_crawler")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("grimlock_tunneler", "acidmaw_burrower", "carrion_lash_crawler")))
+        choice = self.scenario_choice(
+            "How do you stabilize the dig long enough to get people out?",
+            [
+                self.skill_tag("INVESTIGATION", self.action_option("Read the support lines and pick the one section that can still hold.")),
+                self.skill_tag("ATHLETICS", self.action_option("Muscle the blockage open before the lower lane fully goes.")),
+                self.skill_tag("ARCANA", self.action_option("Follow the echoing wards and find the scholars before the monsters do.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = self.apply_scene_companion_support("stonehollow_dig")
+        if choice == 1:
+            self.player_action("Read the support lines and pick the one section that can still hold.")
+            if self.skill_check(self.state.player, "Investigation", 13, context="to read the dig braces under pressure"):
+                hero_bonus += 1
+                self.apply_status(enemies[0], "reeling", 1, source="a planned collapse")
+                self.state.flags["stonehollow_supports_stabilized"] = True
+        elif choice == 2:
+            self.player_action("Muscle the blockage open before the lower lane fully goes.")
+            if self.skill_check(self.state.player, "Athletics", 13, context="to clear the blockage in time"):
+                hero_bonus += 2
+                self.state.flags["stonehollow_lane_forced"] = True
+        else:
+            self.player_action("Follow the echoing wards and find the scholars before the monsters do.")
+            if self.skill_check(self.state.player, "Arcana", 13, context="to track the scholars through residual Pact warding"):
+                hero_bonus += 2
+                enemies[-1].current_hp = max(1, enemies[-1].current_hp - 3)
+                self.state.flags["stonehollow_ward_path_read"] = True
+        outcome = self.run_encounter(
+            Encounter(
+                title="Stonehollow Breakout",
+                description="The trapped dig is full of things that want the scholars silenced before they can finish reading the cave.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=False,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("Stonehollow seals over the party and the missing scholars stay lost below.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You retreat from the dig before the collapse can trap everyone together.")
+            return
+        if not self.find_companion("Nim Ardentglass"):
+            self.speaker(
+                "Nim Ardentglass",
+                "If you're the reason I'm not dying under my own survey notes, I should probably stop pretending I can solve Wave Echo by myself."
+            )
+            recruit = self.scenario_choice(
+                "Nim gathers his satchel and looks between you and the ruined lane.",
+                [
+                    self.quoted_option("RECRUIT", "Then walk with us and keep the maps honest."),
+                    self.quoted_option("SAFE", "Get back to Phandalin and recover. We can talk there."),
+                ],
+                allow_meta=False,
+            )
+            self.recruit_companion(create_nim_ardentglass())
+            nim = self.find_companion("Nim Ardentglass")
+            if delayed and nim is not None:
+                self.adjust_companion_disposition(
+                    nim,
+                    -1,
+                    "you came for Stonehollow late, after some of the cleanest notes were already gone",
+                )
+            if recruit == 2 and nim is not None and nim in self.state.companions:
+                self.move_companion_to_camp(nim)
+                self.say("Nim agrees to return to camp and organize whatever survey truth can still be salvaged.")
+        self.state.flags["stonehollow_dig_cleared"] = True
+        self.reward_party(xp=45, gold=10, reason="clearing Stonehollow Dig")
+        if delayed:
+            self.act2_shift_metric(
+                "act2_route_control",
+                1,
+                "you salvage enough of Stonehollow's survey work to stop the route picture from staying crippled",
+            )
+        else:
+            self.act2_shift_metric(
+                "act2_route_control",
+                2,
+                "the Stonehollow survey line finally belongs to people who plan to bring it back out alive",
+            )
+            if self.state.flags.get("stonehollow_ward_path_read"):
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "reading the Pact warding correctly keeps one more part of the cave from teaching through panic",
+                )
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_act2_midpoint_convergence(self) -> None:
+        assert self.state is not None
+        self.act2_commit_to_midpoint()
+        self.banner("Sabotage Night")
+        self.say(
+            "With at least two routes clarified, the town finally tries to hold a real claims meeting. That is when the Quiet Choir moves openly. "
+            "Lanterns go out, storehouses catch in the wrong places, and somebody inside Phandalin is trying to turn panic into cover for a deeper strike.",
+            typed=True,
+        )
+        neglected = str(self.state.flags.get("act2_neglected_lead", "none"))
+        enemies = [create_enemy("cult_lookout"), create_enemy("choir_adept")]
+        if neglected == "woodland_survey_cleared":
+            enemies.append(self.act2_pick_enemy(("expedition_reaver", "gutter_zealot")))
+        elif neglected == "stonehollow_dig_cleared":
+            enemies.append(self.act2_pick_enemy(("grimlock_tunneler", "hookclaw_burrower")))
+        elif len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("expedition_reaver", "gutter_zealot", "choir_executioner")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "gutter_zealot", "expedition_reaver")))
+        if neglected == "agatha_truth_secured":
+            self.apply_status(
+                self.state.player,
+                "reeling",
+                1,
+                source="walking blind into the riot without Agatha's full warning",
+            )
+        choice = self.scenario_choice(
+            "What do you protect first when the sabotage breaks wide open?",
+            [
+                self.quoted_option("PERSUASION", "Hold the claims hall together. If the council breaks tonight, the mine owns the aftermath."),
+                self.skill_tag("MEDICINE", self.action_option("Get to the shrine lane and keep the wounded and terrified from becoming a stampede.")),
+                self.skill_tag("PERCEPTION", self.action_option("Find the infiltrator cell and cut out the real strike team before they vanish again.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = 0
+        if choice == 1:
+            self.player_speaker("Hold the claims hall together. If the council breaks tonight, the mine owns the aftermath.")
+            if self.skill_check(self.state.player, "Persuasion", 14, context="to keep the claims meeting from shattering under pressure"):
+                hero_bonus = 1
+                self.state.flags["act2_midpoint_priority"] = "hall"
+                if self.state.flags.get("act2_sponsor") == "lionshield":
+                    hero_bonus += 1
+        elif choice == 2:
+            self.player_action("Get to the shrine lane and keep the wounded and terrified from becoming a stampede.")
+            if self.skill_check(self.state.player, "Medicine", 14, context="to turn a panicked fireline into an evacuation instead"):
+                hero_bonus = 2
+                self.state.flags["act2_midpoint_priority"] = "shrine"
+                if self.state.flags.get("elira_town_lantern"):
+                    hero_bonus += 1
+        else:
+            self.player_action("Find the infiltrator cell and cut out the real strike team before they vanish again.")
+            if self.skill_check(self.state.player, "Perception", 14, context="to see through the sabotage pattern"):
+                hero_bonus = 2
+                self.apply_status(enemies[1], "surprised", 1, source="your clean read of the trap")
+                self.state.flags["act2_midpoint_priority"] = "infiltrator"
+                if self.state.flags.get("bryn_false_ledgers_salted"):
+                    hero_bonus += 1
+        outcome = self.run_encounter(
+            Encounter(
+                title="Midpoint: Sabotage Night",
+                description="The Quiet Choir's local strike team tries to turn Phandalin's first united plan into a riot and a fire.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=True,
+                parley_dc=14,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("Phandalin loses its nerve and the expedition fractures before it can truly begin.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You pull the party clear, but the sabotage still scars the town.")
+            return
+        self.state.flags["claims_meet_held"] = True
+        self.state.flags["phandalin_sabotage_resolved"] = True
+        if choice == 1:
+            self.say(
+                "You keep the hall from breaking. People still shout, still grieve, still accuse, but the town does not fully lose the shape of a plan."
+            )
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "the council stayed visible enough that panic never became the only voice in town",
+            )
+            if self.state.flags.get("midpoint_infiltrator_seeded"):
+                self.state.flags["act2_infiltrator_escaped"] = True
+                self.say("Even so, someone still slips the smoke with a packet of copied route notes and a better story than the truth deserved.")
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "the infiltrator cell escapes with useful route scraps while your attention is on the hall",
+                )
+            self.act2_adjust_named_companion("Rhogar Valeguard", 1, "you chose to hold the town's center under pressure")
+        elif choice == 2:
+            self.say(
+                "You choose people over procedure. The claims table is a mess by dawn, but the shrine lane is full of survivors who know exactly why they are still alive."
+            )
+            self.act2_shift_metric(
+                "act2_town_stability",
+                2,
+                "saving the vulnerable first keeps Phandalin from remembering the mine as a thing that immediately demanded sacrifices",
+            )
+            self.act2_shift_metric(
+                "act2_whisper_pressure",
+                -1,
+                "the Choir's chaos fails to turn fear into the clean reverence it wanted",
+            )
+            if self.state.flags.get("act2_sponsor") == "exchange":
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    -1,
+                    "Halia's bloc loses papers, people, and patience while you ignore the claims books for the wounded",
+                )
+            self.act2_adjust_named_companion("Elira Dawnmantle", 1, "you chose living people over the claims race")
+        else:
+            self.say(
+                "You go for the knives in the dark instead of the lanterns in the square. The strike team breaks, but the town has to feel the fear while you are elsewhere."
+            )
+            self.state.flags["act2_infiltrator_caught"] = True
+            self.act2_shift_metric(
+                "act2_route_control",
+                2,
+                "cutting out the infiltrator cell protects the route map from being rewritten in secret",
+            )
+            if not self.state.flags.get("midpoint_infiltrator_seeded"):
+                self.act2_shift_metric(
+                    "act2_town_stability",
+                    -1,
+                    "people remember how alone the square felt while the strike team was being hunted",
+                )
+            self.act2_adjust_named_companion("Bryn Underbough", 1, "you trusted her instincts about hidden knives and bad paperwork")
+        self.reward_party(xp=50, gold=15, reason="holding Phandalin together through sabotage night")
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_broken_prospect(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("act2_first_late_route"):
+            self.act2_mark_late_route_choice("broken_prospect")
+        delayed = self.state.flags.get("act2_first_late_route") == "south_adit"
+        self.banner("Broken Prospect")
+        self.say(
+            "Broken Prospect is a jagged approach above Wave Echo Cave: half collapsed survey cut, half old dwarfwork scar, and now one more place where history is trying to decide which footsteps matter.",
+            typed=True,
+        )
+        if delayed:
+            self.say(
+                "Because you chose the prison line first, rival crews and cult sentries have had longer to root themselves into the prospect shelves."
+            )
+        enemies = [create_enemy("animated_armor"), create_enemy("spectral_foreman")]
+        if delayed or self.act2_metric_value("act2_route_control") <= 2:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "iron_prayer_horror", "obelisk_eye")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "grimlock_tunneler", "starblighted_miner")))
+        choice = self.scenario_choice(
+            "How do you make first contact with the cave approach?",
+            [
+                self.skill_tag("HISTORY", self.action_option("Call the old survey marks before the echoes lie about distance.")),
+                self.skill_tag("STEALTH", self.action_option("Use the broken prospect ledge and slip past the first sentries.")),
+                self.skill_tag("RELIGION", self.action_option("Steady the line before the dead memory of this place gets teeth.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = 0
+        if self.state.flags.get("nim_countermeasure_notes"):
+            hero_bonus += 1
+            self.say("Nim's preserved theorem notes let you predict which part of the prospect's echo is honest and which part is bait.")
+        if choice == 1:
+            self.player_action("Call the old survey marks before the echoes lie about distance.")
+            if self.skill_check(self.state.player, "History", 14, context="to use the Pact survey marks correctly"):
+                hero_bonus += 2
+        elif choice == 2:
+            self.player_action("Use the broken prospect ledge and slip past the first sentries.")
+            if self.skill_check(self.state.player, "Stealth", 14, context="to slip into Wave Echo cleanly"):
+                hero_bonus += 2
+                self.apply_status(enemies[0], "surprised", 1, source="your ledge approach")
+        else:
+            self.player_action("Steady the line before the dead memory of this place gets teeth.")
+            if self.skill_check(self.state.player, "Religion", 14, context="to keep the haunted threshold from owning the pace"):
+                hero_bonus += 1
+                self.apply_status(self.state.player, "blessed", 2, source="meeting the cave with deliberate faith")
+        outcome = self.run_encounter(
+            Encounter(
+                title="Broken Prospect",
+                description="The first Wave Echo guardians still answer old duties, even now that new masters are twisting them.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=False,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("Wave Echo's threshold throws the company back into the dark above.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You withdraw from the cave mouth before the threshold can swallow the approach.")
+            return
+        self.state.flags["wave_echo_reached"] = True
+        self.state.flags["broken_prospect_cleared"] = True
+        if not self.has_quest("free_wave_echo_captives"):
+            self.grant_quest("free_wave_echo_captives")
+        if not self.has_quest("sever_quiet_choir"):
+            self.grant_quest("sever_quiet_choir")
+        self.act2_shift_metric(
+            "act2_route_control",
+            1,
+            "the prospect approach now belongs to your side instead of whoever would have claimed it with confidence and bad intent",
+        )
+        if self.state.flags.get("act2_captive_outcome") == "captives_endangered":
+            self.say(
+                "The route is cleaner now, but nobody in camp mistakes that clean line for a moral victory while the South Adit still holds prisoners."
+            )
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_south_adit(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("act2_first_late_route"):
+            self.act2_mark_late_route_choice("south_adit")
+        delayed = self.state.flags.get("act2_first_late_route") == "broken_prospect"
+        if not self.has_quest("free_wave_echo_captives"):
+            self.grant_quest("free_wave_echo_captives")
+        if not self.has_quest("sever_quiet_choir"):
+            self.grant_quest("sever_quiet_choir")
+        self.banner("South Adit")
+        self.say(
+            "The southern workings smell like old iron, cold water, and fear kept quiet too long. Cells have been built into the support chambers. "
+            "The Quiet Choir has not just occupied Wave Echo. It has been sorting people here.",
+            typed=True,
+        )
+        if delayed:
+            self.say(
+                "Broken Prospect going first bought your side a cleaner route, but the adit has had longer to become a place of missing names and emptied cells."
+            )
+        enemies = [create_enemy("starblighted_miner"), create_enemy("choir_adept")]
+        if delayed:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "oathbroken_revenant")))
+        elif len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "choir_executioner")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "grimlock_tunneler", "starblighted_miner")))
+        choice = self.scenario_choice(
+            "How do you crack the prison line?",
+            [
+                self.skill_tag("SLEIGHT OF HAND", self.action_option("Open the cells quietly and arm the captives before the wardens know.")),
+                self.skill_tag("INTIMIDATION", self.action_option("Hit the wardens hard enough that the prisoners remember your side instead.")),
+                self.skill_tag("MEDICINE", self.action_option("Go for the weakest captives first and keep the line from becoming a slaughter.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = self.apply_scene_companion_support("south_adit")
+        if self.state.flags.get("elira_field_lantern"):
+            hero_bonus += 1
+            self.say("Elira's field lantern turns the adit's worst silence from sacred to merely ugly.")
+        if choice == 1:
+            self.player_action("Open the cells quietly and arm the captives before the wardens know.")
+            if self.skill_check(self.state.player, "Sleight of Hand", 14, context="to free the first prisoners without raising the line"):
+                hero_bonus += 2
+                self.apply_status(enemies[1], "surprised", 1, source="the cells opening behind them")
+        elif choice == 2:
+            self.player_action("Hit the wardens hard enough that the prisoners remember your side instead.")
+            if self.skill_check(self.state.player, "Intimidation", 14, context="to crack the adit's prison discipline"):
+                hero_bonus += 1
+        else:
+            self.player_action("Go for the weakest captives first and keep the line from becoming a slaughter.")
+            if self.skill_check(self.state.player, "Medicine", 14, context="to keep the rescue from turning into a panic crush"):
+                hero_bonus += 1
+                self.apply_status(self.state.player, "blessed", 1, source="saving the vulnerable first")
+        outcome = self.run_encounter(
+            Encounter(
+                title="South Adit Wardens",
+                description="The prison line beneath Wave Echo tries to bury witnesses before the truth can get out.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=False,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("The South Adit stays a prison and the captives disappear back into the dark.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You fall back from the adit before the rescue turns fatal.")
+            return
+        self.state.flags["south_adit_cleared"] = True
+        self.state.flags["wave_echo_reached"] = True
+        self.state.flags["quiet_choir_identified"] = True
+        if delayed:
+            self.state.flags["act2_captive_outcome"] = "few_saved"
+            self.say(
+                "You still free people, but too many cells are already empty for the party to pretend this delay was clean."
+            )
+        else:
+            self.state.flags["act2_captive_outcome"] = "many_saved"
+            self.act2_shift_metric(
+                "act2_town_stability",
+                1,
+                "the rescue reaches town as proof that this expedition still remembers the people trapped under it",
+            )
+        if not self.has_companion("Irielle Ashwake"):
+            self.speaker(
+                "Irielle Ashwake",
+                "If you were trying to prove there was still a side worth escaping to, this was a convincing way to do it."
+            )
+            recruit = self.scenario_choice(
+                "A shaken tiefling augur stands among the freed captives, eyes fixed on the deeper dark.",
+                [
+                    self.quoted_option("RECRUIT", "Then come with us and help end the Choir properly."),
+                    self.quoted_option("SAFE", "Get topside and breathe real air first. We will speak in camp."),
+                ],
+                allow_meta=False,
+            )
+            self.recruit_companion(create_irielle_ashwake())
+            irielle = self.find_companion("Irielle Ashwake")
+            if irielle is not None and delayed:
+                self.adjust_companion_disposition(
+                    irielle,
+                    -1,
+                    "too many captives were left below long enough to vanish before you reached the adit",
+                )
+            elif irielle is not None:
+                self.adjust_companion_disposition(
+                    irielle,
+                    1,
+                    "you chose the prison line before the cleaner route race",
+                )
+            if recruit == 2 and irielle is not None and irielle in self.state.companions:
+                self.move_companion_to_camp(irielle)
+                self.say("Irielle agrees to reach camp first and share what she knows once she can think without whispering walls around her.")
+        self.reward_party(xp=60, gold=18, reason="freeing the South Adit prisoners")
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_wave_echo_outer_galleries(self) -> None:
+        assert self.state is not None
+        self.banner("Wave Echo Outer Galleries")
+        self.say(
+            "The outer galleries keep the mine's old grandeur and none of its safety. Echoing rails, broken cranes, and ancient runoffs "
+            "turn every line of advance into a place where one mistake could still matter more than courage.",
+            typed=True,
+        )
+        enemies = [create_enemy("grimlock_tunneler"), create_enemy("ochre_slime")]
+        if self.act2_metric_value("act2_whisper_pressure") >= 4:
+            enemies.append(self.act2_pick_enemy(("starblighted_miner", "whispermaw_blob", "hookclaw_burrower")))
+        elif self.act2_metric_value("act2_route_control") <= 2 or len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("stirge_swarm", "hookclaw_burrower", "carrion_lash_crawler")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("grimlock_tunneler", "starblighted_miner", "hookclaw_burrower")))
+        choice = self.scenario_choice(
+            "How do you carry the company through the outer galleries?",
+            [
+                self.skill_tag("INVESTIGATION", self.action_option("Follow the survey marks and keep the old mine from lying about its own shape.")),
+                self.skill_tag("SURVIVAL", self.action_option("Take the side-runs the grimlocks trust and beat them to the angle.")),
+                self.skill_tag("ATHLETICS", self.action_option("Reopen the haul rail and force the cave to answer a direct advance.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = self.apply_scene_companion_support("wave_echo_outer_galleries")
+        if choice == 1:
+            self.player_action("Follow the survey marks and keep the old mine from lying about its own shape.")
+            if self.skill_check(self.state.player, "Investigation", 14, context="to keep the party on the real line through false echoes"):
+                hero_bonus += 2
+        elif choice == 2:
+            self.player_action("Take the side-runs the grimlocks trust and beat them to the angle.")
+            if self.skill_check(self.state.player, "Survival", 14, context="to move like something that actually belongs underground"):
+                hero_bonus += 2
+                self.apply_status(enemies[0], "surprised", 1, source="you reached their angle first")
+        else:
+            self.player_action("Reopen the haul rail and force the cave to answer a direct advance.")
+            if self.skill_check(self.state.player, "Athletics", 14, context="to turn the broken rail into a fighting line instead of a hazard"):
+                hero_bonus += 1
+                self.apply_status(self.state.player, "emboldened", 2, source="forcing the galleries to take your pace")
+        outcome = self.run_encounter(
+            Encounter(
+                title="Outer Gallery Pressure",
+                description="Wave Echo's outer defenses are now a mix of scavengers, predators, and bad old engineering.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=False,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("The outer galleries close around the party before the deeper route can be stabilized.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You retreat from the outer galleries to reset the approach.")
+            return
+        self.state.flags["wave_echo_outer_cleared"] = True
+        self.reward_party(xp=50, gold=12, reason="forcing the outer galleries open")
+        self.act2_shift_metric(
+            "act2_route_control",
+            1,
+            "the company now owns a real line through Wave Echo's outer galleries",
+        )
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_black_lake_causeway(self) -> None:
+        assert self.state is not None
+        self.banner("Black Lake Causeway")
+        self.say(
+            "The old black water cuts the cave in half beneath a narrow causeway of stone and broken dwarfwork. A drowned shrine leans off one side. A cult barracks squats on the other. "
+            "This is the last clean threshold before the Forge of Spells, and the Quiet Choir knows it.",
+            typed=True,
+        )
+        enemies = [create_enemy("animated_armor"), create_enemy("starblighted_miner")]
+        if len(self.state.party_members()) >= 4 or self.act2_metric_value("act2_whisper_pressure") >= 4:
+            enemies.append(self.act2_pick_enemy(("spectral_foreman", "blacklake_pincerling", "duskmire_matriarch", "obelisk_eye")))
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "starblighted_miner", "blacklake_pincerling")))
+        choice = self.scenario_choice(
+            "What do you claim on the way across the lake?",
+            [
+                self.skill_tag("RELIGION", self.action_option("Reclaim the drowned shrine and force some older sanctity back into the crossing.")),
+                self.skill_tag("STEALTH", self.action_option("Strip the cult barracks first and cut their messengers and reserves out from under them.")),
+                self.skill_tag("ATHLETICS", self.action_option("Sabotage the causeway anchors and fight while the whole line trembles.")),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = 1
+        if choice == 1:
+            self.player_action("Reclaim the drowned shrine and force some older sanctity back into the crossing.")
+            if self.skill_check(self.state.player, "Religion", 14, context="to wake the shrine before the Choir notices what you are doing"):
+                hero_bonus += 1
+                self.state.flags["black_lake_shrine_purified"] = True
+                self.apply_status(self.state.player, "blessed", 2, source="the reclaimed shrine")
+                self.act2_shift_metric(
+                    "act2_whisper_pressure",
+                    -1,
+                    "the drowned shrine answers before the forge can drown it entirely in the Choir's rhythm",
+                )
+        elif choice == 2:
+            self.player_action("Strip the cult barracks first and cut their messengers and reserves out from under them.")
+            if self.skill_check(self.state.player, "Stealth", 14, context="to gut the barracks without losing the crossing"):
+                hero_bonus += 2
+                self.state.flags["black_lake_barracks_raided"] = True
+                self.act2_shift_metric(
+                    "act2_route_control",
+                    1,
+                    "you seize the last organized staging point before the Forge itself",
+                )
+        else:
+            self.player_action("Sabotage the causeway anchors and fight while the whole line trembles.")
+            if self.skill_check(self.state.player, "Athletics", 14, context="to break the line's stability without dropping your own company with it"):
+                hero_bonus += 2
+                self.state.flags["black_lake_causeway_shaken"] = True
+                self.apply_status(enemies[0], "prone", 1, source="the causeway lurching under your sabotage")
+        outcome = self.run_encounter(
+            Encounter(
+                title="Black Lake Causeway",
+                description="Constructs, corrupted miners, and old command echoes try to stop the final approach.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=False,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("The causeway becomes a kill lane and the Forge remains out of reach.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You withdraw from the causeway before the line fully collapses around you.")
+            return
+        self.state.flags["black_lake_crossed"] = True
+        self.reward_party(xp=55, gold=15, reason="crossing the Black Lake causeway")
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_forge_of_spells(self) -> None:
+        assert self.state is not None
+        self.banner("Forge of Spells")
+        self.say(
+            "The Forge of Spells is no longer just a lost wonder. The Quiet Choir has turned it into an instrument. "
+            "Shards hum inside old channels, the air sounds wrong when it moves, and Sister Caldra Voss stands where ancient craft meets a much newer hunger.",
+            typed=True,
+        )
+        enemies = [create_enemy("caldra_voss"), create_enemy("choir_adept")]
+        if len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "starblighted_miner", "choir_executioner")))
+        if self.state.flags.get("black_lake_barracks_raided") and len(self.state.party_members()) >= 4:
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "starblighted_miner")))
+        elif not self.state.flags.get("black_lake_barracks_raided"):
+            enemies.append(self.act2_pick_enemy(("cult_lookout", "choir_executioner", "starblighted_miner")))
+        if self.act2_metric_value("act2_whisper_pressure") >= 4:
+            enemies.append(self.act2_pick_enemy(("starblighted_miner", "obelisk_eye", "iron_prayer_horror")))
+        if self.state.flags.get("black_lake_shrine_purified"):
+            self.apply_status(self.state.player, "blessed", 2, source="the reclaimed Black Lake shrine")
+        choice = self.scenario_choice(
+            "How do you open the final confrontation?",
+            [
+                self.quoted_option("ARCANA", "Break her ritual tempo before she finishes tuning the forge."),
+                self.quoted_option("PERSUASION", "You have seen enough of what the Choir calls revelation. Step away from the forge."),
+                self.action_option("Hit the chamber hard and trust momentum before the whispers settle in."),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = self.apply_scene_companion_support("forge_of_spells")
+        if self.state.flags.get("irielle_counter_cadence"):
+            hero_bonus += 1
+            enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
+            self.say("Irielle's counter-cadence lands first and steals part of the forge's certainty before steel ever crosses it.")
+        if choice == 1:
+            dc = 15
+            if self.state.flags.get("agatha_truth_clear"):
+                dc -= 1
+            if self.state.flags.get("nim_countermeasure_notes"):
+                dc -= 1
+            self.player_speaker("Break her ritual tempo before she finishes tuning the forge.")
+            if self.skill_check(self.state.player, "Arcana", dc, context="to disrupt the forge-channel harmony"):
+                hero_bonus += 2
+                enemies[0].current_hp = max(1, enemies[0].current_hp - 6)
+        elif choice == 2:
+            dc = 15
+            if self.state.flags.get("act2_captive_outcome") == "many_saved":
+                dc -= 1
+            if self.find_companion("Irielle Ashwake") is not None:
+                dc -= 1
+            self.player_speaker("You have seen enough of what the Choir calls revelation. Step away from the forge.")
+            if self.skill_check(self.state.player, "Persuasion", dc, context="to force even a moment of doubt into Caldra's certainty"):
+                hero_bonus += 1
+                self.apply_status(enemies[1], "frightened", 1, source="hearing the certainty crack")
+        else:
+            self.player_action("Hit the chamber hard and trust momentum before the whispers settle in.")
+            hero_bonus += 2
+            self.apply_status(self.state.player, "emboldened", 2, source="storming the Forge of Spells")
+            if self.state.flags.get("act2_sponsor") == "lionshield":
+                hero_bonus += 1
+        outcome = self.run_encounter(
+            Encounter(
+                title="Boss: Sister Caldra Voss",
+                description="The Quiet Choir's cult agent makes the final stand at the Forge of Spells.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=True,
+                parley_dc=15,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("Caldra holds the Forge and the mine's song bends further away from anything mortal should trust.")
+            return
+        if outcome == "fled":
+            self.state.current_scene = "act2_expedition_hub"
+            self.say("You tear yourself out of the forge chamber before the whole room can close around the party.")
+            return
+        self.state.flags["caldra_defeated"] = True
+        self.add_clue("Caldra's notes describe the Forge as only a lens. Whatever the Quiet Choir truly serves is deeper, older, and not confined to the mine.")
+        if self.act2_metric_value("act2_whisper_pressure") >= 4:
+            self.add_clue(
+                "Even broken, the Forge keeps trying to answer a call from farther down. The party is not leaving Wave Echo with clean silence."
+            )
+        self.reward_party(xp=120, gold=40, reason="breaking the Quiet Choir's Wave Echo cell")
+        self.act2_record_epilogue_flags()
+        self.state.current_scene = "act2_expedition_hub"
+
+    def scene_act2_scaffold_complete(self) -> None:
+        assert self.state is not None
+        self.banner("Act II Complete")
+        town_state = self.state.flags.get("act3_phandalin_state", "holding")
+        claims_state = self.state.flags.get("act3_claims_balance", "contested")
+        whisper_state = self.state.flags.get("act3_whisper_state", "lingering")
+        sponsor = self.ACT2_SPONSOR_LABELS.get(str(self.state.flags.get("act2_sponsor", "council")), "a loose council")
+        captive_outcome = str(self.state.flags.get("act2_captive_outcome", "uncertain"))
+        if town_state == "united":
+            town_line = "Phandalin comes through the act bloodied but unmistakably more united than it began."
+        elif town_state == "holding":
+            town_line = "Phandalin survives, but in the careful, tired way frontier towns survive when everyone is counting what almost went worse."
+        else:
+            town_line = "Phandalin survives in pieces. The town still stands, but the act leaves strain that Act 3 can exploit."
+        if claims_state == "secured":
+            claims_line = f"The route war ends with {sponsor} holding the stronger hand over Wave Echo's aftermath."
+        elif claims_state == "contested":
+            claims_line = f"The claims race is still messy. {sponsor} matters, but nobody owns the whole truth cleanly."
+        else:
+            claims_line = f"The claims race has become chaos. {sponsor} still exists, but it no longer feels like control."
+        if whisper_state == "contained":
+            whisper_line = "You kept the mine's wrong music from spreading far past the cave."
+        elif whisper_state == "lingering":
+            whisper_line = "You stopped Caldra, but the song under Wave Echo is still following somebody home in fragments."
+        else:
+            whisper_line = "You won the act, but not cleanly. The mine's whisper-pressure leaves the cave with you, which is exactly what Act 3 wants."
+        if captive_outcome == "many_saved":
+            captive_line = "Word of the South Adit rescue becomes one of the few uncomplicated pieces of hope the act leaves behind."
+        elif captive_outcome == "few_saved":
+            captive_line = "The rescue still matters, but too many missing names follow the company back out of the adit."
+        else:
+            captive_line = "The prisoners were never the only stakes, but they proved who the party believed the cave was for."
+        self.say(
+            town_line,
+            typed=True,
+        )
+        self.say(claims_line)
+        self.say(whisper_line)
+        self.say(captive_line)
+        if 2 not in self.state.completed_acts:
+            self.state.completed_acts.append(2)
+        self.state.current_act = 2
+        saver = getattr(self, "save_game", None)
+        if callable(saver):
+            saver(slot_name=f"{self.state.player.name}_act2_complete")
+        choice = self.choose(
+            "What next?",
+            [
+                "Review the party",
+                "Return to the title screen",
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.show_party()
+        self.state = None

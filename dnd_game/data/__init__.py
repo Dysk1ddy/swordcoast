@@ -1,0 +1,1 @@
+"""Structured game data packages."""

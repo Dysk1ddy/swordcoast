@@ -1,0 +1,618 @@
+{
+  "player": {
+    "name": "Riven Ashguard",
+    "race": "Half-Orc",
+    "class_name": "Fighter",
+    "background": "Soldier",
+    "level": 2,
+    "ability_scores": {
+      "STR": 17,
+      "DEX": 12,
+      "CON": 15,
+      "INT": 8,
+      "WIS": 10,
+      "CHA": 13
+    },
+    "skill_proficiencies": [
+      "Athletics",
+      "Insight",
+      "Intimidation",
+      "Perception",
+      "Survival"
+    ],
+    "saving_throw_proficiencies": [
+      "STR",
+      "CON"
+    ],
+    "features": [
+      "action_surge",
+      "menacing",
+      "relentless_endurance",
+      "second_wind"
+    ],
+    "weapon": {
+      "name": "Roadworn Longsword",
+      "damage": "1d8",
+      "ability": "STR",
+      "weapon_type": "longsword",
+      "to_hit_bonus": 0,
+      "damage_bonus": 0,
+      "finesse": false,
+      "ranged": false,
+      "hands_required": 1,
+      "properties": [
+        "versatile"
+      ]
+    },
+    "armor": {
+      "name": "Roadworn Chain Mail",
+      "base_ac": 16,
+      "armor_type": "heavy",
+      "dex_cap": 0,
+      "heavy": true,
+      "stealth_disadvantage": true
+    },
+    "hit_die": 10,
+    "current_hp": 20,
+    "max_hp": 20,
+    "shield": true,
+    "spellcasting_ability": null,
+    "skill_expertise": [],
+    "bonus_proficiencies": [
+      "Land Vehicles",
+      "Gaming Set"
+    ],
+    "resources": {
+      "second_wind": 1,
+      "action_surge": 1
+    },
+    "max_resources": {
+      "second_wind": 1,
+      "action_surge": 1
+    },
+    "inventory": {},
+    "conditions": {},
+    "equipment_bonuses": {
+      "Athletics": 1,
+      "Intimidation": 1
+    },
+    "gear_bonuses": {
+      "AC": 0
+    },
+    "notes": [
+      "Veteran's kit: +1 to Athletics and Intimidation checks.",
+      "A brutal shield-line veteran built to absorb pressure and keep swinging in the thick of a fight.",
+      "Preset build: optimized for faster testing and quick starts."
+    ],
+    "tags": [
+      "hero"
+    ],
+    "equipment_slots": {
+      "head": null,
+      "ring_1": null,
+      "ring_2": null,
+      "neck": null,
+      "chest": "chain_mail_common",
+      "gloves": null,
+      "boots": null,
+      "main_hand": "longsword_common",
+      "off_hand": "shield_common",
+      "cape": null
+    },
+    "archetype": "fighter",
+    "companion_id": "",
+    "disposition": 0,
+    "lore": [],
+    "bond_flags": {},
+    "relationship_bonuses": {},
+    "stable": false,
+    "dead": false,
+    "death_successes": 0,
+    "death_failures": 0,
+    "temp_hp": 0,
+    "xp_value": 0,
+    "gold_value": 0
+  },
+  "companions": [
+    {
+      "name": "Rhogar Valeguard",
+      "race": "Dragonborn",
+      "class_name": "Paladin",
+      "background": "Soldier",
+      "level": 2,
+      "ability_scores": {
+        "STR": 17,
+        "DEX": 10,
+        "CON": 13,
+        "INT": 8,
+        "WIS": 12,
+        "CHA": 15
+      },
+      "skill_proficiencies": [
+        "Athletics",
+        "Insight",
+        "Intimidation",
+        "Persuasion"
+      ],
+      "saving_throw_proficiencies": [
+        "WIS",
+        "CHA"
+      ],
+      "features": [
+        "divine_health",
+        "divine_smite",
+        "draconic_presence",
+        "lay_on_hands"
+      ],
+      "weapon": {
+        "name": "Roadworn Longsword",
+        "damage": "1d8",
+        "ability": "STR",
+        "weapon_type": "longsword",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "versatile"
+        ]
+      },
+      "armor": {
+        "name": "Roadworn Chain Mail",
+        "base_ac": 16,
+        "armor_type": "heavy",
+        "dex_cap": 0,
+        "heavy": true,
+        "stealth_disadvantage": true
+      },
+      "hit_die": 10,
+      "current_hp": 18,
+      "max_hp": 18,
+      "shield": true,
+      "spellcasting_ability": "CHA",
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Land Vehicles",
+        "Gaming Set"
+      ],
+      "resources": {
+        "lay_on_hands": 10,
+        "spell_slots": 3
+      },
+      "max_resources": {
+        "lay_on_hands": 10,
+        "spell_slots": 3
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Athletics": 1,
+        "Intimidation": 1,
+        "CON_save": 1,
+        "WIS_save": 1
+      },
+      "gear_bonuses": {
+        "AC": 0
+      },
+      "notes": [
+        "Veteran's kit: +1 to Athletics and Intimidation checks.",
+        "A dragonborn sworn to protect caravans on the road south of Neverwinter.",
+        "A dragonborn oathsworn who treats duty like a living thing that must be fed by action."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "chain_mail_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "longsword_common",
+        "off_hand": "shield_common",
+        "cape": null
+      },
+      "archetype": "paladin",
+      "companion_id": "rhogar_valeguard",
+      "disposition": 0,
+      "lore": [
+        "Rhogar was raised among caravan wardens who believed a sworn road was as sacred as any temple threshold.",
+        "He carries every oath like a visible weight and grows restless whenever words are left unfinished.",
+        "His confidence comes easily, but his forgiveness does not; once broken, his trust has to be rebuilt with deeds."
+      ],
+      "bond_flags": {
+        "talked_topics": []
+      },
+      "relationship_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    },
+    {
+      "name": "Tolan Ironshield",
+      "race": "Dwarf",
+      "class_name": "Fighter",
+      "background": "Soldier",
+      "level": 2,
+      "ability_scores": {
+        "STR": 15,
+        "DEX": 10,
+        "CON": 16,
+        "INT": 8,
+        "WIS": 12,
+        "CHA": 13
+      },
+      "skill_proficiencies": [
+        "Acrobatics",
+        "Athletics",
+        "Intimidation",
+        "Perception",
+        "Survival"
+      ],
+      "saving_throw_proficiencies": [
+        "STR",
+        "CON"
+      ],
+      "features": [
+        "action_surge",
+        "darkvision",
+        "dwarven_resilience",
+        "second_wind"
+      ],
+      "weapon": {
+        "name": "Roadworn Longsword",
+        "damage": "1d8",
+        "ability": "STR",
+        "weapon_type": "longsword",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "versatile"
+        ]
+      },
+      "armor": {
+        "name": "Roadworn Chain Mail",
+        "base_ac": 16,
+        "armor_type": "heavy",
+        "dex_cap": 0,
+        "heavy": true,
+        "stealth_disadvantage": true
+      },
+      "hit_die": 10,
+      "current_hp": 22,
+      "max_hp": 22,
+      "shield": true,
+      "spellcasting_ability": null,
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Land Vehicles",
+        "Gaming Set"
+      ],
+      "resources": {
+        "second_wind": 1,
+        "action_surge": 1
+      },
+      "max_resources": {
+        "second_wind": 1,
+        "action_surge": 1
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Athletics": 1,
+        "Intimidation": 1
+      },
+      "gear_bonuses": {
+        "AC": 0
+      },
+      "notes": [
+        "Veteran's kit: +1 to Athletics and Intimidation checks.",
+        "A caravan guard from Neverwinter with a shield wall mindset.",
+        "A dwarven shield veteran who measures people by whether they hold the line when it matters."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "chain_mail_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "longsword_common",
+        "off_hand": "shield_common",
+        "cape": null
+      },
+      "archetype": "fighter",
+      "companion_id": "tolan_ironshield",
+      "disposition": 0,
+      "lore": [
+        "Tolan served on caravan routes out of Neverwinter for two decades, long enough to see three trade leagues fail and two rise in their place.",
+        "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the Mere of Dead Men.",
+        "He trusts steady action more than speeches, but remembers every promise anyone makes in his hearing."
+      ],
+      "bond_flags": {
+        "talked_topics": []
+      },
+      "relationship_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    },
+    {
+      "name": "Bryn Underbough",
+      "race": "Halfling",
+      "class_name": "Rogue",
+      "background": "Criminal",
+      "level": 2,
+      "ability_scores": {
+        "STR": 8,
+        "DEX": 17,
+        "CON": 12,
+        "INT": 13,
+        "WIS": 14,
+        "CHA": 10
+      },
+      "skill_proficiencies": [
+        "Acrobatics",
+        "Athletics",
+        "Deception",
+        "Insight",
+        "Perception",
+        "Sleight of Hand",
+        "Stealth"
+      ],
+      "saving_throw_proficiencies": [
+        "DEX",
+        "INT"
+      ],
+      "features": [
+        "brave",
+        "cunning_action",
+        "expertise",
+        "lucky",
+        "sneak_attack"
+      ],
+      "weapon": {
+        "name": "Roadworn Shortsword",
+        "damage": "1d6",
+        "ability": "FINESSE",
+        "weapon_type": "shortsword",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": true,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "finesse",
+          "light"
+        ]
+      },
+      "armor": {
+        "name": "Roadworn Leather Armor",
+        "base_ac": 11,
+        "armor_type": "light",
+        "dex_cap": null,
+        "heavy": false,
+        "stealth_disadvantage": false
+      },
+      "hit_die": 8,
+      "current_hp": 13,
+      "max_hp": 15,
+      "shield": false,
+      "spellcasting_ability": null,
+      "skill_expertise": [
+        "Perception",
+        "Stealth"
+      ],
+      "bonus_proficiencies": [
+        "Thieves' Tools",
+        "Disguise Kit"
+      ],
+      "resources": {},
+      "max_resources": {},
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Stealth": 3,
+        "Sleight of Hand": 1,
+        "initiative": 2
+      },
+      "gear_bonuses": {},
+      "notes": [
+        "Thieves' tools: +1 to Stealth and Sleight of Hand checks.",
+        "A caravan scout who knows every shortcut between Phandalin and Neverwinter.",
+        "A halfling scout who hides anxiety behind wit, speed, and relentless observation."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "leather_armor_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "shortsword_common",
+        "off_hand": null,
+        "cape": null
+      },
+      "archetype": "rogue",
+      "companion_id": "bryn_underbough",
+      "disposition": 0,
+      "lore": [
+        "Bryn grew up between caravans, shrines, and borrowed rooms, learning early that knowing an exit mattered as much as knowing a friend.",
+        "She ran messages for smugglers in her teens before deciding she preferred honest pay and fewer knives at her back.",
+        "Her humor gets sharper whenever she is frightened enough to think someone might notice."
+      ],
+      "bond_flags": {
+        "talked_topics": []
+      },
+      "relationship_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    }
+  ],
+  "camp_companions": [],
+  "current_act": 1,
+  "current_scene": "old_owl_well",
+  "flags": {
+    "act1_started": true,
+    "map_state": {
+      "current_node_id": "old_owl_well",
+      "current_dungeon_id": "old_owl_well_dig",
+      "current_room_id": "well_ring",
+      "visited_nodes": [
+        "phandalin_hub",
+        "old_owl_well"
+      ],
+      "cleared_rooms": [],
+      "seen_story_beats": [],
+      "room_history": []
+    },
+    "introduced_characters": [
+      "Ashen Brand Fixer",
+      "Ashen Brand Runner",
+      "Bryn Underbough",
+      "Elira Dawnmantle",
+      "Halia Thornton",
+      "Mira Thann",
+      "Rhogar Valeguard",
+      "Tessa Harrow",
+      "Tolan Ironshield"
+    ],
+    "background_prologue_completed": "Soldier",
+    "briefing_seen": true,
+    "early_companion_recruited": "Rhogar Valeguard",
+    "road_approach_chosen": true,
+    "phandalin_arrived": true,
+    "steward_seen": true,
+    "steward_pressure_asked": true,
+    "steward_ruins_asked": true,
+    "steward_vow_made": true,
+    "shrine_seen": true,
+    "shrine_medicine_attempted": true,
+    "shrine_prayer_attempted": true,
+    "shrine_recruit_attempted": true,
+    "shrine_raiders_asked": true,
+    "inn_seen": true,
+    "inn_buy_drink_asked": true,
+    "inn_road_rumors_asked": true,
+    "inn_recruit_bryn_attempted": true,
+    "miners_exchange_seen": true,
+    "miners_exchange_missing_crews_asked": true,
+    "miners_exchange_lead": true,
+    "edermath_orchard_seen": true,
+    "edermath_orchard_blight_checked": true,
+    "edermath_orchard_training_done": true,
+    "old_owl_well_seen": true
+  },
+  "clues": [
+    "A stolen dispatch confirms the attacks around Phandalin are organized enough to rattle Neverwinter's quartermasters.",
+    "A scorched badge on the goblins marks the Ashen Brand.",
+    "The raiders were working with a hobgoblin sergeant tied to Ashfall Watch.",
+    "Steward Harrow ties the gang to Ashfall Watch and cellar routes under old ruins.",
+    "Elira confirms the gang uses poison and disciplined tactics, not random violence.",
+    "Bryn confirms Ashfall Watch is the gang's field base.",
+    "Halia Thornton ties missing crews and salvage thefts to Old Owl Well.",
+    "The raiders are sabotaging orchard roots and farm walls to blind trusted lookouts around Phandalin."
+  ],
+  "journal": [
+    "Your soldier's opening leaves you with a live look at how hard Neverwinter is leaning on thin patrol lines and tired veterans to protect the road south.",
+    "Word reaches you that Mira Thann is quietly gathering capable hands in Neverwinter against a new bandit threat around Phandalin.",
+    "Reward from South Barracks Breakout: 50 XP, 8 gp.",
+    "Looted Frontier Ale x1 from South Barracks Breakout.",
+    "Looted Roadworn Leather Armor x1 from South Barracks Breakout.",
+    "Looted Potion of Healing x1 from South Barracks Breakout.",
+    "Reward from holding the barracks line: 15 XP, 6 gp.",
+    "Clue: A stolen dispatch confirms the attacks around Phandalin are organized enough to rattle Neverwinter's quartermasters.",
+    "Your soldier prologue ends with the trail leading toward Mira Thann's private briefing in Neverwinter.",
+    "Rhogar Valeguard joined the active party.",
+    "Mira Thann sent you south with a writ for Phandalin's steward.",
+    "Reward from Roadside Ambush: 125 XP, 4 gp.",
+    "Looted Roadworn Leather Armor x1 from Roadside Ambush.",
+    "Looted Potion of Healing x1 from Roadside Ambush.",
+    "Clue: A scorched badge on the goblins marks the Ashen Brand.",
+    "Clue: The raiders were working with a hobgoblin sergeant tied to Ashfall Watch.",
+    "Reward from saving the caravan guard on the High Road: 25 XP, 15 gp.",
+    "Tolan Ironshield joined the active party.",
+    "You reached Phandalin, a hard-bitten frontier town under growing Ashen Brand pressure.",
+    "Clue: Steward Harrow ties the gang to Ashfall Watch and cellar routes under old ruins.",
+    "Quest accepted: Stop the Watchtower Raids.",
+    "Clue: Elira confirms the gang uses poison and disciplined tactics, not random violence.",
+    "Clue: Bryn confirms Ashfall Watch is the gang's field base.",
+    "Bryn Underbough joined the active party.",
+    "Clue: Halia Thornton ties missing crews and salvage thefts to Old Owl Well.",
+    "Quest accepted: Silence Old Owl Well.",
+    "Clue: The raiders are sabotaging orchard roots and farm walls to blind trusted lookouts around Phandalin.",
+    "Reward from reading the orchard blight: 10 XP.",
+    "Reward from drilling with Daran Edermath: 10 XP.",
+    "Reward from Old Owl Well Dig Ring: 150 XP, 12 gp.",
+    "Looted Frontier Ale x1 from Old Owl Well Dig Ring.",
+    "Looted Potion of Healing x1 from Old Owl Well Dig Ring."
+  ],
+  "quests": {
+    "secure_miners_road": {
+      "quest_id": "secure_miners_road",
+      "status": "active",
+      "notes": [
+        "Tessa does not dress it up as heroics. She needs the watchtower raiders stopped before a frightened town begins starving by caution alone.",
+        "Tessa says the watchtower is throttling miners, couriers, and every road-dependent family in town."
+      ]
+    },
+    "silence_old_owl_well": {
+      "quest_id": "silence_old_owl_well",
+      "status": "active",
+      "notes": [
+        "Halia phrases it like a ledger problem, but the meaning is simple enough: Old Owl Well is swallowing people, and every day it stays active makes the town smaller.",
+        "Halia says Old Owl Well has become a grave-salvage site protected by both hired blades and something worse."
+      ]
+    }
+  },
+  "completed_acts": [],
+  "xp": 385,
+  "gold": 65,
+  "inventory": {
+    "potion_healing": 8,
+    "bread_round": 4,
+    "travel_biscuits": 6,
+    "dried_fish": 3,
+    "goat_cheese": 2,
+    "frontier_ale": 4,
+    "root_vegetables": 2,
+    "antitoxin_vial": 1,
+    "chain_mail_common": 3,
+    "longsword_common": 3,
+    "shield_common": 3,
+    "leather_armor_common": 3,
+    "shortsword_common": 1,
+    "moonmint_drops": 1
+  },
+  "short_rests_remaining": 2
+}
