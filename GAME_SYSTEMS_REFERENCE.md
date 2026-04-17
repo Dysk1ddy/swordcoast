@@ -4,7 +4,8 @@ This file is a source-oriented reference for reading and debugging the current g
 
 ## Scope
 
-- Current playable campaign scope: Act 1
+- Current fully playable campaign scope: Act 1
+- Current partially playable scaffold: Act 2 route framework and local-map expedition slices
 - Current level cap: 4
 - Party progression is shared across the whole company
 - The game uses a D&D-inspired rules layer, but many features are adapted or compressed for text-adventure play
@@ -17,13 +18,45 @@ This file is a source-oriented reference for reading and debugging the current g
 - `dnd_game/data/story/character_options/races.py`: races
 - `dnd_game/data/story/character_options/backgrounds.py`: backgrounds
 - `dnd_game/gameplay/progression.py`: XP and level-up handling
+- `dnd_game/gameplay/map_system.py`: live Act 1 and Act 2 map flow, route flags, reactivity state, and epilogue carryover
 - `dnd_game/gameplay/combat_flow.py`: combat turn options and enemy AI
 - `dnd_game/gameplay/combat_resolution.py`: attack, spell, healing, damage, save, and death logic
 - `dnd_game/gameplay/status_effects.py`: status definitions and condition ticking
 - `dnd_game/gameplay/inventory_core.py`: resting, supply use, loot, item use
+- `dnd_game/gameplay/random_encounters.py`: post-combat event pool, follow-up chains, and Act-specific encounter tables
 - `dnd_game/data/story/factories.py`: hero and enemy factory data
 - `dnd_game/data/quests/act1.py`: quest definitions
 - `ITEM_CATALOG.md`: generated item and equipment catalog
+
+## Campaign State Layers
+
+### Act 1 route structure
+
+- Overworld travel is node-based around `Phandalin`
+- Hostile sites use room-based dungeon progression from `dnd_game/drafts/map_system/data/act1_hybrid_map.py`
+- The live mid-Act route can now include `Old Owl Well`, `Wyvern Tor`, and an optional hidden `Cinderfall Ruins` strike before `Ashfall Watch`
+
+### Act 1 metrics and carryover
+
+- `act1_town_fear`
+  - default `2`
+  - tracks how badly Phandalin is rattled
+- `act1_ashen_strength`
+  - default `3`
+  - tracks how much outer-site pressure the Ashen Brand still retains
+- `act1_survivors_saved`
+  - default `0`
+  - tracks rescue outcomes across the act
+- `act1_victory_tier`
+  - recorded as `clean_victory`, `costly_victory`, or `fractured_victory`
+- `act2_starting_pressure`
+  - derived from the ending tier plus a few late moral choices such as selling Bryn's ledger
+
+### Quest-state rules
+
+- Quest log statuses are `active`, `ready_to_turn_in`, and `completed`
+- Readiness is driven from flags, not scene position alone
+- Some Act 1 quests are auto-granted from companion trust thresholds rather than a town-giver menu
 
 ## Character Creation
 
@@ -242,6 +275,19 @@ Present as tags and lore, but not given dedicated runtime logic yet:
 - Initiative = d20 + DEX modifier + initiative bonuses + encounter hero/enemy bonus
 - Tie sorting prefers higher DEX and then heroes over enemies
 
+### Companion combat support
+
+- Scene support bonuses are separate from combat-start openers
+- At disposition `6+`, Kaelis can fire `Shadow Volley` to give the conscious party `Invisible 1` at encounter start
+- At disposition `6+`, Tolan can call `Hold the Line` to give the conscious party `Guarded 2` at encounter start
+
+### Enemy coordination hooks
+
+- `Marked` is now a shared focus-fire status
+- `Ember Channeler` can apply `Marked 2`, and enemies with updated AI will prefer marked heroes when possible
+- `Ashen Brand Enforcer` can spend `punishing_strike` to punish buffed or marked heroes and strip `Blessed`
+- `Carrion Stalker` opens under `Invisible` pressure and applies `Bleeding` on hits
+
 ### Criticals
 
 - Normal critical threshold: `20`
@@ -318,6 +364,9 @@ Present as tags and lore, but not given dedicated runtime logic yet:
 | Restrained | `-2 AC`, attack disadvantage, blocks movement, DEX save disadvantage |
 | Emboldened | `+2 attack`, `+1 saves` |
 | Blessed | `+1 attack`, `+2 saves` |
+| Guarded | `+1 AC` |
+| Marked | enemy focus-fire hook; attacks against the target gain extra pressure in some archetypes |
+| Bleeding | takes `1d4` bleeding damage at end of turn |
 | Cursed | `-1 attack`, `-1 saves`, not marked combat-only |
 | Resist Fire / Cold / Lightning / Poison | grants matching damage resistance |
 | Stunned | cannot act |
@@ -327,6 +376,7 @@ Present as tags and lore, but not given dedicated runtime logic yet:
 
 - Resistances halve incoming matching damage
 - Temporary HP absorbs damage before current HP
+- Effective armor class now accounts for both AC penalties and AC bonuses such as `Guarded`
 - Fire resistance can come from Tiefling ancestry or item/status resistance
 - Poison resistance can come from Dwarf ancestry or item/status resistance
 - Dropping a hero to 0 HP starts death-save state
@@ -382,4 +432,5 @@ Present as tags and lore, but not given dedicated runtime logic yet:
 - Many race and class feature tags are descriptive identifiers, while only a subset have hard-coded effects
 - Enemy behavior is driven more by `archetype` checks than by generic feature tags
 - Companion relationship bonuses stack into the same bonus channels used by gear and level progression
+- A few Act 1 story systems now sit in `map_system.py` rather than classic linear scene files, including hidden-route unlocks, companion personal quests, and the ending-tier calculation
 - Character creation stores a few legacy display names like `Healing Potion`, but active gameplay inventory uses normalized item ids like `potion_healing`

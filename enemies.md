@@ -31,6 +31,9 @@ The final section also includes a design appendix with proposed future enemies w
 | `wolf` | Ash Wolf | Act 1 | road beast, prologue threat, random encounters |
 | `bandit` | Ashen Brand Bandit | Act 1 | human raider baseline |
 | `bandit_archer` | Ashen Brand Lookout | Act 1 | ranged Ashen Brand support |
+| `ash_brand_enforcer` | Ashen Brand Enforcer | Act 1 | anti-momentum bruiser that punishes buffed heroes |
+| `ember_channeler` | Ember Channeler | Act 1 | support caster that paints focus-fire targets |
+| `carrion_stalker` | Carrion Stalker | Act 1 | stealth predator used in Cinderfall and relay ambushes |
 | `skeletal_sentry` | Skeletal Sentry | Act 1 | Old Owl Well and manor undead guards |
 | `worg` | Worg | Act 1 | Wyvern Tor and Ashfall support beast |
 | `orc_raider` | Orc Raider | Act 1 | Wyvern Tor and Ashfall muscle |
@@ -119,7 +122,6 @@ The final section also includes a design appendix with proposed future enemies w
   - Forced or potential: `Miniboss: Rukhar Cinderfang` support enemy
   - Forced: `Tresendar Cellars` as `Ashen Brand Collector`
   - Forced: `Emberhall Antechamber` as `Ashen Brand Fixer` / `Ashen Brand Guard`
-  - Forced: `Boss: Varyn Sable` support enemies `Ashen Brand Enforcer` / `Ashen Brand Collector`
   - Potential random fights:
     - `Chest Scavengers`
     - `Road Toll Collectors`
@@ -150,10 +152,8 @@ The final section also includes a design appendix with proposed future enemies w
   - Potential: `Chest Scavengers` on parties of 3 or more
   - Forced or potential: `Miniboss: Vaelith Marr` as `Ashen Brand Lookout` on large parties
   - Forced: `Ashfall Gate`
-  - Forced: `Ashfall Lower Barracks` as `Ashen Brand Barracks Archer`
   - Forced: `Tresendar Cellars` as `Archive Cutout`
   - Forced: `Emberhall Antechamber` as `Cellar Sniper`
-  - Forced: `Boss: Varyn Sable`
   - Potential random fights:
     - `Panicked Holdouts`
     - `Road Toll Collectors` on parties of 3 or more
@@ -164,6 +164,56 @@ The final section also includes a design appendix with proposed future enemies w
     - `Returning Scavengers`
     - `Returning Campers` on parties of 3 or more
     - `Milestone Scavengers` on parties of 3 or more
+
+### Ashen Brand Enforcer
+
+- Archetype: `ash_brand_enforcer`
+- Base sheet: level 2, 18 HP, AC 13, Hooked Falchion `1d8+1`, XP 100, Gold 14
+- Tags and traits: `enemy`, `humanoid`, `parley`, feature `punishing_strike`
+- Runtime behavior:
+  - `punishing_strike` once: attacks a buffed or marked hero, then deals an extra `1d6` slashing damage on hit
+  - On a successful punishing strike, strips `blessed` if the target has it
+  - Normal targeting prefers marked heroes first, then heroes currently carrying momentum buffs such as `blessed`, `emboldened`, or `invisible`
+- Item drops:
+  - No item loot table currently defined in `LOOT_TABLES`
+- Encounter locations:
+  - Forced: `Ashfall Lower Barracks`
+  - Forced or potential: `Miniboss: Rukhar Cinderfang` support enemy
+  - Forced: `Cinderfall Relay` as `Ashen Brand Runner`
+  - Forced: `Boss: Varyn Sable`
+  - Potential: `Smuggler Revenge Squad`
+
+### Ember Channeler
+
+- Archetype: `ember_channeler`
+- Base sheet: level 2, 15 HP, AC 12, Ember Brand `1d6+1`, XP 100, Gold 12
+- Tags and traits: `enemy`, `humanoid`, feature `ember_mark`
+- Runtime behavior:
+  - `ember_mark` once: WIS save DC 12 or target gains `marked` for 2 rounds and `reeling` for 1 round
+  - The mark acts as a team focus-fire flag; other updated enemies will prioritize that hero when possible
+- Item drops:
+  - No item loot table currently defined in `LOOT_TABLES`
+- Encounter locations:
+  - Potential: `Ashfall Lower Barracks`
+  - Forced: `Cinderfall Relay` as `Ember Relay Keeper`
+  - Forced: `Boss: Varyn Sable`
+  - Potential: `Smuggler Revenge Squad` on parties of 3 or more
+
+### Carrion Stalker
+
+- Archetype: `carrion_stalker`
+- Base sheet: level 2, 17 HP, AC 14, Serrated Talons `1d6+2`, XP 100, Gold 0
+- Tags and traits: `enemy`, `monstrosity`, feature `shadow_hide`
+- Runtime behavior:
+  - Starts combat with `invisible` for 1 round
+  - `shadow_hide` once: can vanish again mid-fight if still conscious
+  - On hit, applies `bleeding` for 2 rounds
+  - Targeting prefers marked heroes first, then weak or lightly defended heroes
+- Item drops:
+  - No item loot table currently defined in `LOOT_TABLES`
+- Encounter locations:
+  - Forced: `Cinderfall Gate`
+  - Potential: `Cinderfall Relay`
 
 ### Skeletal Sentry
 

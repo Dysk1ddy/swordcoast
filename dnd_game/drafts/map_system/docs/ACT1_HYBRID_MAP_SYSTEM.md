@@ -2,20 +2,22 @@
 
 ## Purpose
 
-This draft adds an isolated Act 1 map concept without modifying any existing runtime code.
+This draft started as an isolated Act 1 map concept and now closely mirrors the playable runtime route.
 
 The structure combines three layers:
 
 - node-based overworld travel
 - grid-room local site maps
-- linear unlocks driven by flags and quests
+- linear unlocks driven by flags, quests, and light reactivity state
 
 That matches the current Act 1 shape already present in the project:
 
 - `phandalin_hub` is the central hub
 - `old_owl_well` and `wyvern_tor` are the branch sites
+- `cinderfall_ruins` is the hidden optional mid-act route
 - `ashfall_watch` is the convergence assault
 - `tresendar_manor` and `emberhall_cellars` are late linear descents
+- Act 1 also tracks `Town Fear`, `Ashen Strength`, and `Survivors Saved` for late-act reactivity
 
 ## Rich-Guided Visual Direction
 
@@ -91,8 +93,10 @@ Use flags and quests to decide when major destinations and boss rooms open.
 This layer answers:
 
 - when Ashfall becomes available
+- when the hidden `Cinderfall` path becomes visible
 - when Tresendar is revealed
 - when Emberhall becomes the final route
+- what kind of ending pressure gets handed into Act 2
 
 ## Overworld Node Draft
 
@@ -104,6 +108,7 @@ This layer answers:
 | `high_road_ambush` | `road_ambush` | story | `act1_started` |
 | `phandalin_hub` | `phandalin_hub` | hub | `phandalin_arrived` |
 | `old_owl_well` | `old_owl_well` | dungeon entry | `miners_exchange_lead` or quest `silence_old_owl_well` |
+| `cinderfall_ruins` | `cinderfall_ruins` | dungeon entry | `hidden_route_unlocked` |
 | `wyvern_tor` | `wyvern_tor` | dungeon entry | `edermath_orchard_lead` or quest `break_wyvern_tor_raiders` |
 | `ashfall_watch` | `ashfall_watch` | dungeon entry | `old_owl_well_cleared` and `wyvern_tor_cleared` |
 | `tresendar_manor` | `tresendar_manor` | dungeon entry | `tresendar_revealed` |
@@ -117,10 +122,10 @@ This layer answers:
                   [HIGH ROAD]
                        |
                   [PHANDALIN*]
-                    /       \
-             [OLD OWL]   [WYVERN TOR]
-                    \       /
-                   [ASHFALL]
+               /       |       \
+      [OLD OWL] [CINDERFALL] [WYVERN TOR]
+               \       |       /
+                    [ASHFALL]
                        |
                   [TRESENDAR]
                        |
@@ -220,6 +225,38 @@ Keep the site outdoors while still using room-grid pacing.
 - `high_shelf`
   - Brughor boss room
   - opens once one side branch has been resolved
+
+## Cinderfall Ruins
+
+### Goal
+
+Add a hidden third route that lets the player cut Ashfall's reserve relay before the main assault.
+
+### Structure
+
+```text
+[Collapsed Gate] -> [Ash Chapel] -------> [Ember Relay Node]
+       |
+       v
+[Broken Storehouse] --------------------> [Ember Relay Node]
+```
+
+### Room logic
+
+- `collapsed_gate`
+  - opening breach and first fight
+- `ash_chapel`
+  - rescue and shrine branch
+- `broken_storehouse`
+  - reserve-slate and supply branch
+- `ember_relay`
+  - relay boss room
+  - clearing it grants `cinderfall_relay_destroyed`
+
+### Story function
+
+- Exposes the Ashen Brand's reserve-supply line before `Ashfall Watch`
+- Gives a real payoff branch where optional site progress makes the later fortress assault easier
 
 ## Ashfall Watch
 
@@ -371,15 +408,17 @@ That would fit very naturally into this draft because the room grid already dist
 - `phandalin_arrived`
 - `miners_exchange_lead`
 - `edermath_orchard_lead`
+- `hidden_route_unlocked`
 - `old_owl_well_cleared`
 - `wyvern_tor_cleared`
+- `cinderfall_relay_destroyed`
 - `ashfall_watch_cleared`
 - `tresendar_revealed`
 - `tresendar_cleared`
 - `emberhall_revealed`
 - `act1_complete`
 
-### Draft-only room progression flags
+### Live room progression flags
 
 - `old_owl_ring_cleared`
 - `old_owl_prospector_rescued`
@@ -387,6 +426,9 @@ That would fit very naturally into this draft because the room grid already dist
 - `wyvern_lower_path_cleared`
 - `wyvern_drover_rescued`
 - `wyvern_shrine_secured`
+- `cinderfall_gate_opened`
+- `cinderfall_chapel_secured`
+- `cinderfall_storehouse_searched`
 - `ashfall_gate_breached`
 - `ashfall_prisoners_freed`
 - `ashfall_signal_basin_silenced`
@@ -400,7 +442,7 @@ That would fit very naturally into this draft because the room grid already dist
 - `emberhall_archive_searched`
 - `emberhall_reserve_opened`
 
-These should stay draft-only unless you later decide to integrate them.
+These are now part of the playable Act 1 route rather than a purely hypothetical draft layer.
 
 ## Suggested Integration Path Later
 
@@ -436,4 +478,4 @@ These are the most useful choices to make next as you guide the draft:
 
 ## Current Scope
 
-This draft is Act 1 only, isolated from the live game, and designed for iteration before any integration work begins.
+This draft is still Act 1 focused, but it now describes a route structure that materially feeds the live game rather than an isolated prototype.

@@ -10,9 +10,10 @@ Act 1 is fully playable. The game now includes:
 - Expanded race options including Human, Dwarf, Elf, Halfling, Dragonborn, Half-Elf, Half-Orc, Gnome, Tiefling, Goliath, and Orc
 - Expanded class options including Fighter, Rogue, Cleric, Wizard, Paladin, Ranger, Druid, Barbarian, Bard, Monk, Sorcerer, and Warlock
 - Shared party XP, gold, inventory, level-ups, class progression, and companion relationship bonuses
-- A significantly expanded Act 1 with background-specific prologues, a larger Phandalin hub, fixed town events, non-combat scenes, inns and NPC hubs, a live hybrid map system, branching grid dungeons, multiple minibosses, and a longer final dungeon push
-- Recruitable companions with camp interactions, relationship growth, support bonuses, party/camp management, and camp resurrection for fallen allies with a `Scroll of Revivify`
-- Post-combat random encounters with non-forced outcomes, optional fights, loot scenes, road events, ruins, shrines, smugglers, bandits, animals, and abandoned locations
+- A significantly expanded Act 1 with background-specific prologues, a larger Phandalin hub, fixed town events, non-combat scenes, inns and NPC hubs, a live hybrid map system, branching grid dungeons, the hidden `Cinderfall Ruins` route, multiple minibosses, and a longer final dungeon push
+- Recruitable companions with camp interactions, relationship growth, scene support bonuses, trust-gated interjections, personal quest hooks, party/camp management, and camp resurrection for fallen allies with a `Scroll of Revivify`
+- Act 1 reactivity layers for `Town Fear`, `Ashen Strength`, and `Survivors Saved`, plus route sabotage, companion conflict scenes, and three end-of-act victory tiers that feed pressure into Act 2
+- Post-combat random encounters with non-forced outcomes, optional fights, loot scenes, road events, ruins, shrines, smugglers, bandits, animals, abandoned locations, and small follow-up chains that can pay off later in the act
 
 Act 2 is now playable as a scaffolded expedition campaign, and the project also includes:
 
@@ -27,7 +28,7 @@ Act 2 is now playable as a scaffolded expedition campaign, and the project also 
 - Potion timing rule support:
   drinking a healing potion yourself is a bonus action
   giving a healing potion to someone else is an action
-- Class and enemy abilities, status effects, resistances, parley, fleeing, and chained-fight handling
+- Class and enemy abilities, status effects, resistances, parley, fleeing, chained-fight handling, companion combat openers, and simple enemy coordination around marked targets
 
 ## Inventory, equipment, and items
 
@@ -89,11 +90,12 @@ Act 1 now uses a hybrid navigation structure:
 
 Current Act 1 dungeon structure:
 
-- `Old Owl Well`: opening dig-ring fight, then choose between the salt cart rescue or the supply trench notes before Vaelith Marr
-- `Wyvern Tor`: opening shelf fight, then choose between the drover hollow or shrine ledge before Brughor
+- `Old Owl Well`: opening dig-ring fight, then choose between the salt cart rescue or the supply trench notes before Vaelith Marr, with some approaches opening a second layer of tactical follow-up
+- `Wyvern Tor`: opening shelf fight, then choose between the drover hollow or shrine ledge before Brughor, with rescued allies and companion input able to shift the boss setup
+- `Cinderfall Ruins`: optional hidden pre-Ashfall relay strike with a chapel/storehouse branch that can cut Ashfall reinforcements and reserves
 - `Ashfall Watch`: gate breach into a fast support choice, then lower barracks, then Rukhar
 - `Tresendar Manor`: entry route, intake fight, clue branch, optional store room, then the cistern eye
-- `Emberhall Cellars`: antechamber, control/ledger branch, optional reserve room, then Varyn
+- `Emberhall Cellars`: antechamber, control/ledger branch, optional reserve room, then Varyn and an Act 1 ending state that can land as clean, costly, or fractured
 
 ## Feedback guide
 
@@ -123,9 +125,10 @@ If you want a quick focused pass on the new map system, this route will cover mo
 2. Type `map`, choose `Overworld`, and confirm the panel is still readable when reopened manually.
 3. Clear `Old Owl Well` and check whether the branch choices clearly signal direction.
 4. Clear `Wyvern Tor` and take the opposite style of branch from what you chose at Old Owl.
-5. Enter `Ashfall Watch` and verify the side branches, reconvergence, and `map -> Dungeon` flow still feel readable.
-6. Enter `Tresendar Manor` and test returning through a previously visited room.
-7. Finish `Emberhall Cellars` and note whether the final route feels readable under pressure.
+5. If `Cinderfall Ruins` unlocks, clear it before `Ashfall Watch` and check whether the hidden-route branch feels readable and worth discovering.
+6. Enter `Ashfall Watch` and verify the side branches, reconvergence, and `map -> Dungeon` flow still feel readable.
+7. Enter `Tresendar Manor` and test returning through a previously visited room.
+8. Finish `Emberhall Cellars` and note whether the final route feels readable under pressure and whether the ending state felt earned.
 
 ## Testing
 
@@ -139,7 +142,9 @@ That suite now includes coverage for:
 
 - Act 1 map-state initialization
 - branching room progression in the live map system
-- Ashfall Watch regression behavior
+- hidden-route unlocks, `Cinderfall Ruins`, and Ashfall sabotage behavior
+- companion quest / conflict hooks, encounter-chain unlocks, and Act 1 ending-tier carryover
+- new Act 1 enemy coordination and companion combat opener behavior
 - existing Act 1 scene flow compatibility
 - Act 2 local-map progression, route-order consequences, companion recruitment, pressure/digest UI, forge finale routing, and Act 3 handoff flags
 
@@ -201,6 +206,6 @@ The setting and mechanics are shaped by official D&D / Forgotten Realms referenc
 
 ## Scope
 
-Act 1 is implemented and now runs as a much longer frontier campaign: Neverwinter and the High Road lead into Phandalin, then out through Old Owl Well and Wyvern Tor in either order, then back through Ashfall Watch, Tresendar Manor, and Emberhall for the finale.
+Act 1 is implemented and now runs as a much longer frontier campaign: Neverwinter and the High Road lead into Phandalin, then out through Old Owl Well and Wyvern Tor in either order, with an optional hidden swing through Cinderfall Ruins before Ashfall Watch, then down through Tresendar Manor and Emberhall for the finale.
 
-Act 2 now runs as a playable scaffolded Phandelver / Wave Echo expedition arc with branching early leads, midpoint sponsor pressure in Phandalin, deeper companion development, route-order consequences, multi-room Wave Echo maps, a cult agent manipulating an obelisk shard, and explicit state handoff into a weirder cosmic Act 3. Act 3 itself is still roadmap-only.
+Act 2 now runs as a playable scaffolded Phandelver / Wave Echo expedition arc with branching early leads, midpoint sponsor pressure in Phandalin, deeper companion development, route-order consequences, multi-room Wave Echo maps, a cult agent manipulating an obelisk shard, and explicit state handoff from both Act 1 and Act 2 into a weirder cosmic Act 3. Act 3 itself is still roadmap-only.

@@ -4,8 +4,8 @@ This file is a repo-wide story pass for the current text-based Python DnD game. 
 
 ## What Is Live, Planned, Or Legacy
 
-- Live playable campaign: Act 1, `Ashes on the Triboar Trail`.
-- Planned scaffold: Act 2, `Echoes Beneath the Sword Mountains`.
+- Live fully playable campaign: Act 1, `Ashes on the Triboar Trail`.
+- Live partially playable scaffold: Act 2, `Echoes Beneath the Sword Mountains`.
 - Roadmap only: Act 3, `The Jewel and the Chasm`.
 - Important implementation note: the live Act 1 route uses `MapSystemMixin`, so some older linear Act 1 scene code is effectively superseded by the room-based map version.
 - The `android_port/` folder is a legacy mirror of an older, shorter Act 1 flow. It does not add unique new branches beyond the current desktop version.
@@ -203,31 +203,36 @@ This means the game's narrative identity is not only in scenes; part of it lives
   - Half-Elf Ranger.
   - Recruited in Neverwinter if Mira sends the scout.
   - Story role: quiet pattern-reader and woods guide.
-  - Scene support: `road_ambush`.
+  - Scene support: `road_ambush`, `wyvern_tor`.
+  - Great-trust combat opener: `Shadow Volley`.
 
 - `Rhogar Valeguard`
   - Dragonborn Paladin.
   - Recruited in Neverwinter if Mira sends the caravan guardian.
   - Story role: oath-driven protector.
   - Scene support: `ashfall_watch`.
+  - Late Act 1 hook: can collide with Bryn over how publicly Cinderfall route names should be handled.
 
 - `Tolan Ironshield`
   - Dwarf Fighter.
   - Recruited after the High Road ambush or later at Stonehill Inn.
   - Story role: veteran shield-wall survivor.
   - Scene support: `ashfall_watch`.
+  - Great-trust combat opener: `Hold the Line`.
 
 - `Bryn Underbough`
   - Halfling Rogue.
   - Recruited at Stonehill Inn, first through `Persuasion`, then through a later `Insight` retry if the first ask fails.
   - Story role: rumor-reader, anxious scout, ex-smuggler.
-  - Scene support: `emberhall_cellars`.
+  - Scene support: `old_owl_well`, `emberhall_cellars`.
+  - Personal hook: `Loose Ends`, an old cache and ledger decision that can surface through trench notes or the smuggler encounter chain.
 
 - `Elira Dawnmantle`
   - Human Cleric.
   - Recruited at the shrine; automatically easier if you helped her first.
   - Story role: frontier priestess and moral center.
   - Scene support: `camp_rest`.
+  - Personal hook: `Faith Under Ash`, a captured-cultist judgment scene inside `Ashfall Watch`.
 
 #### Act 2 companions
 
@@ -313,14 +318,15 @@ This means the game's narrative identity is not only in scenes; part of it lives
 1. Background-specific prologue in or near Neverwinter.
 2. Mira Thann's private briefing.
 3. High Road ambush and Tolan pivot.
-4. Phandalin hub and side conversations.
+4. Phandalin hub, side conversations, and possible early discovery of the hidden `Cinderfall` route.
 5. `Old Owl Well` and `Wyvern Tor` in either order.
-6. Stonehill war-room council.
-7. `Ashfall Watch`.
-8. Lantern vigil in Phandalin.
-9. `Tresendar Manor`.
-10. `Emberhall Cellars`.
-11. Act 1 completion and Wave Echo foreshadowing.
+6. Optional `Cinderfall Ruins` relay strike before the main assault.
+7. Stonehill war-room council.
+8. `Ashfall Watch`.
+9. Lantern vigil in Phandalin.
+10. `Tresendar Manor`.
+11. `Emberhall Cellars`.
+12. Act 1 completion, ending tier resolution, and Wave Echo foreshadowing.
 
 ### Neverwinter briefing
 
@@ -374,6 +380,8 @@ First impression choices:
 - `Persuasion`: announce that Neverwinter sent help.
 - `Investigation`: read the tracks, barricades, and weak points.
 - There are also class/race identity response options in some dialogue scenes.
+
+A strong `Insight` read can also reveal the hidden `Cinderfall Ruins` route before either outer branch is complete.
 
 ### Phandalin hub conversations and side-story hubs
 
@@ -472,6 +480,7 @@ What this hub adds:
 
 - The main lead into `Old Owl Well`.
 - Strong hints that the gang's violence is tied to logistics and salvage, not just open raiding.
+- One of the cleanest non-combat reveal lanes for the hidden `Cinderfall` reserve route.
 
 ### Fixed Act 1 convergence beats
 
@@ -523,6 +532,7 @@ Room story beats:
     - Stealth through the trench.
     - Arcana read on the ritual sigils.
     - Deception as hired salvage.
+  - The stealth opening now branches again into sabotage, sentry removal, or deeper infiltration.
 - `Salt Cart Hollow`
   - Rescue options:
     - `Medicine`
@@ -533,11 +543,13 @@ Room story beats:
     - `Investigation`
     - `Arcana`
     - quick salvage and destroy the rest
+    - if Bryn is trusted and active, let her read the soot ledgers herself
 - `Buried Dark Lip`
   - Boss talk options against `Vaelith Marr`:
     - `Religion`
     - `Intimidation`
     - immediate rush
+  - Boss setup now reacts to the earlier sabotage, sentry, or infiltration outcome
 
 Story function:
 
@@ -565,21 +577,53 @@ Room story beats:
     - `Medicine`
     - `Insight`
     - cut them loose and arm them
+  - The follow-up ask can now send a warning, stage a hidden signal, or loose the remaining beasts
 - `Shrine Ledge`
   - Ledge options:
     - restore shrine by `Religion`
     - loose the tethered beasts
     - strip the tack and empty the ledge
+    - if Rhogar is trusted and active, let him reset the cairn oath directly
 - `Broken High Shelf`
   - Boss talk options against `Brughor`:
     - `Intimidation`
     - `Athletics`
     - immediate strike
+  - Boss setup now reacts to hidden spotter support, a camp stampede, and Rhogar's omen
 
 Story function:
 
 - Handles the raider-and-worg pressure on the high ground.
 - Confirms the hill raiders are coordinated with Ashfall instead of acting alone.
+
+#### Cinderfall Ruins
+
+Route structure:
+
+- `Collapsed Gate`
+- branch to `Ash Chapel`
+- branch to `Broken Storehouse`
+- reconverge at `Ember Relay Node`
+
+Room story beats:
+
+- `Collapsed Gate`
+  - Breach options:
+    - `Stealth`
+    - `Investigation`
+    - `Athletics`
+- `Ash Chapel`
+  - Survivor-and-shrine side branch that can increase the rescue count
+- `Broken Storehouse`
+  - Supply and route-slate branch that exposes how Ashfall is being fed off the main road
+- `Ember Relay Node`
+  - Relay strike that can cut Ashfall reinforcements and deny Rukhar his reserve edge
+
+Story function:
+
+- Acts as the dynamic third route in mid-Act 1.
+- Foreshadows Emberhall's deeper logistics.
+- Gives the player a concrete way to shape the later Ashfall difficulty.
 
 #### Ashfall Watch
 
@@ -706,10 +750,14 @@ Story function:
 
 When `Varyn Sable` falls:
 
-- Phandalin finally gets real relief.
-- The Ashen Brand breaks as an organized threat.
+- Act 1 now records one of three ending tiers:
+  - `clean_victory`
+  - `costly_victory`
+  - `fractured_victory`
+- That ending state is shaped by `Town Fear`, `Ashen Strength`, `Survivors Saved`, and strained late-act moral choices around Bryn, Elira, and Rhogar.
+- Phandalin can leave the act relieved, exhausted, or still visibly cracked by what it took to win.
 - Varyn's ledgers point toward older powers beneath the Sword Mountains.
-- `Wave Echo Cave` becomes the obvious next narrative destination.
+- `Wave Echo Cave` becomes the obvious next narrative destination, and the game records `act2_starting_pressure` for the next act.
 
 ## Act 1 Post-Combat Random Encounter Story Pool
 
@@ -721,9 +769,11 @@ These are optional side vignettes that can trigger after fights. They are not pu
 | Abandoned Cottage | A soot-stained roadside cottage has a suspiciously newer cellar door. |
 | Bandit Toll Line | A fake toll rope and sign block the road while voices wait out of sight. |
 | Wounded Messenger | A messenger in torn livery is bleeding out behind a milepost. |
+| Messenger Returns | A previously saved courier can come back later with a reward and more road intel. |
 | Hunter's Snare | A taut roadside snare is waiting for a careless ankle. |
 | Lone Wolf at the Kill | A wolf guards a carcass and a glinting torn purse. |
 | Smuggler Cookfire | A hidden cookfire and tarp suggest smugglers camping just off-road. |
+| Smuggler Revenge Squad | If the smugglers are disrupted, they can later come back with Ashen Brand backing. |
 | Shrine of Tymora | A weathered lucky-road shrine still stands under an oak. |
 | Half-Sunk Satchel | A satchel is trapped in runoff water in a muddy ditch. |
 | Ruined Wayhouse | A roofless wayhouse hides fresh scrape marks around its cellar trapdoor. |
@@ -739,6 +789,10 @@ General pattern:
 - Most of these offer three choices.
 - The options are usually a careful skill route, a bolder forceful route, and a leave-it or escalate-it route.
 - Outcomes can be loot, clue-like flavor, damage, or a short side fight.
+- A few now chain forward into later road scenes or companion-quest payoffs:
+  - `Wounded Messenger` -> `Messenger Returns`
+  - `Smuggler Cookfire` -> `Smuggler Revenge Squad`
+  - `Abandoned Cottage` can expose an `Emberhall` clue once Bryn's cache trail is live
 
 ## Act 2 Scaffold Story Content
 

@@ -28,6 +28,10 @@ The presentation pass now uses native `rich` layout and panels when available, w
 
 The current playable game now uses ideas from this draft in several places:
 
+- playable Act 1 overworld routing through `Phandalin`, `Old Owl Well`, hidden `Cinderfall Ruins`, `Wyvern Tor`, `Ashfall Watch`, `Tresendar Manor`, and `Emberhall Cellars`
+- room-based Act 1 dungeon progression for those hostile sites, including branch-and-reconverge layouts
+- Act 1 route reactivity such as hidden-route unlocks, `Town Fear` / `Ashen Strength` / `Survivors Saved` tracking, and the `clean` / `costly` / `fractured` ending-tier carryover
+- Ashfall-specific payoff hooks where `Cinderfall` sabotage changes later enemy setup
 - richer Act 2 map requirements such as flag counts, numeric thresholds, and route-order checks
 - read-only Act 2 route rendering through the in-game `map` command
 - playable local maps for `Stonehollow Dig`, `Broken Prospect`, `South Adit`, `Wave Echo Outer Galleries`, `Black Lake Causeway`, and the `Forge of Spells`
