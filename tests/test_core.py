@@ -601,6 +601,298 @@ class CoreTests(unittest.TestCase):
         self.assertIn("HIGH ROAD", rendered_map)
         self.assertIn("(  PHANDALIN  )", rendered_map)
 
+    def test_blackwake_map_nodes_and_dungeon_exist(self) -> None:
+        self.assertIn("blackwake_crossing", ACT1_HYBRID_MAP.nodes)
+        self.assertIn("road_decision_post_blackwake", ACT1_HYBRID_MAP.nodes)
+        self.assertIn("blackwake_crossing_branch", ACT1_HYBRID_MAP.dungeons)
+
+        dungeon = ACT1_HYBRID_MAP.dungeons["blackwake_crossing_branch"]
+        self.assertEqual(dungeon.entrance_room_id, "charred_tollhouse")
+        self.assertEqual(dungeon.exit_to_node_id, "road_decision_post_blackwake")
+        self.assertIn("millers_ford_flooded_approach", dungeon.rooms["charred_tollhouse"].exits)
+        self.assertIn("gallows_hanging_path", dungeon.rooms["charred_tollhouse"].exits)
+        self.assertEqual(dungeon.rooms["floodgate_chamber"].encounter_key, "sereth_vane_boss")
+
+    def test_phandalin_arrival_mentions_blackwake_resolution_once(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9201))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            flags={
+                "blackwake_completed": True,
+                "blackwake_resolution": "evidence",
+                "blackwake_sereth_fate": "escaped",
+            },
+        )
+
+        def choose_once(prompt, options, **kwargs):
+            if prompt == "How do you enter town?":
+                return 1
+            raise self._SceneExit()
+
+        game.scenario_choice = choose_once  # type: ignore[method-assign]
+        game.skill_check = lambda actor, skill, dc, context: True
+        with self.assertRaises(self._SceneExit):
+            game.scene_phandalin_hub()
+        rendered = self.plain_output(log)
+        self.assertIn("The copied seals and ledgers from Blackwake", rendered)
+        self.assertIn("Sereth Vane's name", rendered)
+        self.assertTrue(game.state.flags["phandalin_blackwake_arrival_seen"])
+
+    def blackwake_finale_game(
+        self,
+        *,
+        final_choice: int,
+        companions=None,
+        encounter_outcome: str = "victory",
+        flags: dict[str, object] | None = None,
+    ):
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        player.inventory.clear()
+        companion_list = list(companions or [])
+        for companion in companion_list:
+            companion.inventory.clear()
+        log: list[str] = []
+        base_flags: dict[str, object] = {
+            "act1_started": True,
+            "blackwake_started": True,
+            "blackwake_ash_office_searched": True,
+        }
+        if flags:
+            base_flags.update(flags)
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9206 + final_choice))
+        game.state = GameState(
+            player=player,
+            companions=companion_list,
+            current_scene="blackwake_crossing",
+            inventory={},
+            flags=base_flags,
+        )
+        game.ensure_state_integrity()
+        game.grant_quest("trace_blackwake_cell")
+
+        def choose_finale_option(prompt, options, **kwargs):
+            if prompt == "Sereth waits to see whether this becomes bargain, threat, or blood.":
+                return len(options)
+            if prompt == "The chamber is collapsing into smoke, shouting, and floodwater. What matters most now?":
+                return final_choice
+            raise AssertionError(f"Unexpected prompt: {prompt}")
+
+        game.scenario_choice = choose_finale_option  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounter_outcome  # type: ignore[method-assign]
+        dungeon = ACT1_HYBRID_MAP.dungeons["blackwake_crossing_branch"]
+        game._blackwake_floodgate_chamber(dungeon, dungeon.rooms["floodgate_chamber"])
+        return game, log
+
+    def test_blackwake_floodgate_rescue_resolution_sets_people_first_flags(self) -> None:
+        elira = create_elira_dawnmantle()
+        rhogar = create_rhogar_valeguard()
+        game, _ = self.blackwake_finale_game(final_choice=1, companions=[elira, rhogar])
+
+        self.assertEqual(game.state.current_scene, "road_decision_post_blackwake")
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_resolution"], "rescue")
+        self.assertEqual(game.state.flags["blackwake_sereth_fate"], "dead")
+        self.assertEqual(game.state.inventory["potion_healing"], 1)
+        self.assertEqual(game.state.gold, 8)
+        self.assertEqual(elira.disposition, 2)
+        self.assertEqual(rhogar.disposition, 1)
+        self.assertEqual(game.state.quests["trace_blackwake_cell"].status, "ready_to_turn_in")
+
+    def test_blackwake_floodgate_evidence_resolution_sets_proof_flags(self) -> None:
+        bryn = create_bryn_underbough()
+        elira = create_elira_dawnmantle()
+        game, _ = self.blackwake_finale_game(final_choice=2, companions=[bryn, elira])
+
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_resolution"], "evidence")
+        self.assertTrue(game.state.flags["blackwake_evidence_secured"])
+        self.assertTrue(game.state.flags["blackwake_ledgers_secured"])
+        self.assertEqual(game.state.gold, 22)
+        self.assertEqual(bryn.disposition, 1)
+        self.assertEqual(elira.disposition, -1)
+        self.assertTrue(any("organized route corruption" in clue for clue in game.state.clues))
+
+    def test_blackwake_floodgate_sabotage_resolution_weakens_supply_line(self) -> None:
+        kaelis = create_kaelis_starling()
+        bryn = create_bryn_underbough()
+        game, _ = self.blackwake_finale_game(final_choice=3, companions=[kaelis, bryn])
+
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_resolution"], "sabotage")
+        self.assertTrue(game.state.flags["blackwake_cache_sabotaged"])
+        self.assertEqual(game.act1_metric_value("act1_ashen_strength"), 2)
+        self.assertTrue(game.act1_relay_sabotaged())
+        self.assertEqual(game.state.inventory["antitoxin_vial"], 1)
+        self.assertEqual(kaelis.disposition, 1)
+        self.assertEqual(bryn.disposition, -1)
+
+    def test_blackwake_floodgate_flee_marks_sereth_escaped(self) -> None:
+        game, _ = self.blackwake_finale_game(final_choice=1, encounter_outcome="fled")
+
+        self.assertEqual(game.state.current_scene, "road_decision_post_blackwake")
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_sereth_fate"], "escaped")
+        self.assertNotIn("blackwake_resolution", game.state.flags)
+        self.assertEqual(game.state.quests["trace_blackwake_cell"].status, "ready_to_turn_in")
+
+    def blackwake_navigation_game(
+        self,
+        *,
+        route_titles: list[str],
+        room_choices: dict[str, int],
+        final_choice: int,
+    ):
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        player.inventory.clear()
+        log: list[str] = []
+        encounters: list[Encounter] = []
+        route_iter = iter(route_titles)
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9210 + final_choice))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            inventory={},
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        def choose_route(prompt: str, options: list[str], **kwargs) -> int:
+            plain_options = [strip_ansi(option) for option in options]
+            if prompt.startswith("What do you do from "):
+                target = next(route_iter)
+                for index, option in enumerate(plain_options, start=1):
+                    if target in option:
+                        return index
+                raise AssertionError(f"Could not find route target {target!r} in {plain_options!r}")
+            if prompt == "Sereth waits to see whether this becomes bargain, threat, or blood.":
+                for index, option in enumerate(plain_options, start=1):
+                    if "Confront Sereth" in option:
+                        return index
+                return len(options)
+            if prompt == "The chamber is collapsing into smoke, shouting, and floodwater. What matters most now?":
+                return final_choice
+            for key, choice in room_choices.items():
+                if key in prompt:
+                    return choice
+            raise AssertionError(f"Unexpected Blackwake prompt: {prompt}")
+
+        game.scenario_choice = choose_route  # type: ignore[method-assign]
+        game.scene_blackwake_crossing()
+        return game, encounters, log
+
+    def test_blackwake_navigation_can_finish_with_millers_ford_only(self) -> None:
+        game, encounters, _ = self.blackwake_navigation_game(
+            route_titles=[
+                "Flooded Approach",
+                "Reedbank Camp",
+                "Ford Ledger Post",
+                "Outer Cache",
+                "Seal Workshop",
+                "Ash Office",
+                "Floodgate Chamber",
+            ],
+            room_choices={
+                "burned tollhouse": 1,
+                "Miller's Ford": 1,
+                "forged checkpoint tent": 3,
+                "ledger post": 4,
+                "outer cache": 2,
+                "forgery workshop": 1,
+                "record do you focus": 2,
+            },
+            final_choice=2,
+        )
+
+        self.assertEqual(game.state.current_scene, "road_decision_post_blackwake")
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_resolution"], "evidence")
+        self.assertTrue(game.state.flags["blackwake_forged_papers_found"])
+        self.assertNotIn("blackwake_transfer_list_found", game.state.flags)
+        self.assertEqual(game.state.flags["blackwake_sereth_fate"], "captured")
+        self.assertEqual([encounter.title for encounter in encounters], ["Charred Tollhouse Breakout", "Boss: Sereth Vane"])
+        self.assertCountEqual(
+            game.state.flags["map_state"]["cleared_rooms"],
+            [
+                "charred_tollhouse",
+                "millers_ford_flooded_approach",
+                "reedbank_camp",
+                "ford_ledger_post",
+                "outer_cache",
+                "seal_workshop",
+                "ash_office",
+                "floodgate_chamber",
+            ],
+        )
+
+    def test_blackwake_navigation_can_finish_with_gallows_copse_only(self) -> None:
+        game, encounters, _ = self.blackwake_navigation_game(
+            route_titles=[
+                "Hanging Path",
+                "Cage Clearing",
+                "Root Cellar Hollow",
+                "Outer Cache",
+                "Prison Pens",
+                "Ash Office",
+                "Floodgate Chamber",
+            ],
+            room_choices={
+                "burned tollhouse": 4,
+                "hanging path": 3,
+                "captives": 1,
+                "root cellar hollow": 2,
+                "outer cache": 1,
+                "prisoners": 1,
+                "record do you focus": 3,
+            },
+            final_choice=1,
+        )
+
+        self.assertEqual(game.state.current_scene, "road_decision_post_blackwake")
+        self.assertTrue(game.state.flags["blackwake_completed"])
+        self.assertEqual(game.state.flags["blackwake_resolution"], "rescue")
+        self.assertTrue(game.state.flags["blackwake_transfer_list_found"])
+        self.assertNotIn("blackwake_forged_papers_found", game.state.flags)
+        self.assertEqual(game.state.flags["blackwake_sereth_fate"], "captured")
+        self.assertEqual([encounter.title for encounter in encounters], ["Blackwake Outer Cache", "Boss: Sereth Vane"])
+        self.assertCountEqual(
+            game.state.flags["map_state"]["cleared_rooms"],
+            [
+                "charred_tollhouse",
+                "gallows_hanging_path",
+                "cage_clearing",
+                "root_cellar_hollow",
+                "outer_cache",
+                "prison_pens",
+                "ash_office",
+                "floodgate_chamber",
+            ],
+        )
+
     def test_map_requirement_supports_flag_count_groups(self) -> None:
         requirement = Requirement(
             flag_count_requirements=(
@@ -1638,6 +1930,36 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Choir intelligence: captives have named the Quiet Choir's prison cadence; barracks orders confirm the Forge-side reserve plan.", rendered)
         self.assertIn("Campaign Snapshot:", rendered)
 
+    def test_act2_start_records_escaped_sereth_callback(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9212))
+        game.state = GameState(
+            player=player,
+            current_scene="act1_complete",
+            flags={
+                "blackwake_completed": True,
+                "blackwake_sereth_fate": "escaped",
+                "blackwake_sereth_road_note_seen": True,
+            },
+        )
+        game.start_act2_scaffold()
+        game.show_act2_campaign_status()
+        game.show_journal()
+
+        rendered = self.plain_output(log)
+        self.assertTrue(game.state.flags["act2_sereth_shadow_active"])
+        self.assertTrue(game.state.flags["act2_sereth_callback_recorded"])
+        self.assertIn("Blackwake callback: Sereth Vane escaped the crossing", rendered)
+        self.assertIn("Blackwake consequence: Sereth Vane escaped into Act 2's route war", rendered)
+
     def test_act2_scaffold_complete_mentions_forge_subroutes_in_handoff(self) -> None:
         player = build_character(
             name="Vale",
@@ -2246,6 +2568,13 @@ class CoreTests(unittest.TestCase):
         enemy = create_enemy("rukhar")
         self.assertEqual(enemy.name, "Rukhar Cinderfang")
         self.assertGreater(enemy.max_hp, 20)
+        saboteur = create_enemy("brand_saboteur")
+        self.assertEqual(saboteur.name, "Ashen Brand Saboteur")
+        self.assertEqual(saboteur.resources["flash_ash"], 1)
+        sereth = create_enemy("sereth_vane")
+        self.assertEqual(sereth.name, "Sereth Vane")
+        self.assertGreaterEqual(sereth.max_hp, 30)
+        self.assertIn("leader", sereth.tags)
 
     def test_new_race_and_class_options_available(self) -> None:
         self.assertIn("Dragonborn", RACES)
@@ -2330,6 +2659,7 @@ class CoreTests(unittest.TestCase):
                 "1",  # soldier prologue choice
                 "6",  # take the writ
                 "1",  # recruit Kaelis on departure
+                "1",  # take the direct road at the route fork
             ]
         )
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(7))
@@ -2358,6 +2688,7 @@ class CoreTests(unittest.TestCase):
                 "1",  # soldier prologue choice
                 "6",  # take the writ
                 "1",  # recruit Kaelis on departure
+                "1",  # take the direct road at the route fork
             ]
         )
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8))
@@ -2367,6 +2698,27 @@ class CoreTests(unittest.TestCase):
         game.scene_neverwinter_briefing()
         self.assertEqual(game.state.current_scene, "road_ambush")
         self.assertTrue(any(companion.name == "Kaelis Starling" for companion in game.state.companions))
+
+    def test_departure_fork_can_start_blackwake_branch(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        answers = iter(["2"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8042))
+        game.state = GameState(
+            player=player,
+            current_scene="neverwinter_briefing",
+            flags={"act1_started": True, "early_companion_recruited": "Kaelis Starling"},
+        )
+        game.handle_neverwinter_departure_fork()
+        self.assertEqual(game.state.current_scene, "blackwake_crossing")
+        self.assertTrue(game.state.flags["blackwake_started"])
+        self.assertIn("trace_blackwake_cell", game.state.quests)
 
     def test_road_ambush_flow_recruits_tolan(self) -> None:
         player = build_character(
@@ -2386,6 +2738,37 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(any(companion.name == "Tolan Ironshield" for companion in game.state.companions))
         rendered = self.plain_output(log)
         self.assertIn("Tolan Ironshield: \"Good. Give me a minute to cinch the shield", rendered)
+
+    def test_sereth_escape_leaves_high_road_followup_note(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "2"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(9209))
+        game.state = GameState(
+            player=player,
+            current_scene="road_ambush",
+            clues=[],
+            journal=[],
+            flags={
+                "blackwake_completed": True,
+                "blackwake_sereth_fate": "escaped",
+            },
+        )
+        game.skill_check = lambda actor, skill, dc, context: True
+        game.run_encounter = lambda encounter: "victory"
+        game.scene_road_ambush()
+        rendered = self.plain_output(log)
+        self.assertIn("S.V. mark", rendered)
+        self.assertTrue(game.state.flags["blackwake_sereth_road_note_seen"])
+        self.assertTrue(any("Sereth Vane survived Blackwake" in clue for clue in game.state.clues))
+        self.assertTrue(any("Sereth Vane's initials surfaced" in entry for entry in game.state.journal))
 
     def test_point_buy_character_creation_flow(self) -> None:
         answers = iter(
@@ -2546,7 +2929,7 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Insight", "Performance", "Persuasion"],
         )
         log: list[str] = []
-        answers = iter(["1", "3", "4", "1"])
+        answers = iter(["1", "3", "4", "1", "1"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(3010))
         game.state = GameState(player=player, current_scene="neverwinter_briefing")
         game.scene_neverwinter_briefing()
@@ -2567,6 +2950,7 @@ class CoreTests(unittest.TestCase):
         game.state = GameState(player=player, current_scene="neverwinter_briefing", flags={"briefing_seen": True})
         game.scene_identity_options = lambda scene_key: []
         game.offer_early_companion = lambda: None
+        game.handle_neverwinter_departure_fork = lambda: setattr(game.state, "current_scene", "road_ambush")
         game.player_choice_output = lambda text: None
         game.keyboard_choice_menu_supported = lambda: True
         seen: dict[str, object] = {}
@@ -2760,6 +3144,39 @@ class CoreTests(unittest.TestCase):
         self.assertIn('"Tell me about the worst road you ever guarded."', rendered)
         self.assertIn('Tolan Ironshield: "Sleet, broken axles', rendered)
         self.assertIn("*Ask how they see you now.", rendered)
+
+    def test_blackwake_camp_topics_are_flag_gated(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        first_log: list[str] = []
+        first_answers = iter(["1", "5"])
+        first_companion = create_kaelis_starling()
+        first_game = TextDnDGame(input_fn=lambda _: next(first_answers), output_fn=first_log.append, rng=random.Random(9202))
+        first_game.state = GameState(player=player, companions=[first_companion], current_scene="camp")
+        first_game.talk_to_companion()
+        self.assertNotIn("What happened at the crossing?", self.plain_output(first_log))
+
+        second_log: list[str] = []
+        second_answers = iter(["1", "4", "6"])
+        second_companion = create_kaelis_starling()
+        second_game = TextDnDGame(input_fn=lambda _: next(second_answers), output_fn=second_log.append, rng=random.Random(9203))
+        second_game.state = GameState(
+            player=player,
+            companions=[second_companion],
+            current_scene="camp",
+            flags={"blackwake_completed": True},
+        )
+        second_game.talk_to_companion()
+        rendered = self.plain_output(second_log)
+        self.assertIn("What happened at the crossing?", rendered)
+        self.assertIn("That is not banditry. That is logistics with a knife.", rendered)
+        self.assertIn("blackwake_crossing", second_companion.bond_flags["talked_topics"])
 
     def test_terrible_relationship_causes_companion_to_leave(self) -> None:
         player = build_character(
@@ -4108,6 +4525,39 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertEqual(rendered.count('1. "Where is the Ashen Brand hurting you the most?"'), 1)
 
+    def test_steward_accepts_blackwake_report_once(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "1"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(9204))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            flags={
+                "steward_seen": True,
+                "steward_pressure_asked": True,
+                "steward_ruins_asked": True,
+                "steward_vow_made": True,
+                "blackwake_completed": True,
+                "blackwake_resolution": "evidence",
+                "blackwake_sereth_fate": "escaped",
+            },
+        )
+        game.visit_steward()
+        rendered = self.plain_output(log)
+        self.assertIn("*Share what happened at Blackwake Crossing.", rendered)
+        self.assertIn("False seals this close to Neverwinter", rendered)
+        self.assertIn("Sereth Vane is still breathing", rendered)
+        self.assertTrue(game.state.flags["steward_blackwake_asked"])
+        self.assertEqual(game.state.gold, 8)
+
     def test_inn_question_cannot_be_repeated(self) -> None:
         player = build_character(
             name="Velkor",
@@ -4125,6 +4575,39 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertEqual(rendered.count('1. "Mind if I buy you a drink and ask a few questions?"'), 1)
 
+    def test_inn_blackwake_rumor_reflects_resolution_once(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "1"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(9205))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            flags={
+                "inn_seen": True,
+                "inn_buy_drink_asked": True,
+                "inn_road_rumors_asked": True,
+                "inn_recruit_bryn_attempted": True,
+                "inn_recruit_bryn_second_attempted": True,
+                "blackwake_completed": True,
+                "blackwake_resolution": "sabotage",
+                "blackwake_sereth_fate": "escaped",
+            },
+        )
+        game.visit_stonehill_inn()
+        rendered = self.plain_output(log)
+        self.assertIn('"What are people saying about Blackwake Crossing?"', rendered)
+        self.assertIn("someone taught the Brand what a supply loss feels like", rendered)
+        self.assertIn("Sereth Vane", rendered)
+        self.assertTrue(game.state.flags["inn_blackwake_rumor_asked"])
+
     def test_briefing_question_cannot_be_repeated(self) -> None:
         player = build_character(
             name="Velkor",
@@ -4135,7 +4618,7 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         log: list[str] = []
-        answers = iter(["1", "1", "4", "1"])
+        answers = iter(["1", "1", "4", "1", "1"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(27))
         game.state = GameState(player=player, current_scene="neverwinter_briefing", flags={"briefing_seen": True})
         game.scene_neverwinter_briefing()

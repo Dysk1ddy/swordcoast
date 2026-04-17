@@ -278,6 +278,18 @@ class StoryAct2ScaffoldMixin:
         self.state.flags.setdefault("act2_captive_outcome", "uncertain")
         self.state.flags["act2_metrics_initialized"] = True
 
+    def act2_initialize_blackwake_callbacks(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("blackwake_sereth_fate") != "escaped":
+            return
+        self.state.flags["act2_sereth_shadow_active"] = True
+        if self.state.flags.get("act2_sereth_callback_recorded"):
+            return
+        self.state.flags["act2_sereth_callback_recorded"] = True
+        self.add_journal(
+            "Blackwake consequence: Sereth Vane escaped into Act 2's route war; false permits and quiet cargo claims may surface again around Wave Echo."
+        )
+
     def act2_late_route_hub_recap(self) -> str | None:
         assert self.state is not None
         first_late_route = str(self.state.flags.get("act2_first_late_route", "")).strip()
@@ -355,6 +367,10 @@ class StoryAct2ScaffoldMixin:
             route_parts.append("the Forge lens has been broken")
         if route_parts:
             lines.append(f"Route intelligence: {'; '.join(route_parts)}.")
+        if self.state.flags.get("act2_sereth_shadow_active"):
+            lines.append(
+                "Blackwake callback: Sereth Vane escaped the crossing and remains a live route-corruption thread around Wave Echo supply claims."
+            )
         forge_route_line = self.act2_forge_route_summary_line()
         if forge_route_line is not None:
             lines.append(f"Forge route: {forge_route_line}")
@@ -583,6 +599,7 @@ class StoryAct2ScaffoldMixin:
         self.state.flags["act2_started"] = True
         self.state.flags["act2_scaffold_enabled"] = True
         self.act2_initialize_metrics()
+        self.act2_initialize_blackwake_callbacks()
         self.state.current_scene = "act2_claims_council"
         self.add_journal(
             "Act 2 begins with a claims war around Wave Echo Cave, a town trying to stay intact, and a cult using the mine's old song as a listening tool."

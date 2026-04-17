@@ -34,6 +34,13 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "response": "Old habits are the reason more people are alive than dead.",
                 "delta": -2,
             },
+            {
+                "id": "blackwake_ledgers_people",
+                "prompt": "\"Would you have saved the ledgers or the people?\"",
+                "response": "People. Then ledgers if the gods give you time. Proof can shame a city, but a breathing witness can still choose tomorrow.",
+                "delta": 1,
+                "requires_flags": ["blackwake_completed"],
+            },
         ],
         "great_dialogue": "I'd trust your call in a blind pass.",
         "exceptional_dialogue": "Shield-kin. That's what you are to me now. This campfire feels more like home than any barracks has in years.",
@@ -44,7 +51,12 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "text": "Tolan quietly maps the tower angles for you and helps the party tighten their approach.",
                 "hero_bonus": 1,
                 "ally_statuses": {"blessed": 1},
-            }
+            },
+            "blackwake_crossing": {
+                "text": "Tolan plants himself where panicked survivors can see a shield, and the company moves with steadier purpose.",
+                "hero_bonus": 1,
+                "ally_statuses": {"blessed": 1},
+            },
         },
     },
     "bryn_underbough": {
@@ -74,6 +86,13 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "response": "Surviving usually starts with worrying before anyone else does.",
                 "delta": -2,
             },
+            {
+                "id": "blackwake_neverwinter_cares",
+                "prompt": "\"Do you think Neverwinter even cares?\"",
+                "response": "The city cares when caring has handles: names, seals, routes, someone to blame. Blackwake gave us handles. Now we see who grabs them.",
+                "delta": 1,
+                "requires_flags": ["blackwake_completed"],
+            },
         ],
         "great_dialogue": "I start noticing more when you're around, mostly because I know you'll actually listen.",
         "exceptional_dialogue": "I don't plan my exit route first anymore when you walk into a room. That's new.",
@@ -89,7 +108,12 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "text": "Bryn spots the safest shadow-line through the cellar and hands the party a cleaner opening.",
                 "hero_bonus": 1,
                 "ally_statuses": {"invisible": 1},
-            }
+            },
+            "blackwake_crossing": {
+                "text": "Bryn reads the false roadwarden marks quickly enough to turn one bad paper trail into an opening.",
+                "hero_bonus": 1,
+                "ally_statuses": {"emboldened": 1},
+            },
         },
     },
     "elira_dawnmantle": {
@@ -119,6 +143,13 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "response": "Prayer alone won't, but contempt has never saved anyone either.",
                 "delta": -2,
             },
+            {
+                "id": "blackwake_aftermath",
+                "prompt": "\"What should I carry from Blackwake?\"",
+                "response": "Carry the faces, not only the proof. Records can make officials move, but people are why movement matters.",
+                "delta": 1,
+                "requires_flags": ["blackwake_completed"],
+            },
         ],
         "great_dialogue": "There are doubts I only trust you to hear.",
         "exceptional_dialogue": "I pray for your future by name now, not because I fear losing you, but because I believe in what you'll become.",
@@ -129,7 +160,12 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "text": "Elira blesses the camp before sleep, and everyone wakes steadier than expected.",
                 "hero_bonus": 0,
                 "ally_statuses": {"blessed": 2},
-            }
+            },
+            "blackwake_crossing": {
+                "text": "Elira triages the burned and frightened with calm hands, buying the party cleaner testimony and a little mercy.",
+                "hero_bonus": 1,
+                "ally_statuses": {"blessed": 1},
+            },
         },
     },
     "kaelis_starling": {
@@ -159,6 +195,13 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "response": "Caution kept me alive long before trust became an option.",
                 "delta": -2,
             },
+            {
+                "id": "blackwake_crossing",
+                "prompt": "\"What happened at the crossing?\"",
+                "response": "A clean road was taught to look dangerous, then dangerous people used the fear as cover. That is not banditry. That is logistics with a knife.",
+                "delta": 1,
+                "requires_flags": ["blackwake_completed"],
+            },
         ],
         "great_dialogue": "You get the unspoken version of my scouting reports now. I don't hand that to many people.",
         "exceptional_dialogue": "I'd follow your trail by instinct even without prints to guide me.",
@@ -174,7 +217,12 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "text": "Kaelis reads the brush like a page and murmurs the exact second to strike.",
                 "hero_bonus": 1,
                 "ally_statuses": {"invisible": 1},
-            }
+            },
+            "blackwake_crossing": {
+                "text": "Kaelis follows the ash-scored tracks and keeps the pursuit from stumbling into the obvious alarm lines.",
+                "hero_bonus": 1,
+                "ally_statuses": {"invisible": 1},
+            },
         },
     },
     "rhogar_valeguard": {
@@ -204,6 +252,13 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "response": "Belief is only naive when nobody is brave enough to defend it.",
                 "delta": -2,
             },
+            {
+                "id": "blackwake_ledgers_people",
+                "prompt": "\"Would you have saved the ledgers or the people?\"",
+                "response": "A ledger cannot look you in the eye and ask whether your oath meant anything. Save the living first. Then make the guilty fear what testimony can do.",
+                "delta": 1,
+                "requires_flags": ["blackwake_completed"],
+            },
         ],
         "great_dialogue": "Your plans feel less like arrangements now and more like shared vows.",
         "exceptional_dialogue": "Your banner would be one I could swear to without hesitation.",
@@ -214,7 +269,12 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
                 "text": "Rhogar's certainty steadies the campfire briefing and turns hesitation into resolve.",
                 "hero_bonus": 1,
                 "ally_statuses": {"blessed": 1},
-            }
+            },
+            "blackwake_crossing": {
+                "text": "Rhogar's open challenge draws frightened eyes away from the wounded long enough for the company to act.",
+                "hero_bonus": 1,
+                "ally_statuses": {"emboldened": 1},
+            },
         },
     },
     "nim_ardentglass": {

@@ -871,6 +871,48 @@ class CombatFlowMixin:
                         self.clear_status(target, "blessed")
                         self.say(f"{target.name}'s blessing gutters out under the hit.")
                 return
+        if actor.archetype == "brand_saboteur" and actor.resources.get("flash_ash", 0) > 0:
+            target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
+            actor.resources["flash_ash"] = 0
+            self.say(f"{actor.name} cracks a palmful of flash ash across {target.name}'s face.")
+            if not self.saving_throw(target, "CON", 11, context=f"against {actor.name}'s flash ash"):
+                self.apply_status(target, "blinded", 1, source=f"{actor.name}'s flash ash")
+            else:
+                self.say(f"{target.name} coughs through the ash without losing sight of the fight.")
+            return
+        if (
+            actor.archetype == "brand_saboteur"
+            and actor.resources.get("retreat_step", 0) > 0
+            and actor.current_hp <= max(1, actor.max_hp // 2)
+        ):
+            actor.resources["retreat_step"] = 0
+            self.apply_status(actor, "emboldened", 1, source=f"{actor.name}'s retreat step")
+            self.say(f"{actor.name} hooks a boot behind cover, shifts the line, and looks for a cleaner exit.")
+            return
+        if actor.archetype == "sereth_vane" and actor.resources.get("silver_pressure", 0) > 0:
+            target = min(conscious_heroes, key=lambda hero: (hero.current_hp, hero.armor_class))
+            actor.resources["silver_pressure"] = 0
+            self.say(f"{actor.name} names the price of every life in the chamber until {target.name}'s footing starts to feel negotiable.")
+            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s silver pressure"):
+                self.apply_status(target, "reeling", 2, source=f"{actor.name}'s silver pressure")
+            else:
+                self.say(f"{target.name} refuses to let Sereth turn arithmetic into fear.")
+            return
+        if actor.archetype == "sereth_vane" and actor.resources.get("command_relocate", 0) > 0 and conscious_allies:
+            ally = min(conscious_allies, key=lambda candidate: (candidate.current_hp, candidate.armor_class))
+            actor.resources["command_relocate"] = 0
+            self.apply_status(ally, "emboldened", 1, source=f"{actor.name}'s relocation order")
+            self.say(f"{actor.name} snaps two fingers and sends {ally.name} into a better angle before the line can close.")
+            return
+        if actor.archetype == "sereth_vane" and actor.resources.get("flash_ash", 0) > 0:
+            target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
+            actor.resources["flash_ash"] = 0
+            self.say(f"{actor.name} crushes a glass ash capsule underfoot and kicks the burst toward {target.name}.")
+            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s flash ash"):
+                self.apply_status(target, "blinded", 1, source=f"{actor.name}'s flash ash")
+            else:
+                self.say(f"{target.name} turns aside before the ash takes their eyes.")
+            return
         if actor.archetype == "ember_channeler" and actor.resources.get("ember_mark", 0) > 0 and marked_target is None:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["ember_mark"] = 0
@@ -1486,6 +1528,24 @@ class CombatFlowMixin:
                     1 if any(self.has_status(hero, status) for status in ("blessed", "emboldened", "invisible")) else 0,
                     hero.attack_bonus(),
                     hero.current_hp,
+                ),
+            )
+        elif actor.archetype == "brand_saboteur":
+            target = marked_target or min(
+                conscious_heroes,
+                key=lambda hero: (
+                    0 if self.has_status(hero, "blinded") else 1,
+                    hero.current_hp,
+                    hero.armor_class,
+                ),
+            )
+        elif actor.archetype == "sereth_vane":
+            target = marked_target or min(
+                conscious_heroes,
+                key=lambda hero: (
+                    0 if self.has_status(hero, "reeling") else 1,
+                    hero.current_hp,
+                    hero.armor_class,
                 ),
             )
         elif actor.archetype == "ember_channeler":

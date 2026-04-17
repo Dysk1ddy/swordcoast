@@ -589,10 +589,7 @@ class StoryIntroMixin:
             elif selection_key == "prep":
                 self.handle_neverwinter_prep()
             else:
-                if not self.state.flags.get("early_companion_recruited"):
-                    self.offer_early_companion()
-                self.add_journal("Mira Thann sent you south with a writ for Phandalin's steward.")
-                self.state.current_scene = "road_ambush"
+                self.handle_neverwinter_departure_fork()
                 return
 
     def handle_neverwinter_prep(self) -> None:
@@ -637,6 +634,56 @@ class StoryIntroMixin:
             self.say("You keep your focus on the road ahead.")
         self.state.flags["neverwinter_preparation_done"] = True
 
+    def handle_neverwinter_departure_fork(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("early_companion_recruited"):
+            self.offer_early_companion()
+        self.add_journal("Mira Thann sent you south with a writ for Phandalin's steward.")
+
+        while True:
+            self.banner("Leaving Neverwinter")
+            self.say(
+                "The south road opens beyond the last city stones, but smoke smears the river cut to the east. "
+                "A panicked wagon team hammers past with a charred toll seal hanging from the harness.",
+                typed=True,
+            )
+            choice = self.scenario_choice(
+                "Which route do you take?",
+                [
+                    self.action_option("Take the direct south road toward Phandalin."),
+                    self.action_option("Investigate the smoke and caravan panic near the river cut."),
+                    self.action_option("Circle back long enough to gather one more rumor in Neverwinter."),
+                ],
+                allow_meta=False,
+            )
+            if choice == 1:
+                self.player_action("Take the direct south road toward Phandalin.")
+                self.state.current_scene = "road_ambush"
+                return
+            if choice == 2:
+                self.player_action("Investigate the smoke and caravan panic near the river cut.")
+                self.state.flags["blackwake_started"] = True
+                self.state.flags["blackwake_return_destination"] = "undecided"
+                self.grant_quest(
+                    "trace_blackwake_cell",
+                    note="Smoke outside Neverwinter points toward Blackwake Crossing before the wider High Road opens.",
+                )
+                self.add_journal("You turned off toward Blackwake Crossing to trace smoke, forged toll seals, and missing caravans.")
+                self.state.current_scene = "blackwake_crossing"
+                return
+
+            self.player_action("Circle back long enough to gather one more rumor in Neverwinter.")
+            if not self.state.flags.get("blackwake_neverwinter_rumor"):
+                self.state.flags["blackwake_neverwinter_rumor"] = True
+                self.add_clue(
+                    "A Neverwinter drover says forged river-cut inspections are bleeding southbound caravans before they ever reach the High Road."
+                )
+                self.say(
+                    "A drover near the north gate swears the missing wagons were waved aside by men carrying good-looking papers and bad patience."
+                )
+            else:
+                self.say("The rumor loop has gone thin. The smoke east of the road is still the only fresh lead.")
+
     def offer_early_companion(self) -> None:
         assert self.state is not None
         if self.state.flags.get("early_companion_recruited"):
@@ -673,6 +720,17 @@ class StoryIntroMixin:
             "from the scrub while a chained ash wolf snaps at a wounded caravan guard trying to hold them back.",
             typed=True,
         )
+        if (
+            self.state.flags.get("blackwake_sereth_fate") == "escaped"
+            and not self.state.flags.get("blackwake_sereth_road_note_seen")
+        ):
+            self.state.flags["blackwake_sereth_road_note_seen"] = True
+            self.say(
+                "A waxy scrap pinned inside the wagon bed bears a careful S.V. mark and one fresh instruction: "
+                "move the useful cargo south before the crossing story spreads."
+            )
+            self.add_clue("A High Road note suggests Sereth Vane survived Blackwake and is still moving useful cargo south.")
+            self.add_journal("Sereth Vane's initials surfaced on a High Road note after Blackwake.")
         party_size = len(self.state.party_members())
         if party_size == 1:
             enemies = [

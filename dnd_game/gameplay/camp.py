@@ -360,6 +360,27 @@ class CampMixin:
             else:
                 return
 
+    def camp_topic_is_available(self, topic: dict[str, object]) -> bool:
+        assert self.state is not None
+
+        required_flags = topic.get("requires_flags", ())
+        if isinstance(required_flags, str):
+            required_flags = (required_flags,)
+        if any(not self.state.flags.get(str(flag)) for flag in required_flags):
+            return False
+
+        blocked_flags = topic.get("blocked_flags", ())
+        if isinstance(blocked_flags, str):
+            blocked_flags = (blocked_flags,)
+        if any(self.state.flags.get(str(flag)) for flag in blocked_flags):
+            return False
+
+        required_resolution = topic.get("requires_blackwake_resolution")
+        if required_resolution and self.state.flags.get("blackwake_resolution") != required_resolution:
+            return False
+
+        return True
+
     def talk_to_companion(self) -> None:
         assert self.state is not None
         roster = self.state.all_companions()
@@ -378,7 +399,10 @@ class CampMixin:
         while True:
             talked_topics = set(companion.bond_flags.get("talked_topics", []))
             options: list[tuple[str, str]] = []
-            for topic in profile["camp_topics"]:
+            available_topics = [
+                topic for topic in profile["camp_topics"] if self.camp_topic_is_available(topic)
+            ]
+            for topic in available_topics:
                 prefix = "" if topic["id"] not in talked_topics else "(Already discussed) "
                 options.append((topic["id"], prefix + topic["prompt"]))
             options.append(("view", self.action_option("Ask how they see you now.")))
@@ -390,7 +414,7 @@ class CampMixin:
                 continue
             if topic_id == "leave":
                 return
-            topic = next(entry for entry in profile["camp_topics"] if entry["id"] == topic_id)
+            topic = next(entry for entry in available_topics if entry["id"] == topic_id)
             self.player_choice_output(topic["prompt"])
             self.speaker(companion.name, topic["response"])
             if topic_id not in talked_topics:

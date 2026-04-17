@@ -5,6 +5,34 @@ from .constants import LEVEL_XP_THRESHOLDS
 
 
 class StoryTownHubMixin:
+    def describe_blackwake_phandalin_arrival(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("phandalin_blackwake_arrival_seen"):
+            return
+        self.state.flags["phandalin_blackwake_arrival_seen"] = True
+        resolution = self.state.flags.get("blackwake_resolution")
+        if resolution == "rescue":
+            self.say(
+                "Blackwake's rescued teamsters have already become road-talk by the time you reach Phandalin. "
+                "A few townsfolk look at you less like hired steel and more like someone who might actually bring people home."
+            )
+        elif resolution == "evidence":
+            self.say(
+                "The copied seals and ledgers from Blackwake make Phandalin's route permits look less like paperwork and more like a battlefield. "
+                "Merchants notice the proof before they trust the promise behind it."
+            )
+        elif resolution == "sabotage":
+            self.say(
+                "Rumor reaches Phandalin ahead of you: a riverside cache burned, and the Ashen Brand's northbound supply rhythm stumbled. "
+                "The town does not know whether to call it rescue, warning, or war."
+            )
+        else:
+            self.say(
+                "The Blackwake crossing follows you into town as a rumor of smoke, false seals, and caravans disappearing before Phandalin ever saw them."
+            )
+        if self.state.flags.get("blackwake_sereth_fate") == "escaped":
+            self.say("One road hand lowers their voice over Sereth Vane's name, as if saying it too clearly might invite him south.")
+
     def scene_phandalin_hub(self) -> None:
         assert self.state is not None
         self.banner("Phandalin")
@@ -17,6 +45,8 @@ class StoryTownHubMixin:
             )
             self.state.flags["phandalin_arrived"] = True
             self.add_journal("You reached Phandalin, a resettled frontier town under pressure from the Ashen Brand.")
+            if self.state.flags.get("blackwake_completed"):
+                self.describe_blackwake_phandalin_arrival()
             choice = self.scenario_choice(
                 "How do you enter town?",
                 [
@@ -133,6 +163,8 @@ class StoryTownHubMixin:
                 options.append(("pressure", "\"Where is the Ashen Brand hurting you the most?\""))
             if not self.state.flags.get("steward_ruins_asked"):
                 options.append(("ruins", "\"Tell me about the old ruins around town.\""))
+            if self.state.flags.get("blackwake_completed") and not self.state.flags.get("steward_blackwake_asked"):
+                options.append(("blackwake", self.action_option("Share what happened at Blackwake Crossing.")))
             if not self.state.flags.get("steward_vow_made"):
                 options.append(("vow", "\"I'll break their grip on Phandalin.\""))
             options.append(("leave", self.action_option("Leave Tessa to her work and move on.")))
@@ -169,6 +201,36 @@ class StoryTownHubMixin:
                     "Tessa Harrow",
                     "The old foundations are blessing and curse alike. We build against them because the stone is already here, but every buried wall and forgotten cellar gives brigands another place to vanish before decent folk even know to look.",
                 )
+            elif selection_key == "blackwake":
+                self.state.flags["steward_blackwake_asked"] = True
+                self.player_action("Share what happened at Blackwake Crossing.")
+                resolution = self.state.flags.get("blackwake_resolution")
+                if resolution == "evidence":
+                    self.speaker(
+                        "Tessa Harrow",
+                        "False seals this close to Neverwinter changes every petition on my desk. Give me names and route marks, and I can make officials answer a harder question than 'why are you afraid?'",
+                    )
+                    self.add_clue("Tessa can use the Blackwake ledgers to argue that the Ashen Brand is corrupting route authority, not merely raiding wagons.")
+                    self.reward_party(gold=8, reason="sharing Blackwake proof with Phandalin's steward")
+                elif resolution == "rescue":
+                    self.speaker(
+                        "Tessa Harrow",
+                        "Then some of those families may reach us alive. That matters here. Proof can travel later; people need the road under their feet first.",
+                    )
+                    self.add_journal("Tessa Harrow promised to watch for survivors and teamsters pulled out of Blackwake Crossing.")
+                elif resolution == "sabotage":
+                    self.speaker(
+                        "Tessa Harrow",
+                        "A burned cache buys us time even if it leaves me with fewer papers to wave in a magistrate's face. I'll take time. Time lets a town move grain, tools, and children.",
+                    )
+                    self.add_clue("Blackwake's destroyed cache may weaken Ashen Brand supply pressure south of Neverwinter.")
+                else:
+                    self.speaker(
+                        "Tessa Harrow",
+                        "That is too organized to dismiss as roadside theft. Blackwake tells me the rot starts before wagons ever reach our hills.",
+                    )
+                if self.state.flags.get("blackwake_sereth_fate") == "escaped":
+                    self.speaker("Tessa Harrow", "And if Sereth Vane is still breathing, I want that name in every watchman's ear by sundown.")
             elif selection_key == "vow":
                 self.state.flags["steward_vow_made"] = True
                 self.player_speaker("I'll break their grip on Phandalin.")
@@ -202,6 +264,8 @@ class StoryTownHubMixin:
                     options.append(("drink", "\"Mind if I buy you a drink and ask a few questions?\""))
                 if not self.state.flags.get("inn_road_rumors_asked"):
                     options.append(("rumors", "\"Tell me what the roads are saying about the Ashen Brand.\""))
+                if self.state.flags.get("blackwake_completed") and not self.state.flags.get("inn_blackwake_rumor_asked"):
+                    options.append(("blackwake", "\"What are people saying about Blackwake Crossing?\""))
                 if not self.state.flags.get("inn_recruit_bryn_attempted") and not self.has_companion("Bryn Underbough"):
                     options.append(("recruit_bryn", self.quoted_option("PERSUASION", "Take a share of the contract and ride with me.")))
                 elif (
@@ -235,6 +299,32 @@ class StoryTownHubMixin:
                         "If the gang has a spine, that's where it'll be. Break that, and the rest starts looking mortal.",
                     )
                     self.add_clue("Bryn confirms Ashfall Watch is the gang's field base.")
+                elif selection_key == "blackwake":
+                    self.state.flags["inn_blackwake_rumor_asked"] = True
+                    self.player_speaker("What are people saying about Blackwake Crossing?")
+                    resolution = self.state.flags.get("blackwake_resolution")
+                    if resolution == "rescue":
+                        self.speaker(
+                            "Stonehill Teamster",
+                            "That some folk walked out of smoke who had no right surviving it. People remember that kind of help, even when they pretend they only care about freight.",
+                        )
+                    elif resolution == "evidence":
+                        self.speaker(
+                            "Stonehill Teamster",
+                            "That the stolen seals were real enough to fool honest clerks. If you've got proof, keep it dry and close. Paper scares cowards when steel can't reach them yet.",
+                        )
+                    elif resolution == "sabotage":
+                        self.speaker(
+                            "Stonehill Teamster",
+                            "That someone taught the Brand what a supply loss feels like. Makes the room nervous, that does, but not all nervous is bad.",
+                        )
+                    else:
+                        self.speaker(
+                            "Stonehill Teamster",
+                            "That Blackwake was never just a burned crossing. It was a door, and somebody mean was deciding who got through.",
+                        )
+                    if self.state.flags.get("blackwake_sereth_fate") == "escaped":
+                        self.speaker("Stonehill Teamster", "Also heard a name: Sereth Vane. Folk say he leaves clean desks and dirty roads behind him.")
                 elif selection_key == "recruit_bryn":
                     self.state.flags["inn_recruit_bryn_attempted"] = True
                     self.player_speaker("Take a share of the contract and ride with me.")

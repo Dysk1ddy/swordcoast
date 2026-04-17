@@ -1314,6 +1314,11 @@ LOOT_TABLES = {
         LootEntry("shortbow_common", 0.25),
         LootEntry("nut_mix", 0.4),
     ],
+    "brand_saboteur": [
+        LootEntry("antitoxin_vial", 0.25),
+        LootEntry("travel_biscuits", 0.35),
+        LootEntry("dagger_common", 0.2),
+    ],
     "skeletal_sentry": [
         LootEntry("blessed_salve", 0.18),
         LootEntry("mace_common", 0.14),
@@ -1359,6 +1364,12 @@ LOOT_TABLES = {
         LootEntry("fireward_elixir", 0.25),
         LootEntry("scroll_guardian_light", 0.35),
         LootEntry("smoked_ham", 1.0, 2, 3),
+    ],
+    "sereth_vane": [
+        LootEntry("potion_healing", 0.65),
+        LootEntry("scroll_clarity", 0.35),
+        LootEntry("shortsword_uncommon", 0.25),
+        LootEntry("red_wine", 0.8),
     ],
     "varyn": [
         LootEntry("superior_healing_elixir", 0.8),

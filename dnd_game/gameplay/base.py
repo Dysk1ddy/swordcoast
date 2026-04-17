@@ -103,6 +103,8 @@ class GameBase:
     SCENE_OBJECTIVES = {
         "background_prologue": "Finish your origin story and answer the road's first test.",
         "neverwinter_briefing": "Hear Mira Thann out and take the road south.",
+        "blackwake_crossing": "Trace the Blackwake supply cell before committing to the High Road.",
+        "road_decision_post_blackwake": "Choose whether to report back to Neverwinter or press south after Blackwake.",
         "road_ambush": "Survive the High Road attack and reach Phandalin.",
         "phandalin_hub": "Choose which pressure in Phandalin to answer next.",
         "old_owl_well": "Break the grave-salvage line at Old Owl Well.",
@@ -150,6 +152,7 @@ class GameBase:
         "Cragmaw-Ogre Thane": "The Cragmaw-Ogre Thane is a huge scar-latticed brute dragging a stone-shaved club, all stubborn muscle and habitually casual violence.",
         "Cistern Eye": "The Cistern Eye is a warped cellar horror with one wet reflective gaze and a posture that suggests it has spent too long feeding on secrets in the dark.",
         "Rukhar Cinderfang": "Rukhar Cinderfang is a broad hobgoblin sergeant in disciplined mail, every movement controlled with the hard efficiency of a drilled war captain.",
+        "Sereth Vane": "Sereth Vane is a road-dusted Ashen Brand quartermaster with a negotiator's smile, a fixer's eyes, and hands that never drift far from hidden ash capsules.",
         "Varyn Sable": "Varyn Sable is a poised, sharp-featured brigand captain dressed better than the rest of the gang, with a duelist's balance and a smile that never warms.",
         "Ashen Brand Runner": "The Ashen Brand Runner is a wiry courier with road dust on their boots and the twitchy focus of someone used to escaping before blades can reach them.",
         "Ashen Brand Collector": "The Ashen Brand Collector looks like a dockside broker turned enforcer, weighed down by stolen papers, quiet greed, and a hand never far from steel.",
@@ -263,6 +266,8 @@ class GameBase:
         self._scene_handlers = {
             "background_prologue": self.scene_background_prologue,
             "neverwinter_briefing": self.scene_neverwinter_briefing,
+            "blackwake_crossing": self.scene_blackwake_crossing,
+            "road_decision_post_blackwake": self.scene_road_decision_post_blackwake,
             "road_ambush": self.scene_road_ambush,
             "phandalin_hub": self.scene_phandalin_hub,
             "old_owl_well": self.scene_old_owl_well,

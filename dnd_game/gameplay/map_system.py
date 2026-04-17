@@ -125,7 +125,11 @@ class MapSystemMixin:
 
     def act1_relay_sabotaged(self) -> bool:
         assert self.state is not None
-        return bool(self.state.flags.get("cinderfall_relay_destroyed")) or self.act1_metric_value("act1_ashen_strength") <= 0
+        return (
+            bool(self.state.flags.get("cinderfall_relay_destroyed"))
+            or bool(self.state.flags.get("blackwake_cache_sabotaged"))
+            or self.act1_metric_value("act1_ashen_strength") <= 0
+        )
 
     def active_companion_by_id(self, companion_id: str, *, minimum_disposition: int = -99):
         assert self.state is not None
@@ -769,6 +773,21 @@ class MapSystemMixin:
         self.say(text)
         self.render_act1_overworld_map(force=True)
 
+    def return_to_blackwake_decision(self, text: str) -> None:
+        assert self.state is not None
+        payload = self._map_state_payload()
+        payload["current_node_id"] = "road_decision_post_blackwake"
+        if "road_decision_post_blackwake" not in payload["visited_nodes"]:
+            payload["visited_nodes"].append("road_decision_post_blackwake")
+        payload["current_dungeon_id"] = None
+        payload["current_room_id"] = None
+        payload["room_history"] = []
+        self.state.current_scene = "road_decision_post_blackwake"
+        self._clear_map_view_cache()
+        self._compact_hud_last_scene_key = None
+        self.say(text)
+        self.render_act1_overworld_map(force=True)
+
     def act1_hybrid_map_available(self) -> bool:
         if self.state is None:
             return False
@@ -987,7 +1006,10 @@ class MapSystemMixin:
         previous_room = self.peek_backtrack_room(dungeon)
         if previous_room is not None and previous_room.room_id not in seen_targets:
             options.append(("move", previous_room.room_id, self._movement_option_label(room, previous_room)))
-        options.append(("withdraw", "phandalin_hub", self.action_option("Withdraw to Phandalin")))
+        if dungeon.exit_to_node_id == "road_decision_post_blackwake":
+            options.append(("withdraw", "road_decision_post_blackwake", self.action_option("Withdraw to the Blackwake road decision")))
+        else:
+            options.append(("withdraw", "phandalin_hub", self.action_option("Withdraw to Phandalin")))
         return options
 
     def open_map_menu(self) -> None:
@@ -1083,6 +1105,8 @@ class MapSystemMixin:
             )
             self.state.flags["phandalin_arrived"] = True
             self.add_journal("You reached Phandalin, a hard-bitten frontier town under growing Ashen Brand pressure.")
+            if self.state.flags.get("blackwake_completed"):
+                self.describe_blackwake_phandalin_arrival()
             choice = self.scenario_choice(
                 "How do you enter town?",
                 [
@@ -1250,6 +1274,64 @@ class MapSystemMixin:
     def scene_old_owl_well(self) -> None:
         self.run_act1_dungeon("old_owl_well")
 
+    def scene_blackwake_crossing(self) -> None:
+        self.run_act1_dungeon("blackwake_crossing")
+
+    def scene_road_decision_post_blackwake(self) -> None:
+        assert self.state is not None
+        self.banner("Road Decision After Blackwake")
+        resolution = str(self.state.flags.get("blackwake_resolution", "unresolved"))
+        self.say(
+            "Blackwake Crossing falls behind you in wet ash, broken crate slats, and frightened testimony. "
+            "The road has not become safer, exactly, but it has become more honest about what is hunting it.",
+            typed=True,
+        )
+        choice = self.scenario_choice(
+            "Where do you go now?",
+            [
+                self.action_option("Return to Neverwinter with what you found."),
+                self.action_option("Press south toward the road to Phandalin."),
+                self.action_option("Camp first, then decide."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Return to Neverwinter with what you found.")
+            self.state.flags["blackwake_return_destination"] = "neverwinter"
+            self.speaker(
+                "Mira Thann",
+                "This is too close to the city to dismiss as frontier noise. Give me the names, the routes, and what you chose to leave standing.",
+            )
+            if not self.state.flags.get("blackwake_neverwinter_reported"):
+                self.state.flags["blackwake_neverwinter_reported"] = True
+                if resolution == "evidence":
+                    self.reward_party(xp=20, gold=18, reason="bringing Blackwake proof back to Neverwinter")
+                    self.say("Mira pays for the ledgers without pretending coin is the point.")
+                elif resolution == "rescue":
+                    self.add_inventory_item("potion_healing", 1, source="Mira's emergency stores")
+                    self.say("Mira sends aid back toward the survivors before she finishes reading your account.")
+                elif resolution == "sabotage":
+                    self.add_inventory_item("antitoxin_vial", 1, source="a seized city-side medicine pouch")
+                    self.say("Mira cannot prosecute ashes, but she can use the damage to tighten the next patrol net.")
+            self.turn_in_quest("trace_blackwake_cell")
+            self.say("With the report made, the south road waits again. The Phandalin writ is still yours to carry.")
+            self.state.current_scene = "road_ambush"
+            return
+        if choice == 2:
+            self.player_action("Press south toward the road to Phandalin.")
+            self.state.flags["blackwake_return_destination"] = "south_road"
+            if resolution == "sabotage":
+                self.say("Behind you, the ruined cache leaves the Ashen Brand's next road crew short on warning, arrows, and patience.")
+            elif resolution == "evidence":
+                self.say("The copied route marks ride in your pack, making every broken wagon ahead feel less random.")
+            elif resolution == "rescue":
+                self.say("The rescued survivors' names travel south with you, carried as proof that the road still has people worth saving.")
+            self.state.current_scene = "road_ambush"
+            return
+        self.player_action("Camp first, then decide.")
+        self.open_camp_menu()
+        self.say("The fire burns low. Blackwake is behind you; Neverwinter and Phandalin both still have claims on the morning.")
+
     def scene_wyvern_tor(self) -> None:
         self.run_act1_dungeon("wyvern_tor")
 
@@ -1339,11 +1421,28 @@ class MapSystemMixin:
                     movement_text=f"You move {room_direction(room, next_room, dungeon).lower()} toward {next_room.title}.",
                 )
                 continue
+            if dungeon.exit_to_node_id == "road_decision_post_blackwake":
+                self.return_to_blackwake_decision(f"You pull back from {node.title} and regroup on the road beyond the river cut.")
+                return
             self.return_to_phandalin(f"You withdraw from {node.title} and ride back to Phandalin to regroup.")
             return
 
     def _run_act1_room(self, node_id: str, dungeon: DungeonMap, room: DungeonRoom) -> None:
         handlers = {
+            ("blackwake_crossing", "charred_tollhouse"): self._blackwake_charred_tollhouse,
+            ("blackwake_crossing", "millers_ford_flooded_approach"): self._blackwake_flooded_approach,
+            ("blackwake_crossing", "wagon_snarl"): self._blackwake_wagon_snarl,
+            ("blackwake_crossing", "reedbank_camp"): self._blackwake_reedbank_camp,
+            ("blackwake_crossing", "ford_ledger_post"): self._blackwake_ford_ledger_post,
+            ("blackwake_crossing", "gallows_hanging_path"): self._blackwake_hanging_path,
+            ("blackwake_crossing", "cage_clearing"): self._blackwake_cage_clearing,
+            ("blackwake_crossing", "watcher_tree"): self._blackwake_watcher_tree,
+            ("blackwake_crossing", "root_cellar_hollow"): self._blackwake_root_cellar_hollow,
+            ("blackwake_crossing", "outer_cache"): self._blackwake_outer_cache,
+            ("blackwake_crossing", "prison_pens"): self._blackwake_prison_pens,
+            ("blackwake_crossing", "seal_workshop"): self._blackwake_seal_workshop,
+            ("blackwake_crossing", "ash_office"): self._blackwake_ash_office,
+            ("blackwake_crossing", "floodgate_chamber"): self._blackwake_floodgate_chamber,
             ("old_owl_well", "well_ring"): self._old_owl_well_ring,
             ("old_owl_well", "salt_cart"): self._old_owl_salt_cart,
             ("old_owl_well", "supply_trench"): self._old_owl_supply_trench,
@@ -1374,6 +1473,690 @@ class MapSystemMixin:
         }
         handler = handlers[(node_id, room.room_id)]
         handler(dungeon, room)
+
+    def _blackwake_adjust_named_companion(self, name: str, delta: int, reason: str) -> None:
+        companion = self.find_companion(name)
+        if companion is not None:
+            self.adjust_companion_disposition(companion, delta, reason)
+
+    def _blackwake_mid_route_count(self) -> int:
+        assert self.state is not None
+        return sum(
+            1
+            for flag_name in ("blackwake_forged_papers_found", "blackwake_transfer_list_found")
+            if self.state.flags.get(flag_name)
+        )
+
+    def _blackwake_charred_tollhouse(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say(
+            "The tollhouse at the river cut is a blackened frame around stunned survivors, dead coals, and a torn inspection board. "
+            "The attackers took ledgers, seals, and anyone who could explain the route marks.",
+            typed=True,
+        )
+        enemies = [create_enemy("brand_saboteur"), create_enemy("bandit")]
+        hero_bonus = self.apply_scene_companion_support("blackwake_crossing")
+        avoid_fight = False
+        choice = self.scenario_choice(
+            "What do you do first at the burned tollhouse?",
+            [
+                self.skill_tag("INVESTIGATION", self.action_option("Reconstruct what was taken from the inspection room.")),
+                self.skill_tag("MEDICINE", self.action_option("Stabilize a burned guard before their testimony fades.")),
+                self.skill_tag("INTIMIDATION", self.action_option("Force a panicked mercenary to stop babbling and name facts.")),
+                self.skill_tag("PERSUASION", self.action_option("Calm the survivors and organize clean testimony.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Reconstruct what was taken from the inspection room.")
+            if self.skill_check(self.state.player, "Investigation", 12, context="to read the burned tollhouse before the trail goes cold"):
+                self.state.flags["blackwake_millers_ford_lead"] = True
+                self.add_clue("The tollhouse thieves wanted seals, route slates, and ledgers tied to Miller's Ford inspections.")
+                enemies[0].current_hp = max(1, enemies[0].current_hp - 3)
+                hero_bonus += 1
+                self.say("The missing shelves point cleanly toward a forged checkpoint at Miller's Ford.")
+            else:
+                self.add_clue("The tollhouse evidence is damaged, but the thieves cared more about route authority than coin.")
+                self.say("You cannot save the whole pattern, but the ashes still point toward organized papers, not random banditry.")
+        elif choice == 2:
+            self.player_action("Stabilize a burned guard before their testimony fades.")
+            if self.skill_check(self.state.player, "Medicine", 12, context="to keep the burned guard coherent"):
+                self.state.flags["blackwake_gallows_copse_lead"] = True
+                self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 1
+                self.add_clue("A rescued guard heard prisoners moved toward old hanging trees south of the river cut.")
+                self._blackwake_adjust_named_companion("Rhogar Valeguard", 1, "you protected the burned guard before chasing proof")
+                self.say("The guard lives long enough to name a prisoner route through Gallows Copse.")
+            else:
+                self.say("You keep the guard breathing, but only fragments survive: cages, dead trees, and soot-marked crate rope.")
+        elif choice == 3:
+            self.player_action("Force a panicked mercenary to stop babbling and name facts.")
+            if self.skill_check(self.state.player, "Intimidation", 12, context="to turn panic into usable testimony"):
+                self.state.flags["blackwake_millers_ford_lead"] = True
+                self.apply_status(enemies[0], "frightened", 1, source="your hard-edged command")
+                hero_bonus += 1
+                self.say("The mercenary finally says the words that matter: false roadwardens, a ford ledger, and black ash on the permit wax.")
+            else:
+                self.apply_status(self.state.player, "reeling", 1, source="too many shouted accounts")
+                self.say("The panic gives you direction, but not without wasting precious minutes.")
+        else:
+            self.player_action("Calm the survivors and organize clean testimony.")
+            if self.skill_check(self.state.player, "Persuasion", 12, context="to steady the tollhouse survivors"):
+                self.state.flags["blackwake_gallows_copse_lead"] = True
+                self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 1
+                self._blackwake_adjust_named_companion("Elira Dawnmantle", 1, "you made the frightened survivors people before evidence")
+                avoid_fight = True
+                self.say("The survivors spot the saboteur trying to blend into the crowd, and the whole yard turns on them before a real fight forms.")
+            else:
+                self.say("You settle enough voices to learn there were prisoners, but not enough to stop the saboteur from making a break for it.")
+
+        if not avoid_fight:
+            outcome = self.run_encounter(
+                Encounter(
+                    title="Charred Tollhouse Breakout",
+                    description="A saboteur and hired blade try to erase the last witnesses before you can organize pursuit.",
+                    enemies=enemies,
+                    allow_flee=True,
+                    allow_parley=True,
+                    parley_dc=12,
+                    hero_initiative_bonus=hero_bonus,
+                    allow_post_combat_random_encounter=False,
+                )
+            )
+            if outcome == "defeat":
+                self.handle_defeat("The Blackwake trail burns out before it can be followed.")
+                return
+            if outcome == "fled":
+                self.return_to_blackwake_decision("You pull away from the tollhouse before the smoke-trail can close cleanly.")
+                return
+        self.complete_map_room(dungeon, room.room_id)
+        self.reward_party(xp=15, gold=6, reason="stabilizing the Blackwake tollhouse")
+        self.say("Two routes remain readable through the damage: Miller's Ford for forged authority, and Gallows Copse for prisoners and fear.")
+
+    def _blackwake_flooded_approach(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("Cold floodwater chews at the ford stones while wrecked carts pin draft horses against the current.")
+        choice = self.scenario_choice(
+            "How do you approach Miller's Ford?",
+            [
+                self.skill_tag("SURVIVAL", self.action_option("Cross safely and find the flank through the shallows.")),
+                self.skill_tag("ANIMAL HANDLING", self.action_option("Calm the trapped horse teams before panic breaks them.")),
+                self.skill_tag("STEALTH", self.action_option("Survey the false checkpoint before anyone notices you.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Cross safely and find the flank through the shallows.")
+            if self.skill_check(self.state.player, "Survival", 12, context="to read the ford current and hidden shelf"):
+                self.state.flags["blackwake_ford_flank"] = True
+                self.say("The current shows you a dry shelf behind the checkpoint tents.")
+        elif choice == 2:
+            self.player_action("Calm the trapped horse teams before panic breaks them.")
+            if self.skill_check(self.state.player, "Animal Handling", 12, context="to settle the trapped teams"):
+                self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 1
+                self.state.flags["blackwake_horse_teams_saved"] = True
+                self._blackwake_adjust_named_companion("Rhogar Valeguard", 1, "you risked time to save the ford teams")
+                self.say("The teams stop thrashing, which keeps the whole wreck from turning into a second disaster.")
+        else:
+            self.player_action("Survey the false checkpoint before anyone notices you.")
+            if self.skill_check(self.state.player, "Stealth", 12, context="to watch Miller's Ford unseen"):
+                self.state.flags["blackwake_ford_surveyed"] = True
+                self._blackwake_adjust_named_companion("Kaelis Starling", 1, "you read the ford before triggering its alarm")
+                self.say("You count the hired guards, the real loyalists, and the tent where the seals are being copied.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_wagon_snarl(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("The wagon snarl is a knot of axles, splintered cargo ribs, and teamsters tied where the false wardens could use them as leverage.")
+        choice = self.scenario_choice(
+            "What do you prioritize in the wagon snarl?",
+            [
+                self.action_option("Cut civilians free before cargo or cover."),
+                self.action_option("Secure the cargo before the smugglers can move it."),
+                self.action_option("Overturn carts for cover and prepare an ambush."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Cut civilians free before cargo or cover.")
+            self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 2
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", 1, "you put trapped teamsters ahead of cargo")
+            self.say("The teamsters scatter, then return with enough courage to point out which tent the clerk was dragged into.")
+        elif choice == 2:
+            self.player_action("Secure the cargo before the smugglers can move it.")
+            self.state.flags["blackwake_cargo_secured"] = True
+            self.reward_party(gold=8, reason="recovering intact ford cargo")
+            self.say("You save flour, lamp oil, and one locked strongbox whose wax matches the false permits.")
+        else:
+            self.player_action("Overturn carts for cover and prepare an ambush.")
+            self.state.flags["blackwake_ford_ambush_prepared"] = True
+            self.say("The carts become a fighting wall. Whoever holds the ledger post will have to come through your ground.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_reedbank_camp(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("The reedbank camp looks official from a distance: checkpoint tent, wax kit, blank permits, and a stolen roadwarden cloak drying over a spear.")
+        choice = self.scenario_choice(
+            "How do you work the forged checkpoint tent?",
+            [
+                self.skill_tag("STEALTH", self.action_option("Steal the seal kit and papers quietly.")),
+                self.skill_tag("INTIMIDATION", self.action_option("Drag the lookout behind the reeds and make them talk.")),
+                self.skill_tag("INVESTIGATION", self.action_option("Copy the names and route marks before disturbing anything.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Steal the seal kit and papers quietly.")
+            if self.skill_check(self.state.player, "Stealth", 12, context="to lift the forged permit kit"):
+                self.state.flags["blackwake_route_permits_found"] = True
+                self.state.flags["blackwake_forged_papers_found"] = True
+                self.add_clue("Forged route permits from Miller's Ford name Blackwake Store Cavern as the next handling point.")
+                self._blackwake_adjust_named_companion("Bryn Underbough", 1, "you stole the paperwork before anyone could sanitize it")
+        elif choice == 2:
+            self.player_action("Drag the lookout behind the reeds and make them talk.")
+            if self.skill_check(self.state.player, "Intimidation", 12, context="to break the lookout's false authority"):
+                self.state.flags["blackwake_lookout_interrogated"] = True
+                self.add_clue("A Reedbank lookout says someone in Neverwinter is paid to ignore missing toll seals.")
+                self.say("The lookout gives up the cave name and keeps insisting the city side is not as clean as Mira hopes.")
+        else:
+            self.player_action("Copy the names and route marks before disturbing anything.")
+            if self.skill_check(self.state.player, "Investigation", 12, context="to copy the forged route marks accurately"):
+                self.state.flags["blackwake_route_names_copied"] = True
+                self.state.flags["blackwake_forged_papers_found"] = True
+                self.add_clue("Copied route marks tie Blackwake permits to a Neverwinter-facing paymaster mark.")
+                self.say("The route marks are ugly in the useful way: repeatable, provable, and too neat to be local chaos.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_ford_ledger_post(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("At the ledger post, false roadwardens shout seizure orders while hired guards start wondering whether the papers are worth dying for.")
+        enemies = [create_enemy("brand_saboteur"), create_enemy("bandit")]
+        if self.act1_party_size() >= 3 and not self.state.flags.get("blackwake_ford_ambush_prepared"):
+            enemies.append(create_enemy("bandit_archer"))
+        hero_bonus = 1 if self.state.flags.get("blackwake_ford_flank") else 0
+        avoid_fight = False
+        choice = self.scenario_choice(
+            "How do you break the ledger post?",
+            [
+                self.skill_tag("DECEPTION", self.action_option("Pose as higher authority and order the seizure halted.")),
+                self.skill_tag("PERSUASION", self.action_option("Split the hired guards from the true loyalists.")),
+                self.skill_tag("ATHLETICS", self.action_option("Rush the barricade before they settle behind it.")),
+                self.skill_tag("INVESTIGATION", self.action_option("Use the seized ledgers to expose the fraud publicly.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Pose as higher authority and order the seizure halted.")
+            if self.skill_check(self.state.player, "Deception", 13, context="to outrank the false roadwardens with their own lies"):
+                avoid_fight = True
+                self.state.flags["blackwake_forged_papers_found"] = True
+                self._blackwake_adjust_named_companion("Bryn Underbough", 1, "you beat forged authority with a cleaner lie")
+                self.say("The false wardens hesitate just long enough for the hired blades to decide they were never paid for this.")
+        elif choice == 2:
+            self.player_action("Split the hired guards from the true loyalists.")
+            if self.skill_check(self.state.player, "Persuasion", 13, context="to separate fear from loyalty at the ledger post"):
+                enemies = enemies[:1]
+                hero_bonus += 1
+                self.say("Most of the hired guards back away when the fraud becomes obvious enough to survive.")
+        elif choice == 3:
+            self.player_action("Rush the barricade before they settle behind it.")
+            if self.skill_check(self.state.player, "Athletics", 12, context="to break the ford barricade"):
+                self.apply_status(enemies[0], "prone", 1, source="your barricade rush")
+                hero_bonus += 2
+                self.say("The barricade folds inward and the saboteur loses the first clean breath of the fight.")
+        else:
+            self.player_action("Use the seized ledgers to expose the fraud publicly.")
+            if self.skill_check(self.state.player, "Investigation", 12, context="to prove the checkpoint's authority is forged"):
+                avoid_fight = True
+                self.state.flags["blackwake_forged_papers_found"] = True
+                self.add_clue("Miller's Ford ledgers prove the Ashen Brand was selecting cargo by route value, not raiding blindly.")
+                self.say("The crowd hears enough names and dates that the checkpoint authority collapses in daylight.")
+
+        if not avoid_fight:
+            outcome = self.run_encounter(
+                Encounter(
+                    title="Miller's Ford Ledger Post",
+                    description="False roadwardens try to keep their fraud alive with steel.",
+                    enemies=enemies,
+                    allow_flee=True,
+                    allow_parley=True,
+                    parley_dc=13,
+                    hero_initiative_bonus=hero_bonus,
+                    allow_post_combat_random_encounter=False,
+                )
+            )
+            if outcome == "defeat":
+                self.handle_defeat("The Miller's Ford fraud holds long enough to swallow the Blackwake trail.")
+                return
+            if outcome == "fled":
+                self.return_to_blackwake_decision("You break away from Miller's Ford with only partial proof and too many riders behind you.")
+                return
+        self.state.flags["blackwake_forged_papers_found"] = True
+        self.complete_map_room(dungeon, room.room_id)
+        self.reward_party(xp=20, gold=8, reason="securing Miller's Ford")
+        self.say("The seized papers name a riverside store cavern downstream: Blackwake's hidden cache.")
+
+    def _blackwake_hanging_path(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("Gallows Copse begins with dead branches, staged warning charms, and cage marks dragged through old leaves.")
+        choice = self.scenario_choice(
+            "How do you approach the hanging path?",
+            [
+                self.skill_tag("RELIGION", self.action_option("Read whether the symbols are true rite or staged fear.")),
+                self.skill_tag("PERCEPTION", self.action_option("Detect hidden sentries before they decide the route.")),
+                self.skill_tag("STEALTH", self.action_option("Approach without triggering the copse alarm.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Read whether the symbols are true rite or staged fear.")
+            if self.skill_check(self.state.player, "Religion", 12, context="to separate ritual from intimidation"):
+                self.state.flags["blackwake_fear_symbols_staged"] = True
+                self.say("The charms are theater: frightening, cheap, and checked often by living hands.")
+        elif choice == 2:
+            self.player_action("Detect hidden sentries before they decide the route.")
+            if self.skill_check(self.state.player, "Perception", 12, context="to pick sentries out of the hanging branches"):
+                self.state.flags["blackwake_copse_sentries_spotted"] = True
+                self.say("You catch two sentry nests and the route they use to report prisoner movement.")
+        else:
+            self.player_action("Approach without triggering the copse alarm.")
+            if self.skill_check(self.state.player, "Stealth", 12, context="to move through Gallows Copse unseen"):
+                self.state.flags["blackwake_copse_alarm_prevented"] = True
+                self._blackwake_adjust_named_companion("Kaelis Starling", 1, "you kept Gallows Copse quiet long enough to read it")
+                self.say("The copse stays quiet, which makes every later choice less rushed.")
+            else:
+                self.state.flags["blackwake_copse_alarm_triggered"] = True
+                self.say("A warning charm cracks underfoot. The alarm is not loud, but it is enough.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_cage_clearing(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("Cages hang low between dead trunks. The captives inside have learned to whisper only when the wind moves.")
+        choice = self.scenario_choice(
+            "What do you do with the captives?",
+            [
+                self.action_option("Free the captives now."),
+                self.action_option("Question the captives before cutting cages loose."),
+                self.action_option("Stay hidden and observe the next transfer pattern."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Free the captives now.")
+            self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 2
+            self.state.flags["blackwake_captive_support_ready"] = True
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", 1, "you chose living captives over cleaner intelligence")
+            self.say("The freed captives can barely stand, but they can still tell you where the crates go.")
+        elif choice == 2:
+            self.player_action("Question the captives before cutting cages loose.")
+            self.state.flags["blackwake_transfer_pattern_learned"] = True
+            self.add_clue("Gallows captives confirm prisoners and seized goods are being funneled to Blackwake Store Cavern.")
+            self.say("Their answers are thin with thirst, but the route is clear: cave, floodgate, southbound handoff.")
+        else:
+            self.player_action("Stay hidden and observe the next transfer pattern.")
+            self.state.flags["blackwake_transfer_pattern_learned"] = True
+            self.state.flags["blackwake_copse_alarm_prevented"] = True
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", -1, "you let prisoners wait in cages for cleaner timing")
+            self.say("The wait earns you a transfer rhythm and costs the captives another measure of fear.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_watcher_tree(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("The watcher tree is more scaffold than tree now, full of rope, signal strips, and nailed charms meant to look older than they are.")
+        choice = self.scenario_choice(
+            "How do you use the watcher tree?",
+            [
+                self.skill_tag("ATHLETICS", self.action_option("Climb and scout the transfer route.")),
+                self.action_option("Cut down the warning charms before they can be checked."),
+                self.skill_tag("SURVIVAL", self.action_option("Leave the charms untouched and track who checks them.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Climb and scout the transfer route.")
+            if self.skill_check(self.state.player, "Athletics", 12, context="to climb the watcher tree without dropping the alarm strips"):
+                self.state.flags["blackwake_cavern_route_scouted"] = True
+                self.say("From above, the riverbank route to the store cavern is plain enough to follow after dark.")
+        elif choice == 2:
+            self.player_action("Cut down the warning charms before they can be checked.")
+            self.state.flags["blackwake_copse_alarm_prevented"] = True
+            self.say("The charms come down in a dry rattle, leaving the next Brand patrol without its little theater of fear.")
+        else:
+            self.player_action("Leave the charms untouched and track who checks them.")
+            if self.skill_check(self.state.player, "Survival", 12, context="to follow the charm-checker without being seen"):
+                self.state.flags["blackwake_transfer_tail"] = True
+                self.add_clue("A Gallows Copse charm-checker carries a soot-marked crate tag matching the Blackwake cache route.")
+                self.say("The charm-checker leads you to a crate trail without ever knowing the warning system failed.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_root_cellar_hollow(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("Below the roots, transfer crates sit in shallow pits marked by soot, chalk cuts, and prisoner initials scratched under the lids.")
+        choice = self.scenario_choice(
+            "What do you inspect in the root cellar hollow?",
+            [
+                self.action_option("Inspect the transfer crates."),
+                self.skill_tag("INVESTIGATION", self.action_option("Decode the route symbols.")),
+                self.skill_tag("ATHLETICS", self.action_option("Force open the hidden cellar door.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Inspect the transfer crates.")
+            self.state.flags["blackwake_soot_crate_route_found"] = True
+            self.add_clue("Soot-marked crates show seized goods moving from Gallows Copse to Blackwake Store Cavern before redistribution.")
+            self.say("The crates are numbered for storage, not ransom. This is logistics, not rage.")
+        elif choice == 2:
+            self.player_action("Decode the route symbols.")
+            if self.skill_check(self.state.player, "Investigation", 12, context="to decode the Gallows Copse route marks"):
+                self.state.flags["blackwake_transfer_list_found"] = True
+                self.add_clue("A prisoner transfer list connects Blackwake to wider Ashen Brand staging farther south.")
+                self.say("The marks point beyond the cavern: southbound pressure sites, later staging, and one hobgoblin supervision note.")
+        else:
+            self.player_action("Force open the hidden cellar door.")
+            if self.skill_check(self.state.player, "Athletics", 12, context="to break the hidden root cellar door"):
+                self.state.flags["blackwake_transfer_list_found"] = True
+                self.reward_party(gold=6, reason="recovering coin from a hidden transfer box")
+                self.say("The hidden compartment gives up a prisoner list and the petty coin skimmed off their guards.")
+        self.state.flags["blackwake_transfer_list_found"] = True
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_outer_cache(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("Blackwake Store Cavern opens under an old quarry shelf, half flooded and half disguised as a rotten riverside store cut.")
+        enemies = [create_enemy("brand_saboteur"), create_enemy("bandit_archer")]
+        if self.act1_party_size() >= 3 and self._blackwake_mid_route_count() < 2:
+            enemies.append(create_enemy("bandit"))
+        hero_bonus = 0
+        avoid_fight = False
+        choice = self.scenario_choice(
+            "How do you enter the outer cache?",
+            [
+                self.skill_tag("STEALTH", self.action_option("Slip through the loading shadow and bypass the front watch.")),
+                self.skill_tag("DECEPTION", self.action_option("Enter as caravan inspectors using the forged papers.")),
+                self.skill_tag("ATHLETICS", self.action_option("Break through the outer cache before they seal the passage.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Slip through the loading shadow and bypass the front watch.")
+            if self.skill_check(self.state.player, "Stealth", 13, context="to infiltrate the Blackwake outer cache"):
+                enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
+                self.apply_status(enemies[0], "surprised", 1, source="your cache infiltration")
+                hero_bonus += 2
+                self._blackwake_adjust_named_companion("Kaelis Starling", 1, "you entered Blackwake without feeding the alarm")
+                self.say("You reach the loading cut before the first watchman realizes the shadow has moved.")
+        elif choice == 2:
+            self.player_action("Enter as caravan inspectors using the forged papers.")
+            if self.state.flags.get("blackwake_forged_papers_found") and self.skill_check(
+                self.state.player,
+                "Deception",
+                13,
+                context="to pass as higher-route inspectors",
+            ):
+                avoid_fight = True
+                self._blackwake_adjust_named_companion("Bryn Underbough", 1, "you made the stolen papers open the right door")
+                self.say("The forged papers carry you past the first watch with the awful ease of a system built to trust itself.")
+            else:
+                self.state.flags["blackwake_cache_alarm_triggered"] = True
+                self.say("The lie catches on one wrong route mark, and the cache watch reaches for weapons.")
+        else:
+            self.player_action("Break through the outer cache before they seal the passage.")
+            if self.skill_check(self.state.player, "Athletics", 13, context="to force the loading gate before it bars shut"):
+                self.apply_status(self.state.player, "emboldened", 2, source="breaking into Blackwake Store Cavern")
+                hero_bonus += 1
+                self.say("The loading gate loses the argument with your shoulder, and the watch line starts the fight scattered.")
+        if not avoid_fight:
+            outcome = self.run_encounter(
+                Encounter(
+                    title="Blackwake Outer Cache",
+                    description="Cache guards try to keep the riverside entrance from becoming evidence.",
+                    enemies=enemies,
+                    allow_flee=True,
+                    allow_parley=True,
+                    parley_dc=13,
+                    hero_initiative_bonus=hero_bonus,
+                    allow_post_combat_random_encounter=False,
+                )
+            )
+            if outcome == "defeat":
+                self.handle_defeat("The Blackwake cache seals around its secrets.")
+                return
+            if outcome == "fled":
+                self.return_to_blackwake_decision("You tear free of the cache entrance before the flood-cut can trap you inside.")
+                return
+        self.complete_map_room(dungeon, room.room_id)
+        self.say("Past the outer cache, the cavern splits between prisoner pens and a seal workshop, both feeding Sereth Vane's office deeper in.")
+
+    def _blackwake_prison_pens(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("The prison pens stink of river damp, old rope, and people held as inventory.")
+        choice = self.scenario_choice(
+            "What do you do with the prisoners?",
+            [
+                self.action_option("Free prisoners quietly."),
+                self.action_option("Arm prisoners for an uprising."),
+                self.action_option("Leave them until Sereth is handled to preserve stealth."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Free prisoners quietly.")
+            self.state.flags["blackwake_prisoners_freed_early"] = True
+            self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 2
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", 1, "you risked the cache route to free prisoners early")
+            self.say("The prisoners move slowly, but every opened lock takes weight off the final chamber.")
+        elif choice == 2:
+            self.player_action("Arm prisoners for an uprising.")
+            self.state.flags["blackwake_prisoner_uprising"] = True
+            self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 1
+            self.say("The prisoners take knives, pry bars, and one look that says chaos can be a kind of mercy.")
+        else:
+            self.player_action("Leave them until Sereth is handled to preserve stealth.")
+            self.state.flags["blackwake_prisoners_delayed"] = True
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", -1, "you left prisoners behind for tactical patience")
+            self.say("The stealth remains clean. The prisoners hear you leave them, which is less clean.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_seal_workshop(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say("The seal workshop is all wax heat, copied stamps, route ledgers, and benches scarred by hurried knife work.")
+        choice = self.scenario_choice(
+            "What do you do with the forgery workshop?",
+            [
+                self.action_option("Seize the forgeries as evidence."),
+                self.action_option("Destroy the workshop."),
+                self.skill_tag("INVESTIGATION", self.action_option("Copy names and route marks before sabotage.")),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Seize the forgeries as evidence.")
+            self.state.flags["blackwake_evidence_secured"] = True
+            self.state.flags["blackwake_forged_papers_found"] = True
+            self.add_clue("Blackwake's seal workshop proves the Ashen Brand is manipulating trade with forged authority.")
+            self.say("The papers are heavy with names, seals, and the kind of proof officials can no longer politely misunderstand.")
+        elif choice == 2:
+            self.player_action("Destroy the workshop.")
+            self.state.flags["blackwake_workshop_destroyed"] = True
+            self.act1_adjust_metric("act1_ashen_strength", -1)
+            self.say("Wax, stamp blanks, and route slates crack under deliberate ruin. The next false checkpoint will be harder to stock.")
+        else:
+            self.player_action("Copy names and route marks before sabotage.")
+            if self.skill_check(self.state.player, "Investigation", 13, context="to copy the Blackwake route marks under pressure"):
+                self.state.flags["blackwake_route_names_copied"] = True
+                self.state.flags["blackwake_evidence_secured"] = True
+                self.add_clue("Copied Blackwake marks name route payments, seized cargo categories, and a future Phandalin pressure chain.")
+                self.say("You take the names before the workshop loses its shape.")
+            self.state.flags["blackwake_workshop_destroyed"] = True
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_ash_office(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say(
+            "Sereth's ash office is a command room pretending to be a storeroom: partial Phandalin pressure routes, caravan hijack summaries, and a note about hobgoblin supervision farther south."
+        )
+        choice = self.scenario_choice(
+            "Which record do you focus on?",
+            [
+                self.action_option("Trace the Phandalin pressure sites."),
+                self.action_option("Read the caravan hijack summaries."),
+                self.action_option("Search for the southern supervisor note."),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Trace the Phandalin pressure sites.")
+            self.state.flags["blackwake_phandalin_pressure_clue"] = True
+            self.add_clue("Blackwake notes point to Phandalin pressure sites and supply timing, not isolated roadside theft.")
+        elif choice == 2:
+            self.player_action("Read the caravan hijack summaries.")
+            self.state.flags["blackwake_caravan_hijack_clue"] = True
+            self.add_clue("Blackwake summaries show selective theft: food, medicine, tools, and route authority are taken before luxuries.")
+        else:
+            self.player_action("Search for the southern supervisor note.")
+            self.state.flags["blackwake_hobgoblin_supervision_clue"] = True
+            self.add_clue("A Blackwake order references hobgoblin supervision farther south, foreshadowing the High Road and Ashfall chain.")
+        self.complete_map_room(dungeon, room.room_id)
+
+    def _blackwake_floodgate_chamber(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
+        assert self.state is not None
+        self.say(
+            "The floodgate chamber breathes river-cold air through iron teeth. Prison ropes, seized ledgers, and packed crates all converge under Sereth Vane's calm little smile.",
+            typed=True,
+        )
+        enemies = [create_enemy("sereth_vane")]
+        if not self.state.flags.get("blackwake_prisoners_freed_early"):
+            enemies.append(create_enemy("brand_saboteur"))
+        if self.act1_party_size() >= 3 and self._blackwake_mid_route_count() < 2:
+            enemies.append(create_enemy("bandit_archer"))
+        hero_bonus = self.apply_scene_companion_support("blackwake_crossing")
+        if self._blackwake_mid_route_count() >= 2:
+            hero_bonus += 1
+            self.say("Because both the ford and the copse are exposed, Sereth has fewer clean orders left to give.")
+
+        talk_options: list[tuple[str, str]] = [
+            ("persuasion", self.skill_tag("PERSUASION", self.action_option("Offer prisoners for Sereth's safe withdrawal."))),
+            ("intimidation", self.skill_tag("INTIMIDATION", self.action_option("Threaten full exposure and a slaughtered supply line."))),
+        ]
+        if self.state.flags.get("blackwake_forged_papers_found") or self.state.flags.get("blackwake_transfer_list_found"):
+            talk_options.append(("investigation", self.skill_tag("INVESTIGATION", self.action_option("Confront Sereth with specific ledger facts."))))
+        if self.state.flags.get("blackwake_forged_papers_found"):
+            talk_options.append(("deception", self.skill_tag("DECEPTION", self.action_option("Pretend to represent higher Ashen Brand authority."))))
+        talk_options.append(("strike", self.action_option("Strike immediately before Sereth can spoil the room.")))
+        choice = self.scenario_choice("Sereth waits to see whether this becomes bargain, threat, or blood.", [text for _, text in talk_options], allow_meta=False)
+        talk_key, talk_text = talk_options[choice - 1]
+        self.player_choice_output(talk_text)
+        if talk_key == "persuasion":
+            if self.skill_check(self.state.player, "Persuasion", 14, context="to trade prisoners for Sereth's withdrawal"):
+                self.state.flags["blackwake_partial_prisoner_surrender"] = True
+                self.apply_status(enemies[0], "reeling", 1, source="your prisoner bargain")
+                hero_bonus += 1
+                self.say("Sereth gives up half the prisoners to buy room to survive the rest of the conversation.")
+            else:
+                self.state.flags["blackwake_evidence_burned_by_sereth"] = True
+                self.say("Sereth smiles, tips a coalpan into the nearest ledger stack, and lets negotiation become smoke.")
+        elif talk_key == "intimidation":
+            if self.skill_check(self.state.player, "Intimidation", 14, context="to break Sereth's confidence"):
+                self.apply_status(enemies[0], "frightened", 1, source="your threat of exposure")
+                hero_bonus += 2
+                self.say("For the first time, Sereth looks less like a fixer and more like someone standing beside a very expensive mistake.")
+            else:
+                self.state.flags["blackwake_floodgate_hazard"] = True
+                self.say("Sereth answers the threat by kicking the floodgate release halfway open.")
+        elif talk_key == "investigation":
+            if self.skill_check(self.state.player, "Investigation", 13, context="to pin Sereth with the exact Blackwake ledger chain"):
+                self.state.flags["blackwake_sereth_cornered_by_ledgers"] = True
+                self.state.flags["blackwake_sereth_fate"] = "captured"
+                self.apply_status(enemies[0], "reeling", 2, source="your ledger confrontation")
+                hero_bonus += 2
+                self.say("The facts land harder than a blade. Sereth's own people hear enough to stop trusting his escape math.")
+            else:
+                self.state.flags["blackwake_evidence_burned_by_sereth"] = True
+                self.say("You have the right accusation, but not the right order. Sereth burns the page that would have made it clean.")
+        elif talk_key == "deception":
+            if self.skill_check(self.state.player, "Deception", 14, context="to impersonate higher Ashen Brand authority"):
+                if len(enemies) > 1:
+                    enemies.pop()
+                hero_bonus += 1
+                self._blackwake_adjust_named_companion("Bryn Underbough", 1, "you lied to the liars and made their chain of command bite itself")
+                self.say("The lie hits the room like rank. One guard steps back before Sereth realizes the order never came from above.")
+            else:
+                self.state.flags["blackwake_enemy_ambush_advantage"] = True
+                self.say("Sereth recognizes the missing countersign and the room moves on his timing.")
+        else:
+            self.player_action("Strike immediately before Sereth can spoil the room.")
+            hero_bonus += 1
+
+        if self.state.flags.get("blackwake_prisoner_uprising"):
+            hero_bonus += 1
+            self.say("The armed prisoners hit the chamber's edge at the same time you do.")
+        if self.state.flags.get("blackwake_floodgate_hazard"):
+            self.apply_status(self.state.player, "reeling", 1, source="the half-open floodgate")
+        outcome = self.run_encounter(
+            Encounter(
+                title="Boss: Sereth Vane",
+                description="Sereth Vane tries to turn papers, prisoners, and floodwater into one last exit.",
+                enemies=enemies,
+                allow_flee=True,
+                allow_parley=True,
+                parley_dc=14 if self._blackwake_mid_route_count() >= 2 else 15,
+                hero_initiative_bonus=hero_bonus,
+                allow_post_combat_random_encounter=False,
+            )
+        )
+        if outcome == "defeat":
+            self.handle_defeat("Sereth keeps Blackwake's cache alive and the frontier learns one more reason to fear the road.")
+            return
+        if outcome == "fled":
+            self.state.flags["blackwake_sereth_fate"] = "escaped"
+            self.state.flags["blackwake_completed"] = True
+            self.refresh_quest_statuses()
+            self.return_to_blackwake_decision("You escape the floodgate chamber with Blackwake broken but Sereth still somewhere ahead of you.")
+            return
+        if not self.state.flags.get("blackwake_sereth_fate"):
+            self.state.flags["blackwake_sereth_fate"] = "dead"
+
+        final_choice = self.scenario_choice(
+            "The chamber is collapsing into smoke, shouting, and floodwater. What matters most now?",
+            [
+                self.action_option("Save the prisoners and survivors first."),
+                self.action_option("Secure the ledgers and seal workshop."),
+                self.action_option("Sabotage the entire cache and floodgate."),
+            ],
+            allow_meta=False,
+        )
+        if final_choice == 1:
+            self.player_action("Save the prisoners and survivors first.")
+            self.state.flags["blackwake_resolution"] = "rescue"
+            self.state.flags["blackwake_survivors_saved"] = int(self.state.flags.get("blackwake_survivors_saved", 0) or 0) + 3
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", 2, "you chose people over proof at Blackwake")
+            self._blackwake_adjust_named_companion("Rhogar Valeguard", 1, "you held the line for prisoners under pressure")
+            self.add_inventory_item("potion_healing", 1, source="grateful Blackwake survivors")
+            self.reward_party(xp=35, gold=8, reason="saving Blackwake prisoners")
+            self.say("Records vanish into water and smoke, but people stumble out alive who would not have had another morning.")
+        elif final_choice == 2:
+            self.player_action("Secure the ledgers and seal workshop.")
+            self.state.flags["blackwake_resolution"] = "evidence"
+            self.state.flags["blackwake_evidence_secured"] = True
+            self.state.flags["blackwake_ledgers_secured"] = True
+            self._blackwake_adjust_named_companion("Bryn Underbough", 1, "you understood the value of proof before officials could deny it")
+            self._blackwake_adjust_named_companion("Elira Dawnmantle", -1, "you chose ledgers while wounded people were still calling for help")
+            self.reward_party(xp=35, gold=22, reason="securing Blackwake ledgers")
+            self.add_clue("Blackwake ledgers prove organized route corruption from Neverwinter's edge toward Phandalin.")
+            self.say("You leave with proof heavy enough to change official conversations, though not every voice in the chamber leaves with you.")
+        else:
+            self.player_action("Sabotage the entire cache and floodgate.")
+            self.state.flags["blackwake_resolution"] = "sabotage"
+            self.state.flags["blackwake_cache_sabotaged"] = True
+            self.act1_adjust_metric("act1_ashen_strength", -1)
+            self._blackwake_adjust_named_companion("Kaelis Starling", 1, "you broke the network's route before it could adapt")
+            self._blackwake_adjust_named_companion("Bryn Underbough", -1, "you burned useful names with the cache")
+            self.add_inventory_item("antitoxin_vial", 1, source="a waterproof cache satchel")
+            self.reward_party(xp=35, gold=6, reason="sabotaging the Blackwake cache")
+            self.say("The floodgate takes the cache apart in a roar. Evidence and loot go with it, but so does a working supply line.")
+        self.complete_map_room(dungeon, room.room_id)
+        self.refresh_quest_statuses()
+        self.return_to_blackwake_decision("Blackwake Crossing is resolved. The choice now is whether its ashes go north to Mira or south toward Phandalin.")
 
     def run_act2_dungeon(self, node_id: str) -> None:
         assert self.state is not None

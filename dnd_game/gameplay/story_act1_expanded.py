@@ -215,6 +215,8 @@ class StoryAct1ExpandedMixin:
             )
             self.state.flags["phandalin_arrived"] = True
             self.add_journal("You reached Phandalin, a hard-bitten frontier town under growing Ashen Brand pressure.")
+            if self.state.flags.get("blackwake_completed"):
+                self.describe_blackwake_phandalin_arrival()
             choice = self.scenario_choice(
                 "How do you enter town?",
                 [

@@ -4,6 +4,26 @@ from .schema import QuestDefinition, QuestReward
 
 
 ACT_1_QUESTS: dict[str, QuestDefinition] = {
+    "trace_blackwake_cell": QuestDefinition(
+        quest_id="trace_blackwake_cell",
+        title="Embers Before the Road",
+        giver="Mira Thann",
+        location="Blackwake Crossing",
+        summary=(
+            "Smoke near the river cut points to burned toll records, forged route authority, and an Ashen Brand supply cell operating closer to Neverwinter than expected."
+        ),
+        objective="Investigate Blackwake Crossing, uncover the cache behind the forged papers, and decide what survives the floodgate chamber.",
+        turn_in="Report the Blackwake outcome to Mira in Neverwinter or carry the proof south toward Phandalin.",
+        completion_flags=("blackwake_completed",),
+        reward=QuestReward(),
+        accepted_text=(
+            "The road to Phandalin can wait long enough to answer one ugly question: why are caravans vanishing before they even reach the wider High Road?"
+        ),
+        ready_text="The Blackwake cell has been resolved. The crossing's prisoners, ledgers, and cache damage will shape what the road hears next.",
+        turn_in_text=(
+            "Mira reads the Blackwake account without interrupting. By the end, the Ashen Brand is no longer a distant frontier gang on her board. It is a supply network with city-side shadows."
+        ),
+    ),
     "secure_miners_road": QuestDefinition(
         quest_id="secure_miners_road",
         title="Stop the Watchtower Raids",
