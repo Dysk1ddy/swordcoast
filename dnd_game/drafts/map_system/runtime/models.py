@@ -162,6 +162,7 @@ class HybridMapBlueprint:
     story_beats: tuple[StoryBeat, ...]
     dungeons: dict[str, DungeonMap]
     overworld_template: tuple[str, ...]
+    overworld_positions: dict[str, tuple[int, int]] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

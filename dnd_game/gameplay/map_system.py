@@ -17,6 +17,8 @@ from ..drafts.map_system.runtime import (
     current_room_exits,
     requirement_met,
     room_direction,
+    room_exit_directions,
+    room_precise_direction,
 )
 from ..ui.rich_render import Group, RICH_AVAILABLE
 from .encounter import Encounter
@@ -58,6 +60,33 @@ ACT1_MAP_FLAG_NAMES = _collect_blueprint_flag_names(ACT1_HYBRID_MAP)
 ACT2_MAP_FLAG_NAMES = _collect_blueprint_flag_names(ACT2_ENEMY_DRIVEN_MAP)
 ACT1_SCENE_TO_NODE_ID = {node.scene_key: node_id for node_id, node in ACT1_HYBRID_MAP.nodes.items()}
 ACT2_SCENE_TO_NODE_ID = {node.scene_key: node_id for node_id, node in ACT2_ENEMY_DRIVEN_MAP.nodes.items()}
+DUNGEON_DIRECTION_ORDER = {
+    "NORTH": 0,
+    "EAST": 2,
+    "SOUTH": 4,
+    "WEST": 6,
+    "HERE": 8,
+}
+
+
+def _dungeon_direction_sort_key(direction: str) -> tuple[int, ...]:
+    return tuple(DUNGEON_DIRECTION_ORDER.get(part, 99) for part in direction.split("-"))
+
+
+def _room_target_sort_key(from_room: DungeonRoom, to_room: DungeonRoom, direction: str) -> tuple[int, tuple[int, ...]]:
+    dx = to_room.x - from_room.x
+    dy = to_room.y - from_room.y
+    if dy < 0:
+        primary = DUNGEON_DIRECTION_ORDER["NORTH"]
+    elif dy > 0:
+        primary = DUNGEON_DIRECTION_ORDER["SOUTH"]
+    elif dx > 0:
+        primary = DUNGEON_DIRECTION_ORDER["EAST"]
+    elif dx < 0:
+        primary = DUNGEON_DIRECTION_ORDER["WEST"]
+    else:
+        primary = DUNGEON_DIRECTION_ORDER["HERE"]
+    return (primary, _dungeon_direction_sort_key(direction))
 
 
 class MapSystemMixin:
@@ -369,7 +398,8 @@ class MapSystemMixin:
             "visited_nodes": self._string_list(raw.get("visited_nodes")),
             "cleared_rooms": self._string_list(raw.get("cleared_rooms")),
             "seen_story_beats": self._string_list(raw.get("seen_story_beats")),
-            "room_history": self._string_list(raw.get("room_history")),
+            "node_history": self._string_history(raw.get("node_history")),
+            "room_history": self._string_history(raw.get("room_history")),
         }
         self.state.flags[self.MAP_STATE_KEY] = payload
 
@@ -382,6 +412,7 @@ class MapSystemMixin:
 
     def _ensure_act2_map_state_payload(self) -> None:
         assert self.state is not None
+        self._ensure_map_state_payload()
         raw = self.state.flags.get(self.ACT2_MAP_STATE_KEY)
         if not isinstance(raw, dict):
             raw = {}
@@ -392,7 +423,8 @@ class MapSystemMixin:
             "visited_nodes": self._string_list(raw.get("visited_nodes")),
             "cleared_rooms": self._string_list(raw.get("cleared_rooms")),
             "seen_story_beats": self._string_list(raw.get("seen_story_beats")),
-            "room_history": self._string_list(raw.get("room_history")),
+            "node_history": self._string_history(raw.get("node_history")),
+            "room_history": self._string_history(raw.get("room_history")),
         }
         self.state.flags[self.ACT2_MAP_STATE_KEY] = payload
 
@@ -420,6 +452,15 @@ class MapSystemMixin:
             seen.add(value)
             normalized.append(value)
         return normalized
+
+    def _string_history(self, raw: Any) -> list[str]:
+        if isinstance(raw, list):
+            values = raw
+        elif isinstance(raw, tuple):
+            values = list(raw)
+        else:
+            values = []
+        return [value for value in values if isinstance(value, str)]
 
     def _map_view_cache(self) -> dict[str, Any]:
         cache = getattr(self, "_act1_map_view_cache", None)
@@ -513,6 +554,14 @@ class MapSystemMixin:
         if current_node_id == "emberhall_cellars" or self.state.current_scene == "act1_complete" or bool(self.state.flags.get("act1_complete")):
             self._remember_act1_nodes(payload, "emberhall_cellars")
 
+    def _seed_act1_overworld_history(self, payload: dict[str, Any], current_node_id: str) -> None:
+        if payload["node_history"]:
+            return
+        if current_node_id == "high_road_ambush":
+            payload["node_history"] = ["neverwinter_briefing"]
+        elif current_node_id == "phandalin_hub":
+            payload["node_history"] = ["neverwinter_briefing", "high_road_ambush"]
+
     def _sync_map_state_with_scene(self, *, force_node_id: str | None = None) -> None:
         assert self.state is not None
         payload = self._map_state_payload()
@@ -524,7 +573,9 @@ class MapSystemMixin:
             return
         node = ACT1_HYBRID_MAP.nodes[node_id]
         payload["current_node_id"] = node_id
+        payload["node_history"] = [history_node_id for history_node_id in payload["node_history"] if history_node_id in ACT1_HYBRID_MAP.nodes]
         self._backfill_act1_visited_nodes(payload, node_id)
+        self._seed_act1_overworld_history(payload, node_id)
         if node.enters_dungeon_id is None or self.state.current_scene != node.scene_key:
             payload["current_dungeon_id"] = None
             payload["current_room_id"] = None
@@ -546,6 +597,7 @@ class MapSystemMixin:
         node_id = force_node_id or self._act2_current_node_id()
         node = ACT2_ENEMY_DRIVEN_MAP.nodes[node_id]
         payload["current_node_id"] = node_id
+        payload["node_history"] = [history_node_id for history_node_id in payload["node_history"] if history_node_id in ACT2_ENEMY_DRIVEN_MAP.nodes]
         if node_id not in payload["visited_nodes"]:
             payload["visited_nodes"].append(node_id)
         if node.enters_dungeon_id is None or self.state.current_scene != node.scene_key:
@@ -701,6 +753,20 @@ class MapSystemMixin:
         self._clear_map_view_cache("dungeon")
         self._compact_hud_last_scene_key = None
 
+    def _queue_act1_dungeon_transition_feedback(self, movement_text: str = "") -> None:
+        self._pending_act1_dungeon_map_refresh = True
+        self._pending_act1_dungeon_movement_text = movement_text
+
+    def _consume_act1_dungeon_transition_feedback(self, dungeon: DungeonMap) -> None:
+        if not getattr(self, "_pending_act1_dungeon_map_refresh", False):
+            return
+        movement_text = str(getattr(self, "_pending_act1_dungeon_movement_text", ""))
+        self._pending_act1_dungeon_map_refresh = False
+        self._pending_act1_dungeon_movement_text = ""
+        self.render_act1_dungeon_map(dungeon, force=True)
+        if movement_text:
+            self.say(movement_text)
+
     def set_current_map_room(self, room_id: str, *, announce: bool = False, movement_text: str = "") -> None:
         payload = self._map_state_payload()
         current_room_id = payload.get("current_room_id")
@@ -711,22 +777,23 @@ class MapSystemMixin:
         payload["current_room_id"] = room_id
         self._clear_map_view_cache("dungeon")
         self._compact_hud_last_scene_key = None
-        if announce:
-            self.say(movement_text or f"You move toward {room_id.replace('_', ' ')}.")
-        dungeon = self.current_act1_dungeon()
-        if dungeon is not None:
-            self.render_act1_dungeon_map(dungeon, force=True)
+        self._queue_act1_dungeon_transition_feedback(
+            movement_text or f"You move toward {room_id.replace('_', ' ')}." if announce else ""
+        )
 
     def backtrack_map_room(self, dungeon: DungeonMap) -> bool:
         payload = self._map_state_payload()
         while payload["room_history"]:
             previous_room_id = payload["room_history"].pop()
-            if previous_room_id in dungeon.rooms:
+            current_room_id = payload.get("current_room_id")
+            if previous_room_id in dungeon.rooms and previous_room_id != current_room_id:
+                current_room = dungeon.rooms[current_room_id] if isinstance(current_room_id, str) and current_room_id in dungeon.rooms else dungeon.rooms[dungeon.entrance_room_id]
+                previous_room = dungeon.rooms[previous_room_id]
+                direction = room_precise_direction(current_room, previous_room, dungeon).lower()
                 payload["current_room_id"] = previous_room_id
                 self._clear_map_view_cache("dungeon")
                 self._compact_hud_last_scene_key = None
-                self.say(f"You backtrack toward {dungeon.rooms[previous_room_id].title}.")
-                self.render_act1_dungeon_map(dungeon, force=True)
+                self._queue_act1_dungeon_transition_feedback(f"You backtrack {direction} toward {previous_room.title}.")
                 return True
         return False
 
@@ -737,9 +804,27 @@ class MapSystemMixin:
                 return dungeon.rooms[room_id]
         return None
 
-    def travel_to_act1_node(self, node_id: str) -> None:
+    def _show_act1_overworld_transition_feedback(self, text: str = "") -> None:
+        self.render_act1_overworld_map(force=True)
+        if text:
+            self.say(text)
+
+    def _act1_current_node_id_for_history(self, payload: dict[str, Any]) -> str:
+        assert self.state is not None
+        scene_node_id = ACT1_SCENE_TO_NODE_ID.get(self.state.current_scene)
+        if scene_node_id is not None:
+            return scene_node_id
+        return str(payload.get("current_node_id") or "")
+
+    def _record_act1_node_history(self, payload: dict[str, Any], from_node_id: str, to_node_id: str) -> None:
+        if from_node_id and from_node_id in ACT1_HYBRID_MAP.nodes and from_node_id != to_node_id:
+            payload["node_history"].append(from_node_id)
+
+    def travel_to_act1_node(self, node_id: str, *, transition_text: str = "", record_history: bool = True) -> None:
         assert self.state is not None
         payload = self._map_state_payload()
+        if record_history:
+            self._record_act1_node_history(payload, self._act1_current_node_id_for_history(payload), node_id)
         node = ACT1_HYBRID_MAP.nodes[node_id]
         payload["current_node_id"] = node_id
         if node_id not in payload["visited_nodes"]:
@@ -756,37 +841,69 @@ class MapSystemMixin:
         self.state.current_scene = node.scene_key
         self._clear_map_view_cache()
         self._compact_hud_last_scene_key = None
-        self.render_act1_overworld_map(force=True)
+        self._show_act1_overworld_transition_feedback(transition_text)
 
     def return_to_phandalin(self, text: str) -> None:
-        assert self.state is not None
-        payload = self._map_state_payload()
-        payload["current_node_id"] = "phandalin_hub"
-        if "phandalin_hub" not in payload["visited_nodes"]:
-            payload["visited_nodes"].append("phandalin_hub")
-        payload["current_dungeon_id"] = None
-        payload["current_room_id"] = None
-        payload["room_history"] = []
-        self.state.current_scene = "phandalin_hub"
-        self._clear_map_view_cache()
-        self._compact_hud_last_scene_key = None
-        self.say(text)
-        self.render_act1_overworld_map(force=True)
+        self.travel_to_act1_node("phandalin_hub", transition_text=text)
 
     def return_to_blackwake_decision(self, text: str) -> None:
-        assert self.state is not None
+        self.travel_to_act1_node("road_decision_post_blackwake", transition_text=text)
+
+    def _act1_overworld_backtrack_allowed(self, current_node_id: str, candidate_node_id: str) -> bool:
+        return candidate_node_id in ACT1_HYBRID_MAP.nodes and candidate_node_id != current_node_id
+
+    def peek_act1_overworld_backtrack_node(self):
         payload = self._map_state_payload()
-        payload["current_node_id"] = "road_decision_post_blackwake"
-        if "road_decision_post_blackwake" not in payload["visited_nodes"]:
-            payload["visited_nodes"].append("road_decision_post_blackwake")
-        payload["current_dungeon_id"] = None
-        payload["current_room_id"] = None
-        payload["room_history"] = []
-        self.state.current_scene = "road_decision_post_blackwake"
-        self._clear_map_view_cache()
-        self._compact_hud_last_scene_key = None
-        self.say(text)
-        self.render_act1_overworld_map(force=True)
+        current_node_id = str(payload.get("current_node_id") or "")
+        for node_id in reversed(payload["node_history"]):
+            if self._act1_overworld_backtrack_allowed(current_node_id, node_id):
+                return ACT1_HYBRID_MAP.nodes[node_id]
+        return None
+
+    def _act1_overworld_backtrack_text(self, from_node_id: str, to_node_id: str) -> str:
+        from_title = ACT1_HYBRID_MAP.nodes[from_node_id].title
+        to_title = ACT1_HYBRID_MAP.nodes[to_node_id].title
+        if to_node_id == "neverwinter_briefing":
+            return (
+                "You backtrack north toward Neverwinter, letting the familiar city road pull the party "
+                "back to Mira's briefing room instead of pressing farther into the frontier."
+            )
+        if to_node_id == "high_road_ambush":
+            return "You backtrack north along the High Road, returning to the scarred wagon site between Phandalin and Neverwinter."
+        if from_node_id == "road_decision_post_blackwake" and to_node_id == "blackwake_crossing":
+            return "You double back toward Blackwake Crossing, following the wet wagon scars and smoke-stained reeds instead of committing to the south road."
+        if from_node_id == "phandalin_hub":
+            return f"You leave Phandalin by the same track you used before, letting the road back to {to_title} replace the town's noise behind you."
+        return f"You backtrack from {from_title} toward {to_title}, choosing the familiar route over a new lead."
+
+    def _narrate_act1_overworld_backtrack_context(self, from_node_id: str, to_node_id: str) -> None:
+        if to_node_id == "neverwinter_briefing":
+            self.say("Mira is waiting in the background of the city machine: messengers, wax seals, and hard questions ready for whatever you bring back.")
+            return
+        if to_node_id == "high_road_ambush":
+            self.say("No fresh ambush waits there now, but the road still remembers the smoke, broken wheels, and the choice that first pointed you south.")
+            return
+        if to_node_id == "blackwake_crossing":
+            self.say("Mira is not on this muddy bend, but her unanswered questions sit in the background as you retrace Blackwake's broken approach.")
+            return
+        if from_node_id == "phandalin_hub":
+            self.say("Behind you, Phandalin keeps moving: Tessa's runners argue supplies, road watches trade signals, and familiar voices fade into background work.")
+
+    def backtrack_act1_overworld_node(self) -> bool:
+        assert self.state is not None
+        candidate = self.peek_act1_overworld_backtrack_node()
+        if candidate is None:
+            return False
+        payload = self._map_state_payload()
+        current_node_id = str(payload.get("current_node_id") or "")
+        while payload["node_history"]:
+            node_id = payload["node_history"].pop()
+            if node_id == candidate.node_id:
+                break
+        transition_text = self._act1_overworld_backtrack_text(current_node_id, candidate.node_id)
+        self.travel_to_act1_node(candidate.node_id, transition_text=transition_text, record_history=False)
+        self._narrate_act1_overworld_backtrack_context(current_node_id, candidate.node_id)
+        return True
 
     def act1_hybrid_map_available(self) -> bool:
         if self.state is None:
@@ -871,6 +988,59 @@ class MapSystemMixin:
         self._clear_map_view_cache("act2_overworld", "act2_dungeon")
         self._compact_hud_last_scene_key = None
 
+    def _queue_act2_dungeon_transition_feedback(self, movement_text: str = "") -> None:
+        self._pending_act2_dungeon_map_refresh = True
+        self._pending_act2_dungeon_movement_text = movement_text
+
+    def _consume_act2_dungeon_transition_feedback(self, dungeon: DungeonMap) -> None:
+        if not getattr(self, "_pending_act2_dungeon_map_refresh", False):
+            return
+        movement_text = str(getattr(self, "_pending_act2_dungeon_movement_text", ""))
+        self._pending_act2_dungeon_map_refresh = False
+        self._pending_act2_dungeon_movement_text = ""
+        self.render_act2_dungeon_map(dungeon, force=True)
+        if movement_text:
+            self.say(movement_text)
+
+    def _show_act2_overworld_transition_feedback(self, text: str = "") -> None:
+        self.render_act2_overworld_map(force=True)
+        if text:
+            self.say(text)
+
+    def _act2_current_node_id_for_history(self, payload: dict[str, Any]) -> str:
+        assert self.state is not None
+        scene_node_id = ACT2_SCENE_TO_NODE_ID.get(self.state.current_scene)
+        if scene_node_id is not None:
+            return scene_node_id
+        return str(payload.get("current_node_id") or "")
+
+    def _record_act2_node_history(self, payload: dict[str, Any], from_node_id: str, to_node_id: str) -> None:
+        if from_node_id and from_node_id in ACT2_ENEMY_DRIVEN_MAP.nodes and from_node_id != to_node_id:
+            payload["node_history"].append(from_node_id)
+
+    def travel_to_act2_node(self, node_id: str, *, transition_text: str = "", record_history: bool = True) -> None:
+        assert self.state is not None
+        payload = self._act2_map_state_payload()
+        if record_history:
+            self._record_act2_node_history(payload, self._act2_current_node_id_for_history(payload), node_id)
+        node = ACT2_ENEMY_DRIVEN_MAP.nodes[node_id]
+        payload["current_node_id"] = node_id
+        if node_id not in payload["visited_nodes"]:
+            payload["visited_nodes"].append(node_id)
+        if node.enters_dungeon_id is None:
+            payload["current_dungeon_id"] = None
+            payload["current_room_id"] = None
+            payload["room_history"] = []
+        else:
+            dungeon = ACT2_ENEMY_DRIVEN_MAP.dungeons[node.enters_dungeon_id]
+            payload["current_dungeon_id"] = dungeon.dungeon_id
+            payload["current_room_id"] = dungeon.entrance_room_id
+            payload["room_history"] = []
+        self.state.current_scene = node.scene_key
+        self._clear_map_view_cache("act2_overworld", "act2_dungeon")
+        self._compact_hud_last_scene_key = None
+        self._show_act2_overworld_transition_feedback(transition_text)
+
     def set_current_act2_map_room(self, room_id: str, *, announce: bool = False, movement_text: str = "") -> None:
         payload = self._act2_map_state_payload()
         current_room_id = payload.get("current_room_id")
@@ -881,11 +1051,9 @@ class MapSystemMixin:
         payload["current_room_id"] = room_id
         self._clear_map_view_cache("act2_dungeon")
         self._compact_hud_last_scene_key = None
-        if announce:
-            self.say(movement_text or f"You move toward {room_id.replace('_', ' ')}.")
-        dungeon = self.current_act2_dungeon()
-        if dungeon is not None:
-            self.render_act2_dungeon_map(dungeon, force=True)
+        self._queue_act2_dungeon_transition_feedback(
+            movement_text or f"You move toward {room_id.replace('_', ' ')}." if announce else ""
+        )
 
     def peek_act2_backtrack_room(self, dungeon: DungeonMap) -> DungeonRoom | None:
         payload = self._act2_map_state_payload()
@@ -894,47 +1062,96 @@ class MapSystemMixin:
                 return dungeon.rooms[room_id]
         return None
 
-    def _act2_movement_option_label(self, room: DungeonRoom, candidate: DungeonRoom) -> str:
-        dungeon = self.current_act2_dungeon()
-        direction = room_direction(room, candidate, dungeon)
+    def backtrack_act2_map_room(self, dungeon: DungeonMap) -> bool:
+        payload = self._act2_map_state_payload()
+        while payload["room_history"]:
+            previous_room_id = payload["room_history"].pop()
+            current_room_id = payload.get("current_room_id")
+            if previous_room_id in dungeon.rooms and previous_room_id != current_room_id:
+                current_room = dungeon.rooms[current_room_id] if isinstance(current_room_id, str) and current_room_id in dungeon.rooms else dungeon.rooms[dungeon.entrance_room_id]
+                previous_room = dungeon.rooms[previous_room_id]
+                direction = room_precise_direction(current_room, previous_room, dungeon).lower()
+                payload["current_room_id"] = previous_room_id
+                self._clear_map_view_cache("act2_dungeon")
+                self._compact_hud_last_scene_key = None
+                self._queue_act2_dungeon_transition_feedback(f"You backtrack {direction} toward {previous_room.title}.")
+                return True
+        return False
+
+    def _act2_movement_option_label(self, room: DungeonRoom, candidate: DungeonRoom, direction: str | None = None) -> str:
+        direction = direction or room_direction(room, candidate)
         verb = "Advance to" if not self.act2_room_is_cleared(candidate.room_id) else "Return to"
         return self.skill_tag(f"MOVE {direction}", self.action_option(f"{verb} {candidate.title}"))
+
+    def _act2_backtrack_option_label(self, room: DungeonRoom, candidate: DungeonRoom, direction: str | None = None) -> str:
+        direction = direction or room_precise_direction(room, candidate)
+        return self.skill_tag(f"BACKTRACK {direction}", self.action_option(f"Backtrack to {candidate.title}"))
 
     def act2_room_navigation_options(self, dungeon: DungeonMap) -> list[tuple[str, str, str]]:
         room = self.current_act2_room(dungeon)
         options: list[tuple[str, str, str]] = []
-        seen_targets: set[str] = set()
+        previous_room = self.peek_act2_backtrack_room(dungeon)
+        backtrack_direction = room_precise_direction(room, previous_room, dungeon) if previous_room is not None else None
         exits = current_room_exits(dungeon, self.act2_map_state())
+        move_exits = [candidate for candidate in exits if previous_room is None or candidate.room_id != previous_room.room_id]
+        reserved_directions = {backtrack_direction} if backtrack_direction is not None else set()
+        directions = room_exit_directions(room, move_exits, dungeon=dungeon, reserved_directions=reserved_directions)
         ordered_exits = sorted(
-            exits,
+            move_exits,
             key=lambda candidate: (
                 self.act2_room_is_cleared(candidate.room_id),
-                {"UP": 0, "RIGHT": 1, "DOWN": 2, "LEFT": 3, "HERE": 4}[room_direction(room, candidate, dungeon)],
+                _room_target_sort_key(room, candidate, directions[candidate.room_id]),
                 candidate.title,
             ),
         )
         for candidate in ordered_exits:
-            options.append(("move", candidate.room_id, self._act2_movement_option_label(room, candidate)))
-            seen_targets.add(candidate.room_id)
-        previous_room = self.peek_act2_backtrack_room(dungeon)
-        if previous_room is not None and previous_room.room_id not in seen_targets:
-            options.append(("move", previous_room.room_id, self._act2_movement_option_label(room, previous_room)))
+            direction = directions[candidate.room_id]
+            options.append((f"move:{direction}", candidate.room_id, self._act2_movement_option_label(room, candidate, direction)))
+        if previous_room is not None and backtrack_direction is not None:
+            options.append((f"backtrack:{backtrack_direction}", previous_room.room_id, self._act2_backtrack_option_label(room, previous_room, backtrack_direction)))
         options.append(("withdraw", "act2_expedition_hub", self.action_option("Withdraw to the expedition hub")))
         return options
 
     def return_to_act2_hub(self, text: str) -> None:
-        assert self.state is not None
+        self.travel_to_act2_node("act2_expedition_hub", transition_text=text)
+
+    def _act2_overworld_backtrack_allowed(self, current_node_id: str, candidate_node_id: str) -> bool:
+        return candidate_node_id in ACT2_ENEMY_DRIVEN_MAP.nodes and candidate_node_id != current_node_id
+
+    def peek_act2_overworld_backtrack_node(self):
         payload = self._act2_map_state_payload()
-        payload["current_node_id"] = "act2_expedition_hub"
-        if "act2_expedition_hub" not in payload["visited_nodes"]:
-            payload["visited_nodes"].append("act2_expedition_hub")
-        payload["current_dungeon_id"] = None
-        payload["current_room_id"] = None
-        payload["room_history"] = []
-        self.state.current_scene = "act2_expedition_hub"
-        self._clear_map_view_cache("act2_overworld", "act2_dungeon")
-        self._compact_hud_last_scene_key = None
-        self.say(text)
+        current_node_id = str(payload.get("current_node_id") or "")
+        for node_id in reversed(payload["node_history"]):
+            if self._act2_overworld_backtrack_allowed(current_node_id, node_id):
+                return ACT2_ENEMY_DRIVEN_MAP.nodes[node_id]
+        return None
+
+    def _act2_overworld_backtrack_text(self, from_node_id: str, to_node_id: str) -> str:
+        from_title = ACT2_ENEMY_DRIVEN_MAP.nodes[from_node_id].title
+        to_title = ACT2_ENEMY_DRIVEN_MAP.nodes[to_node_id].title
+        if from_node_id == "act2_expedition_hub":
+            return f"You reopen the same expedition line from Phandalin, backtracking toward {to_title} before the council can turn the map into another argument."
+        return f"You backtrack from {from_title} toward {to_title}, choosing the route you already know."
+
+    def _narrate_act2_overworld_backtrack_context(self, from_node_id: str, to_node_id: str) -> None:
+        if from_node_id == "act2_expedition_hub":
+            self.say("At the expedition table behind you, Halia, Linene, Elira, and Daran keep the argument alive in low voices while the party retraces the marked route.")
+
+    def backtrack_act2_overworld_node(self) -> bool:
+        assert self.state is not None
+        candidate = self.peek_act2_overworld_backtrack_node()
+        if candidate is None:
+            return False
+        payload = self._act2_map_state_payload()
+        current_node_id = str(payload.get("current_node_id") or "")
+        while payload["node_history"]:
+            node_id = payload["node_history"].pop()
+            if node_id == candidate.node_id:
+                break
+        transition_text = self._act2_overworld_backtrack_text(current_node_id, candidate.node_id)
+        self.travel_to_act2_node(candidate.node_id, transition_text=transition_text, record_history=False)
+        self._narrate_act2_overworld_backtrack_context(current_node_id, candidate.node_id)
+        return True
 
     def render_act2_overworld_map(self, *, force: bool = False) -> None:
         if not self.act2_hybrid_map_available():
@@ -981,31 +1198,45 @@ class MapSystemMixin:
         cache["act2_dungeon"] = cache_key
         self.output_fn("")
 
-    def _movement_option_label(self, room: DungeonRoom, candidate: DungeonRoom) -> str:
-        dungeon = self.current_act1_dungeon()
-        direction = room_direction(room, candidate, dungeon)
+    def _movement_option_label(self, room: DungeonRoom, candidate: DungeonRoom, direction: str | None = None) -> str:
+        direction = direction or room_direction(room, candidate)
         verb = "Advance to" if not self.room_is_cleared(candidate.room_id) else "Return to"
         return self.skill_tag(f"MOVE {direction}", self.action_option(f"{verb} {candidate.title}"))
+
+    def _backtrack_option_label(self, room: DungeonRoom, candidate: DungeonRoom, direction: str | None = None) -> str:
+        direction = direction or room_precise_direction(room, candidate)
+        return self.skill_tag(f"BACKTRACK {direction}", self.action_option(f"Backtrack to {candidate.title}"))
 
     def act1_room_navigation_options(self, dungeon: DungeonMap) -> list[tuple[str, str, str]]:
         room = self.current_act1_room(dungeon)
         options: list[tuple[str, str, str]] = []
-        seen_targets: set[str] = set()
+        previous_room = self.peek_backtrack_room(dungeon)
+        backtrack_direction = room_precise_direction(room, previous_room, dungeon) if previous_room is not None else None
         exits = current_room_exits(dungeon, self.act1_map_state())
+        move_exits = [candidate for candidate in exits if previous_room is None or candidate.room_id != previous_room.room_id]
+        reserved_directions = {backtrack_direction} if backtrack_direction is not None else set()
+        directions = room_exit_directions(room, move_exits, dungeon=dungeon, reserved_directions=reserved_directions)
         ordered_exits = sorted(
-            exits,
+            move_exits,
             key=lambda candidate: (
                 self.room_is_cleared(candidate.room_id),
-                {"UP": 0, "RIGHT": 1, "DOWN": 2, "LEFT": 3, "HERE": 4}[room_direction(room, candidate, dungeon)],
+                _room_target_sort_key(room, candidate, directions[candidate.room_id]),
                 candidate.title,
             ),
         )
         for candidate in ordered_exits:
-            options.append(("move", candidate.room_id, self._movement_option_label(room, candidate)))
-            seen_targets.add(candidate.room_id)
-        previous_room = self.peek_backtrack_room(dungeon)
-        if previous_room is not None and previous_room.room_id not in seen_targets:
-            options.append(("move", previous_room.room_id, self._movement_option_label(room, previous_room)))
+            direction = directions[candidate.room_id]
+            options.append((f"move:{direction}", candidate.room_id, self._movement_option_label(room, candidate, direction)))
+        if previous_room is not None and backtrack_direction is not None:
+            options.append((f"backtrack:{backtrack_direction}", previous_room.room_id, self._backtrack_option_label(room, previous_room, backtrack_direction)))
+        overworld_backtrack_node = self.peek_act1_overworld_backtrack_node()
+        if (
+            previous_room is None
+            and room.room_id == dungeon.entrance_room_id
+            and overworld_backtrack_node is not None
+            and overworld_backtrack_node.node_id != dungeon.exit_to_node_id
+        ):
+            options.append(("overworld_backtrack", overworld_backtrack_node.node_id, self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {overworld_backtrack_node.title}"))))
         if dungeon.exit_to_node_id == "road_decision_post_blackwake":
             options.append(("withdraw", "road_decision_post_blackwake", self.action_option("Withdraw to the Blackwake road decision")))
         else:
@@ -1023,13 +1254,14 @@ class MapSystemMixin:
 
     def open_act1_map_menu(self) -> None:
         if not self.act1_hybrid_map_available():
-            self.say("There is no active hybrid map at this point in the adventure.")
+            self.say("There is no active map yet.")
             return
         dungeon = self.current_act1_dungeon()
         while True:
             choice = self.choose(
                 "Map menu",
                 [
+                    "Travel Ledger",
                     "Overworld",
                     dungeon.title if dungeon is not None else "Dungeon (not available here)",
                     "Back",
@@ -1038,10 +1270,13 @@ class MapSystemMixin:
                 show_hud=False,
             )
             if choice == 1:
+                self.render_compact_hud()
+                continue
+            if choice == 2:
                 self.banner("Overworld Map")
                 self.render_act1_overworld_map(force=True)
                 continue
-            if choice == 2:
+            if choice == 3:
                 if dungeon is None:
                     self.say("There is no dungeon map to show from this location.")
                     continue
@@ -1052,7 +1287,7 @@ class MapSystemMixin:
 
     def open_act2_map_menu(self) -> None:
         if not self.act2_hybrid_map_available():
-            self.say("There is no active Act II map yet.")
+            self.say("There is no active map yet.")
             return
         dungeon = self.current_act2_dungeon()
         site_label = "Current Site (not available here)"
@@ -1063,6 +1298,7 @@ class MapSystemMixin:
             choice = self.choose(
                 "Map menu",
                 [
+                    "Travel Ledger",
                     "Act II Route Map",
                     site_label,
                     "Back",
@@ -1071,10 +1307,13 @@ class MapSystemMixin:
                 show_hud=False,
             )
             if choice == 1:
+                self.render_compact_hud()
+                continue
+            if choice == 2:
                 self.banner("Act II Route Map")
                 self.render_act2_overworld_map(force=True)
                 continue
-            if choice == 2:
+            if choice == 3:
                 if dungeon is None:
                     self.say("There is no Act II site map to show from this location.")
                     continue
@@ -1084,9 +1323,12 @@ class MapSystemMixin:
             return
 
     def handle_meta_command(self, raw: str) -> bool:
-        if raw.lower() == "map":
+        lowered = raw.lower()
+        if lowered in {"map", "maps", "map menu"}:
             if self.state is None:
                 self.say("There is no active map yet.")
+            elif getattr(self, "_in_combat", False):
+                self.say("Maps are unavailable during combat.")
             else:
                 self.open_map_menu()
             return True
@@ -1169,8 +1411,6 @@ class MapSystemMixin:
         self.maybe_run_act1_companion_conflict()
 
         while True:
-            self.banner("Phandalin")
-            self.render_act1_overworld_map()
             options: list[tuple[str, str]] = [
                 ("steward", self.action_option("Report to Steward Tessa Harrow")),
                 ("inn", self.action_option("Visit the Stonehill Inn")),
@@ -1215,6 +1455,10 @@ class MapSystemMixin:
             else:
                 options.append(("emberhall", self.action_option("Descend into Emberhall Cellars")))
 
+            backtrack_node = self.peek_act1_overworld_backtrack_node()
+            if backtrack_node is not None:
+                options.append(("backtrack", self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {backtrack_node.title}"))))
+
             choice = self.scenario_choice("Where do you go next?", [text for _, text in options])
             selection_key, _ = options[choice - 1]
             if selection_key == "steward":
@@ -1235,6 +1479,11 @@ class MapSystemMixin:
                 self.open_camp_menu()
             elif selection_key == "rest":
                 self.short_rest()
+            elif selection_key == "backtrack":
+                if not self.backtrack_act1_overworld_node():
+                    self.say("There is no familiar route to backtrack right now.")
+                    continue
+                return
             elif selection_key == "old_owl":
                 if not self.can_visit_old_owl_well():
                     self.say("You need a firmer lead on the well before marching the party into empty scrub.")
@@ -1286,16 +1535,17 @@ class MapSystemMixin:
             "The road has not become safer, exactly, but it has become more honest about what is hunting it.",
             typed=True,
         )
-        choice = self.scenario_choice(
-            "Where do you go now?",
-            [
-                self.action_option("Return to Neverwinter with what you found."),
-                self.action_option("Press south toward the road to Phandalin."),
-                self.action_option("Camp first, then decide."),
-            ],
-            allow_meta=False,
-        )
-        if choice == 1:
+        options: list[tuple[str, str]] = [
+            ("neverwinter", self.action_option("Return to Neverwinter with what you found.")),
+            ("south", self.action_option("Press south toward the road to Phandalin.")),
+            ("camp", self.action_option("Camp first, then decide.")),
+        ]
+        backtrack_node = self.peek_act1_overworld_backtrack_node()
+        if backtrack_node is not None:
+            options.append(("backtrack", self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {backtrack_node.title}"))))
+        choice = self.scenario_choice("Where do you go now?", [text for _, text in options], allow_meta=False)
+        selection_key, _ = options[choice - 1]
+        if selection_key == "neverwinter":
             self.player_action("Return to Neverwinter with what you found.")
             self.state.flags["blackwake_return_destination"] = "neverwinter"
             self.speaker(
@@ -1315,9 +1565,9 @@ class MapSystemMixin:
                     self.say("Mira cannot prosecute ashes, but she can use the damage to tighten the next patrol net.")
             self.turn_in_quest("trace_blackwake_cell")
             self.say("With the report made, the south road waits again. The Phandalin writ is still yours to carry.")
-            self.state.current_scene = "road_ambush"
+            self.travel_to_act1_node("high_road_ambush")
             return
-        if choice == 2:
+        if selection_key == "south":
             self.player_action("Press south toward the road to Phandalin.")
             self.state.flags["blackwake_return_destination"] = "south_road"
             if resolution == "sabotage":
@@ -1326,11 +1576,15 @@ class MapSystemMixin:
                 self.say("The copied route marks ride in your pack, making every broken wagon ahead feel less random.")
             elif resolution == "rescue":
                 self.say("The rescued survivors' names travel south with you, carried as proof that the road still has people worth saving.")
-            self.state.current_scene = "road_ambush"
+            self.travel_to_act1_node("high_road_ambush")
             return
-        self.player_action("Camp first, then decide.")
-        self.open_camp_menu()
-        self.say("The fire burns low. Blackwake is behind you; Neverwinter and Phandalin both still have claims on the morning.")
+        if selection_key == "camp":
+            self.player_action("Camp first, then decide.")
+            self.open_camp_menu()
+            self.say("The fire burns low. Blackwake is behind you; Neverwinter and Phandalin both still have claims on the morning.")
+            return
+        if not self.backtrack_act1_overworld_node():
+            self.say("There is no familiar Blackwake route to backtrack right now.")
 
     def scene_wyvern_tor(self) -> None:
         self.run_act1_dungeon("wyvern_tor")
@@ -1383,11 +1637,12 @@ class MapSystemMixin:
         self._sync_map_state_with_scene(force_node_id=node_id)
         node = ACT1_HYBRID_MAP.nodes[node_id]
         dungeon = ACT1_HYBRID_MAP.dungeons[str(node.enters_dungeon_id)]
+        self.banner(node.title)
+        self.render_act1_dungeon_map(dungeon, force=True)
 
         while self.state is not None and self.state.current_scene == node.scene_key:
+            self._consume_act1_dungeon_transition_feedback(dungeon)
             room = self.current_act1_room(dungeon)
-            self.banner(node.title)
-            self.render_act1_dungeon_map(dungeon)
             if not self.room_is_cleared(room.room_id):
                 self._run_act1_room(node_id, dungeon, room)
                 if self.state.current_scene != node.scene_key:
@@ -1413,14 +1668,24 @@ class MapSystemMixin:
                 allow_meta=False,
             )
             action, destination, _ = options[choice - 1]
-            if action == "move":
+            action_kind, _, action_direction = action.partition(":")
+            if action_kind == "move":
                 next_room = dungeon.rooms[destination]
                 self.set_current_map_room(
                     destination,
                     announce=True,
-                    movement_text=f"You move {room_direction(room, next_room, dungeon).lower()} toward {next_room.title}.",
+                    movement_text=f"You move {(action_direction or room_direction(room, next_room, dungeon)).lower()} toward {next_room.title}.",
                 )
                 continue
+            if action_kind == "backtrack":
+                if not self.backtrack_map_room(dungeon):
+                    self.say("There is nowhere useful to backtrack from here.")
+                continue
+            if action_kind == "overworld_backtrack":
+                if not self.backtrack_act1_overworld_node():
+                    self.say("There is no familiar overworld route to backtrack right now.")
+                    continue
+                return
             if dungeon.exit_to_node_id == "road_decision_post_blackwake":
                 self.return_to_blackwake_decision(f"You pull back from {node.title} and regroup on the road beyond the river cut.")
                 return
@@ -2163,11 +2428,12 @@ class MapSystemMixin:
         self._sync_act2_map_state_with_scene(force_node_id=node_id)
         node = ACT2_ENEMY_DRIVEN_MAP.nodes[node_id]
         dungeon = ACT2_ENEMY_DRIVEN_MAP.dungeons[str(node.enters_dungeon_id)]
+        self.banner(node.title)
+        self.render_act2_dungeon_map(dungeon, force=True)
 
         while self.state is not None and self.state.current_scene == node.scene_key:
+            self._consume_act2_dungeon_transition_feedback(dungeon)
             room = self.current_act2_room(dungeon)
-            self.banner(node.title)
-            self.render_act2_dungeon_map(dungeon)
             if not self.act2_room_is_cleared(room.room_id):
                 self._run_act2_room(node_id, dungeon, room)
                 if self.state.current_scene != node.scene_key:
@@ -2181,13 +2447,18 @@ class MapSystemMixin:
                 allow_meta=False,
             )
             action, destination, _ = options[choice - 1]
-            if action == "move":
+            action_kind, _, action_direction = action.partition(":")
+            if action_kind == "move":
                 next_room = dungeon.rooms[destination]
                 self.set_current_act2_map_room(
                     destination,
                     announce=True,
-                    movement_text=f"You move {room_direction(room, next_room, dungeon).lower()} toward {next_room.title}.",
+                    movement_text=f"You move {(action_direction or room_direction(room, next_room, dungeon)).lower()} toward {next_room.title}.",
                 )
+                continue
+            if action_kind == "backtrack":
+                if not self.backtrack_act2_map_room(dungeon):
+                    self.say("There is nowhere useful to backtrack from here.")
                 continue
             self.return_to_act2_hub(f"You withdraw from {node.title} and return to Phandalin's expedition table.")
             return

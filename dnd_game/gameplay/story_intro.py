@@ -658,7 +658,7 @@ class StoryIntroMixin:
             )
             if choice == 1:
                 self.player_action("Take the direct south road toward Phandalin.")
-                self.state.current_scene = "road_ambush"
+                self.travel_to_act1_node("high_road_ambush")
                 return
             if choice == 2:
                 self.player_action("Investigate the smoke and caravan panic near the river cut.")
@@ -669,7 +669,7 @@ class StoryIntroMixin:
                     note="Smoke outside Neverwinter points toward Blackwake Crossing before the wider High Road opens.",
                 )
                 self.add_journal("You turned off toward Blackwake Crossing to trace smoke, forged toll seals, and missing caravans.")
-                self.state.current_scene = "blackwake_crossing"
+                self.travel_to_act1_node("blackwake_crossing")
                 return
 
             self.player_action("Circle back long enough to gather one more rumor in Neverwinter.")
@@ -714,7 +714,32 @@ class StoryIntroMixin:
 
     def scene_road_ambush(self) -> None:
         assert self.state is not None
+        self._sync_map_state_with_scene(force_node_id="high_road_ambush")
         self.banner("High Road")
+        if self.state.flags.get("road_ambush_cleared") or self.state.flags.get("phandalin_arrived"):
+            self.render_act1_overworld_map(force=True)
+            self.say(
+                "The ambush site has gone quiet: ash-dark wagon ribs, old hoof churn, and the track south toward Phandalin "
+                "all sit under a wind that knows the worst of this fight already passed."
+            )
+            options: list[tuple[str, str]] = [
+                ("south", self.action_option("Follow the High Road back to Phandalin.")),
+            ]
+            backtrack_node = self.peek_act1_overworld_backtrack_node()
+            if backtrack_node is not None:
+                options.append(("backtrack", self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {backtrack_node.title}"))))
+            choice = self.scenario_choice("Where do you go from the High Road?", [text for _, text in options], allow_meta=False)
+            selection_key, _ = options[choice - 1]
+            if selection_key == "backtrack":
+                if not self.backtrack_act1_overworld_node():
+                    self.say("There is no familiar road behind you to backtrack right now.")
+                    return
+                return
+            self.travel_to_act1_node(
+                "phandalin_hub",
+                transition_text="You turn south again, letting the familiar road carry you back to Phandalin's lanterns.",
+            )
+            return
         self.say(
             "South of Neverwinter, smoke rises from a wrecked wagon just off the road. Goblin voices bark "
             "from the scrub while a chained ash wolf snaps at a wounded caravan guard trying to hold them back.",
@@ -850,4 +875,5 @@ class StoryIntroMixin:
         else:
             self.state.flags["tolan_waiting_at_inn"] = True
             self.add_journal("Tolan Ironshield is waiting at the Stonehill Inn if you need another shield arm.")
-        self.state.current_scene = "phandalin_hub"
+        self.state.flags["road_ambush_cleared"] = True
+        self.travel_to_act1_node("phandalin_hub")

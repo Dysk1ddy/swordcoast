@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import random
+import re
 from types import SimpleNamespace
 import unittest
 from collections import Counter
@@ -37,9 +38,13 @@ from dnd_game.drafts.map_system.runtime import (
     FlagValueRequirement,
     NumericFlagRequirement,
     Requirement,
+    build_dungeon_panel,
     build_overworld_panel_text,
     requirement_met,
+    room_exit_directions,
+    room_travel_path,
 )
+from dnd_game.drafts.map_system import ACT2_ENEMY_DRIVEN_MAP
 from dnd_game.drafts.map_system.data.act1_hybrid_map import ACT1_HYBRID_MAP
 from dnd_game.data.story.lore import APPENDIX_LORE
 from dnd_game.data.quests import QuestLogEntry
@@ -56,6 +61,42 @@ class CoreTests(unittest.TestCase):
 
     def plain_output(self, lines: list[str]) -> str:
         return strip_ansi("\n".join(lines))
+
+    def assert_dungeon_map_header_is_balanced(self, rendered: str) -> None:
+        self.assertNotIn("Compass", rendered)
+        rendered_lines = rendered.splitlines()
+        header_line = next(line for line in rendered_lines if line.startswith("| ") and "NORTH" in line)
+        west_line = next(line for line in rendered_lines if line.startswith("| ") and "WEST-+-EAST" in line)
+        south_line = next(line for line in rendered_lines if line.startswith("| ") and "SOUTH" in line)
+        panel_body = header_line[2:-2]
+        map_start = panel_body.find("+")
+        map_end = panel_body.find("+", map_start + 1)
+        compass_start = panel_body.rfind("NORTH")
+        west_body = west_line[2:-2]
+        south_body = south_line[2:-2]
+        cross_index = west_body.rfind("+")
+        panel_center = (len(panel_body) - 1) / 2
+        map_center = (map_start + map_end) / 2
+        self.assertNotEqual(map_start, -1)
+        self.assertNotEqual(map_end, -1)
+        self.assertGreaterEqual(compass_start, len(panel_body) - len("   NORTH   ") - 2)
+        self.assertLess(map_end, compass_start)
+        self.assertEqual(panel_body.rfind("NORTH") + len("NORTH") // 2, cross_index)
+        self.assertEqual(south_body.rfind("SOUTH") + len("SOUTH") // 2, cross_index)
+        self.assertLessEqual(abs(map_center - panel_center), 1.0)
+
+    def assert_rich_compass_block_is_fixed_width(self, rendered: str) -> None:
+        self.assertNotIn("Compass", rendered)
+        rendered_lines = rendered.splitlines()
+        north_line = next(line for line in rendered_lines if "NORTH" in line)
+        west_line = next(line for line in rendered_lines if "WEST-+-EAST" in line)
+        south_line = next(line for line in rendered_lines if "SOUTH" in line)
+        pipe_lines = [line for line in rendered_lines if line.rfind("|") != -1]
+        cross_index = west_line.rfind("+")
+        self.assertEqual(north_line.rfind("NORTH") + len("NORTH") // 2, cross_index)
+        self.assertEqual(south_line.rfind("SOUTH") + len("SOUTH") // 2, cross_index)
+        self.assertGreaterEqual(len(pipe_lines), 2)
+        self.assertTrue(all(line.rfind("|") == cross_index for line in pipe_lines[:2]))
 
     def test_point_buy_total(self) -> None:
         scores = {"STR": 15, "DEX": 14, "CON": 13, "INT": 10, "WIS": 10, "CHA": 8}
@@ -589,6 +630,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("neverwinter_briefing", map_state["visited_nodes"])
         self.assertIn("high_road_ambush", map_state["visited_nodes"])
         self.assertIn("phandalin_hub", map_state["visited_nodes"])
+        self.assertEqual(map_state["node_history"], ["neverwinter_briefing", "high_road_ambush"])
 
         rendered_map = build_overworld_panel_text(
             ACT1_HYBRID_MAP,
@@ -600,6 +642,83 @@ class CoreTests(unittest.TestCase):
         self.assertIn("NEVERWINTER", rendered_map)
         self.assertIn("HIGH ROAD", rendered_map)
         self.assertIn("(  PHANDALIN  )", rendered_map)
+
+    def test_act1_overworld_map_places_blackwake_as_right_branch_from_neverwinter(self) -> None:
+        rendered_map = build_overworld_panel_text(
+            ACT1_HYBRID_MAP,
+            DraftMapState(
+                current_node_id="neverwinter_briefing",
+                visited_nodes=set(ACT1_HYBRID_MAP.nodes),
+            ),
+        )
+        lines = rendered_map.splitlines()
+
+        def token_position(token: str) -> tuple[int, int]:
+            for row_index, line in enumerate(lines):
+                column = line.find(token)
+                if column != -1:
+                    return row_index, column
+            raise AssertionError(f"{token} was not rendered in the overworld map")
+
+        neverwinter_row, neverwinter_column = token_position("NEVERWINTER")
+        blackwake_row, blackwake_column = token_position("BLACKWAKE")
+        road_choice_row, road_choice_column = token_position("ROAD CHOICE")
+        high_road_row, high_road_column = token_position("HIGH ROAD")
+        phandalin_row, phandalin_column = token_position("PHANDALIN")
+
+        self.assertGreater(blackwake_column, neverwinter_column)
+        self.assertGreater(road_choice_column, high_road_column)
+        self.assertGreater(blackwake_row, neverwinter_row)
+        self.assertLess(blackwake_row, high_road_row)
+        self.assertAlmostEqual(high_road_column, neverwinter_column, delta=6)
+        self.assertAlmostEqual(phandalin_column, high_road_column, delta=4)
+
+    def test_act1_overworld_map_uses_fixed_grid_alignment(self) -> None:
+        rendered_map = build_overworld_panel_text(
+            ACT1_HYBRID_MAP,
+            DraftMapState(
+                current_node_id="neverwinter_briefing",
+                visited_nodes=set(ACT1_HYBRID_MAP.nodes),
+            ),
+        )
+        map_lines = []
+        for line in rendered_map.splitlines():
+            if "Travel Routes:" in line:
+                break
+            if line.startswith("| "):
+                map_lines.append(line)
+
+        def token_span(label: str) -> tuple[int, int, int, int]:
+            for row_index, line in enumerate(map_lines):
+                label_column = line.find(label)
+                if label_column == -1:
+                    continue
+                left = max(line.rfind("[", 0, label_column), line.rfind("(", 0, label_column))
+                right_candidates = [index for index in (line.find("]", label_column), line.find(")", label_column)) if index != -1]
+                assert right_candidates
+                right = min(right_candidates)
+                return row_index, left, right, (left + right) // 2
+            raise AssertionError(f"{label} was not rendered in the overworld map")
+
+        neverwinter_row, neverwinter_left, neverwinter_right, neverwinter_center = token_span("NEVERWINTER")
+        high_road_row, _, _, high_road_center = token_span("HIGH ROAD")
+        phandalin_row, _, _, phandalin_center = token_span("PHANDALIN")
+        blackwake_row, _, _, blackwake_center = token_span("BLACKWAKE")
+        road_choice_row, _, _, road_choice_center = token_span("ROAD CHOICE")
+
+        token_widths = []
+        for line in map_lines:
+            for match in re.finditer(r"[\[(][^\])]+[\])]", line):
+                token_widths.append(len(match.group(0)))
+        self.assertEqual(set(token_widths), {neverwinter_right - neverwinter_left + 1})
+
+        self.assertEqual(neverwinter_center, high_road_center)
+        self.assertEqual(high_road_center, phandalin_center)
+        self.assertGreater(blackwake_center, neverwinter_center)
+        self.assertEqual(blackwake_center, road_choice_center)
+        for row in map_lines[neverwinter_row + 1 : high_road_row]:
+            self.assertIn(row[neverwinter_center], {"|", "+"})
+        self.assertIn("-", map_lines[high_road_row][high_road_center + 1 : road_choice_center])
 
     def test_blackwake_map_nodes_and_dungeon_exist(self) -> None:
         self.assertIn("blackwake_crossing", ACT1_HYBRID_MAP.nodes)
@@ -892,6 +1011,167 @@ class CoreTests(unittest.TestCase):
                 "floodgate_chamber",
             ],
         )
+
+    def test_blackwake_room_resolution_flows_directly_into_navigation_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1"])
+
+        def fake_input(_: str) -> str:
+            try:
+                return next(answers)
+            except StopIteration as exc:
+                raise self._SceneExit() from exc
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(9217))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: "victory"  # type: ignore[method-assign]
+        with self.assertRaises(self._SceneExit):
+            game.scene_blackwake_crossing()
+        rendered = self.plain_output(log)
+        scene_index = rendered.rfind("Two routes remain readable through the damage")
+        prompt_index = rendered.rfind("What do you do from Charred Tollhouse?")
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        between = rendered[scene_index:prompt_index]
+        self.assertNotIn("=== Blackwake Crossing ===", between)
+        self.assertNotIn("Current room:", between)
+        self.assertNotIn("Blackwake Crossing --------------------------------", between)
+
+    def test_blackwake_entry_renders_dungeon_map_before_first_room_scene(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+
+        def fake_input(_: str) -> str:
+            raise self._SceneExit()
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(92171))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        with self.assertRaises(self._SceneExit):
+            game.scene_blackwake_crossing()
+        rendered = self.plain_output(log)
+        compass_index = rendered.find("NORTH")
+        map_index = rendered.find("Current room: Charred Tollhouse")
+        scene_index = rendered.find("The tollhouse at the river cut")
+        prompt_index = rendered.find("What do you do first at the burned tollhouse?")
+        self.assertNotEqual(compass_index, -1)
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(compass_index, scene_index)
+        self.assertLess(map_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
+        self.assert_dungeon_map_header_is_balanced(rendered)
+
+    def test_act2_room_resolution_flows_directly_into_navigation_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1"])
+
+        def fake_input(_: str) -> str:
+            try:
+                return next(answers)
+            except StopIteration as exc:
+                raise self._SceneExit() from exc
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(9218))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="stonehollow_dig",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        with self.assertRaises(self._SceneExit):
+            game.scene_stonehollow_dig()
+        rendered = self.plain_output(log)
+        scene_index = rendered.rfind("You mark the honest braces and the whole entry stops feeling like a mouth about to\nclose.")
+        prompt_index = rendered.rfind("What do you do from Survey Mouth?")
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        between = rendered[scene_index:prompt_index]
+        self.assertNotIn("=== Stonehollow Dig ===", between)
+        self.assertNotIn("Current room:", between)
+        self.assertNotIn("Act II Pressures", between)
+
+    def test_act2_entry_renders_dungeon_map_before_first_room_scene(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+
+        def fake_input(_: str) -> str:
+            raise self._SceneExit()
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(92181))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="stonehollow_dig",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        with self.assertRaises(self._SceneExit):
+            game.scene_stonehollow_dig()
+        rendered = self.plain_output(log)
+        compass_index = rendered.find("NORTH")
+        map_index = rendered.find("Current room: Survey Mouth")
+        scene_index = rendered.find("Stonehollow is a half-legitimate dig site")
+        prompt_index = rendered.find("How do you take the first measure of the dig?")
+        self.assertNotEqual(compass_index, -1)
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(compass_index, scene_index)
+        self.assertLess(map_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
+        self.assert_dungeon_map_header_is_balanced(rendered)
 
     def test_map_requirement_supports_flag_count_groups(self) -> None:
         requirement = Requirement(
@@ -1304,9 +1584,222 @@ class CoreTests(unittest.TestCase):
         assert dungeon is not None
         game.complete_map_room(dungeon, "well_ring")
         option_labels = [label for _, _, label in game.act1_room_navigation_options(dungeon)]
-        self.assertIn("[MOVE RIGHT] *Advance to Salt Cart Hollow", option_labels)
-        self.assertIn("[MOVE DOWN] *Advance to Supply Trench", option_labels)
+        self.assertIn("[MOVE EAST] *Advance to Salt Cart Hollow", option_labels)
+        self.assertIn("[MOVE SOUTH] *Advance to Supply Trench", option_labels)
         self.assertIn("*Withdraw to Phandalin", option_labels)
+
+    def test_blackwake_room_navigation_uses_vertical_split_labels_at_tollhouse(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(900841))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.complete_map_room(dungeon, "charred_tollhouse")
+        game.render_act1_dungeon_map(dungeon, force=True)
+        option_labels = [label for _, _, label in game.act1_room_navigation_options(dungeon)]
+        self.assertIn("[MOVE EAST-NORTH] *Advance to Flooded Approach", option_labels)
+        self.assertIn("[MOVE EAST-SOUTH] *Advance to Hanging Path", option_labels)
+        self.assertNotIn("[MOVE EAST] *Advance to Flooded Approach", option_labels)
+        self.assertNotIn("[MOVE EAST] *Advance to Hanging Path", option_labels)
+        rendered = self.plain_output(log)
+        self.assertIn("WEST-+-EAST", rendered)
+        self.assert_dungeon_map_header_is_balanced(rendered)
+        self.assertIn("EAST-NORTH -> Flooded Approach", rendered)
+        self.assertIn("EAST-SOUTH -> Hanging Path", rendered)
+
+    def test_blackwake_entrance_offers_overworld_backtrack_to_neverwinter(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008491))
+        game.state = GameState(
+            player=player,
+            current_scene="neverwinter_briefing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act1_node("blackwake_crossing")
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.complete_map_room(dungeon, "charred_tollhouse")
+
+        options = game.act1_room_navigation_options(dungeon)
+        option_labels = [label for _, _, label in options]
+        self.assertIn(("overworld_backtrack", "neverwinter_briefing", "[BACKTRACK] *Backtrack to Neverwinter Briefing"), options)
+        self.assertIn("[BACKTRACK] *Backtrack to Neverwinter Briefing", option_labels)
+        self.assertIn("*Withdraw to the Blackwake road decision", option_labels)
+
+    @unittest.skipUnless(RICH_AVAILABLE, "Rich rendering is optional")
+    def test_rich_dungeon_compass_renders_as_fixed_width_block(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008411))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        rendered = "\n".join(strip_ansi(line) for line in render_rich_lines(build_dungeon_panel(dungeon, game.act1_map_state()), width=108))
+        self.assert_rich_compass_block_is_fixed_width(rendered)
+
+    def test_act1_dungeon_backtrack_uses_precise_direction_and_consumes_history(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900842))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.complete_map_room(dungeon, "charred_tollhouse")
+        game.set_current_map_room("millers_ford_flooded_approach")
+        game.complete_map_room(dungeon, "millers_ford_flooded_approach")
+
+        option_labels = [label for _, _, label in game.act1_room_navigation_options(dungeon)]
+        self.assertIn("[BACKTRACK WEST-SOUTH] *Backtrack to Charred Tollhouse", option_labels)
+        self.assertIn("[MOVE EAST-SOUTH] *Advance to Reedbank Camp", option_labels)
+        self.assertIn("[MOVE EAST] *Advance to Wagon Snarl", option_labels)
+        self.assertNotIn("[MOVE SOUTH] *Advance to Reedbank Camp", option_labels)
+
+        self.assertTrue(game.backtrack_map_room(dungeon))
+        self.assertEqual(game.current_act1_room(dungeon).room_id, "charred_tollhouse")
+        self.assertEqual(game._map_state_payload()["room_history"], [])
+        self.assertEqual(game._pending_act1_dungeon_movement_text, "You backtrack west-south toward Charred Tollhouse.")
+
+    def test_act2_dungeon_backtrack_uses_true_backtrack_action(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900843))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="stonehollow_dig",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act2_dungeon()
+        assert dungeon is not None
+        game.complete_act2_map_room(dungeon, "survey_mouth")
+        game.set_current_act2_map_room("slime_cut")
+        game.complete_act2_map_room(dungeon, "slime_cut")
+
+        option_labels = [label for _, _, label in game.act2_room_navigation_options(dungeon)]
+        self.assertIn("[BACKTRACK WEST] *Backtrack to Survey Mouth", option_labels)
+        self.assertIn("[MOVE EAST-NORTH] *Advance to Collapse Lift", option_labels)
+        self.assertIn("[MOVE EAST] *Advance to Scholar Pocket", option_labels)
+
+        self.assertTrue(game.backtrack_act2_map_room(dungeon))
+        self.assertEqual(game.current_act2_room(dungeon).room_id, "survey_mouth")
+        self.assertEqual(game._act2_map_state_payload()["room_history"], [])
+        self.assertEqual(game._pending_act2_dungeon_movement_text, "You backtrack west toward Survey Mouth.")
+
+    def test_room_exit_direction_labels_only_duplicate_for_truly_cardinal_overlaps(self) -> None:
+        for blueprint in (ACT1_HYBRID_MAP, ACT2_ENEMY_DRIVEN_MAP):
+            for dungeon in blueprint.dungeons.values():
+                for room in dungeon.rooms.values():
+                    exits = [dungeon.rooms[room_id] for room_id in room.exits]
+                    if not exits:
+                        continue
+                    directions = room_exit_directions(room, exits, dungeon=dungeon)
+                    grouped: dict[str, list[tuple[int, int]]] = {}
+                    for exit_room in exits:
+                        grouped.setdefault(directions[exit_room.room_id], []).append((exit_room.x - room.x, exit_room.y - room.y))
+                    for vectors in grouped.values():
+                        if len(vectors) < 2:
+                            continue
+                        self.assertTrue(
+                            all(dx == 0 or dy == 0 for dx, dy in vectors),
+                            f"Expected duplicate labels to remain only for shared cardinal lanes from {room.title}, got {vectors!r}",
+                        )
+
+    def test_room_exit_direction_labels_match_path_order_for_all_dungeons(self) -> None:
+        def expected_direction(dungeon, room, exit_room) -> str:
+            path = room_travel_path(dungeon, room, exit_room)
+            if not path:
+                dx = exit_room.x - room.x
+                dy = exit_room.y - room.y
+                parts: list[str] = []
+                if dy < 0:
+                    parts.append("NORTH")
+                elif dy > 0:
+                    parts.append("SOUTH")
+                if dx < 0:
+                    parts.append("WEST")
+                elif dx > 0:
+                    parts.append("EAST")
+                return "-".join(parts) or "HERE"
+            previous = (room.x * 2, room.y * 2)
+            directions: list[str] = []
+            seen: set[str] = set()
+            for step in path:
+                dx = step[0] - previous[0]
+                dy = step[1] - previous[1]
+                previous = step
+                direction = "EAST" if dx > 0 else "WEST" if dx < 0 else "SOUTH" if dy > 0 else "NORTH" if dy < 0 else "HERE"
+                if direction == "HERE" or direction in seen:
+                    continue
+                directions.append(direction)
+                seen.add(direction)
+            return "-".join(directions) or "HERE"
+
+        for blueprint in (ACT1_HYBRID_MAP, ACT2_ENEMY_DRIVEN_MAP):
+            for dungeon in blueprint.dungeons.values():
+                for room in dungeon.rooms.values():
+                    exits = [dungeon.rooms[room_id] for room_id in room.exits]
+                    directions = room_exit_directions(room, exits, dungeon=dungeon)
+                    for exit_room in exits:
+                        self.assertEqual(
+                            directions[exit_room.room_id],
+                            expected_direction(dungeon, room, exit_room),
+                            f"{dungeon.title}: {room.title} -> {exit_room.title} should reflect traversable path order",
+                        )
 
     def test_dungeon_map_renders_once_per_room_until_room_changes(self) -> None:
         player = build_character(
@@ -1338,9 +1831,11 @@ class CoreTests(unittest.TestCase):
         game.render_act1_dungeon_map(dungeon)
         self.assertEqual(len(log), rerender_count)
         game.set_current_map_room("salt_cart")
+        self.assertEqual(len(log), rerender_count)
+        game.render_act1_dungeon_map(dungeon)
         self.assertGreater(len(log), rerender_count)
 
-    def test_travel_to_act1_node_prints_the_updated_overworld_map(self) -> None:
+    def test_travel_to_act1_node_updates_state_and_renders_the_overworld_map(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -1359,11 +1854,164 @@ class CoreTests(unittest.TestCase):
         game.ensure_state_integrity()
         game.travel_to_act1_node("old_owl_well")
         rendered = self.plain_output(log)
+        self.assertEqual(game.state.current_scene, "old_owl_well")
         self.assertIn("Overworld Route Map", rendered)
-        self.assertIn("OLD OWL", rendered)
-        self.assertNotIn("Wyvern Tor", rendered)
+        self.assertIn("Old Owl Well", rendered)
 
-    def test_set_current_map_room_prints_the_updated_dungeon_map(self) -> None:
+    def test_act1_overworld_backtrack_returns_to_previous_site_with_context_text(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008512))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            flags={"phandalin_arrived": True, "miners_exchange_lead": True},
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act1_node("old_owl_well")
+        game.return_to_phandalin("You withdraw from Old Owl Well and ride back to Phandalin to regroup.")
+
+        candidate = game.peek_act1_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "old_owl_well")
+        self.assertTrue(game.backtrack_act1_overworld_node())
+        self.assertEqual(game.state.current_scene, "old_owl_well")
+        self.assertEqual(game._map_state_payload()["node_history"], ["neverwinter_briefing", "high_road_ambush", "phandalin_hub"])
+        rendered = self.plain_output(log)
+        self.assertIn("You leave Phandalin by the same track you used before", rendered)
+        self.assertIn("Tessa's runners argue supplies", rendered)
+        self.assertIn("Overworld Route Map", rendered)
+
+    def test_act1_overworld_backtrack_can_return_to_neverwinter(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008513))
+        game.state = GameState(
+            player=player,
+            current_scene="neverwinter_briefing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act1_node("blackwake_crossing")
+
+        candidate = game.peek_act1_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "neverwinter_briefing")
+        self.assertTrue(game.backtrack_act1_overworld_node())
+        self.assertEqual(game.state.current_scene, "neverwinter_briefing")
+        self.assertEqual(game._map_state_payload()["current_node_id"], "neverwinter_briefing")
+        self.assertEqual(game._map_state_payload()["node_history"], [])
+        rendered = self.plain_output(log)
+        self.assertIn("backtrack north toward Neverwinter", rendered)
+        self.assertIn("Mira is waiting in the background", rendered)
+        self.assertIn("Overworld Route Map", rendered)
+
+    def test_act1_overworld_backtrack_from_phandalin_returns_to_high_road_then_neverwinter(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008514))
+        game.state = GameState(player=player, current_scene="phandalin_hub", flags={"phandalin_arrived": True})
+        game.ensure_state_integrity()
+
+        candidate = game.peek_act1_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "high_road_ambush")
+        self.assertTrue(game.backtrack_act1_overworld_node())
+        self.assertEqual(game.state.current_scene, "road_ambush")
+        self.assertEqual(game._map_state_payload()["node_history"], ["neverwinter_briefing"])
+
+        candidate = game.peek_act1_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "neverwinter_briefing")
+        self.assertTrue(game.backtrack_act1_overworld_node())
+        self.assertEqual(game.state.current_scene, "neverwinter_briefing")
+        self.assertEqual(game._map_state_payload()["node_history"], [])
+        rendered = self.plain_output(log)
+        self.assertIn("backtrack north along the High Road", rendered)
+        self.assertIn("backtrack north toward Neverwinter", rendered)
+
+    def test_cleared_high_road_scene_can_backtrack_to_neverwinter(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["2"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(9008515))
+        game.state = GameState(
+            player=player,
+            current_scene="road_ambush",
+            flags={"act1_started": True, "road_ambush_cleared": True},
+        )
+        game.ensure_state_integrity()
+
+        game.scene_road_ambush()
+        self.assertEqual(game.state.current_scene, "neverwinter_briefing")
+        self.assertEqual(game._map_state_payload()["node_history"], [])
+        rendered = self.plain_output(log)
+        self.assertIn("Where do you go from the High Road?", rendered)
+        self.assertIn("[BACKTRACK] *Backtrack to Neverwinter Briefing", rendered)
+
+    def test_act1_overworld_travel_renders_map_before_next_scene_and_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+
+        def fake_input(_: str) -> str:
+            raise self._SceneExit()
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(9008511))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            flags={"phandalin_arrived": True, "miners_exchange_lead": True},
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act1_node("old_owl_well")
+        with self.assertRaises(self._SceneExit):
+            game.scene_old_owl_well()
+        rendered = self.plain_output(log)
+        map_index = rendered.rfind("Overworld Route Map")
+        scene_index = rendered.rfind("The old watchtower rises from the scrub like a cracked finger of Netherese stone.")
+        prompt_index = rendered.rfind("How do you work the edge of the dig ring?")
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(map_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
+
+    def test_set_current_map_room_queues_transition_feedback_without_printing_immediately(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -1382,8 +2030,224 @@ class CoreTests(unittest.TestCase):
         game.ensure_state_integrity()
         game.set_current_map_room("salt_cart", announce=True)
         rendered = self.plain_output(log)
-        self.assertIn("You move toward salt cart.", rendered)
-        self.assertIn("Current room: Salt Cart Hollow", rendered)
+        self.assertEqual(rendered.strip(), "")
+        self.assertTrue(game._pending_act1_dungeon_map_refresh)
+        self.assertEqual(game._pending_act1_dungeon_movement_text, "You move toward salt cart.")
+        self.assertNotIn("Current room: Salt Cart Hollow", rendered)
+
+    def test_act1_movement_renders_updated_map_before_next_room_scene_and_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "1"])
+
+        def fake_input(_: str) -> str:
+            try:
+                return next(answers)
+            except StopIteration as exc:
+                raise self._SceneExit() from exc
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(900853))
+        game.state = GameState(
+            player=player,
+            current_scene="blackwake_crossing",
+            flags={"act1_started": True, "blackwake_started": True},
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.complete_map_room(dungeon, "charred_tollhouse")
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        with self.assertRaises(self._SceneExit):
+            game.run_act1_dungeon("blackwake_crossing")
+        rendered = self.plain_output(log)
+        prior_prompt_index = rendered.rfind("What do you do from Charred Tollhouse?")
+        map_index = rendered.rfind("Current room: Flooded Approach")
+        movement_index = rendered.rfind("You move east-north toward Flooded Approach.")
+        scene_index = rendered.rfind("Cold floodwater chews at the ford stones while wrecked carts pin draft horses")
+        prompt_index = rendered.rfind("How do you approach Miller's Ford?")
+        self.assertNotEqual(prior_prompt_index, -1)
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(movement_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(prior_prompt_index, map_index)
+        self.assertLess(map_index, movement_index)
+        self.assertLess(movement_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
+
+    def test_act2_overworld_travel_renders_map_before_next_scene_and_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+
+        def fake_input(_: str) -> str:
+            raise self._SceneExit()
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(9008541))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="act2_expedition_hub",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act2_node("stonehollow_dig")
+        with self.assertRaises(self._SceneExit):
+            game.scene_stonehollow_dig()
+        rendered = self.plain_output(log)
+        map_index = rendered.rfind("Overworld Route Map")
+        scene_index = rendered.rfind("Stonehollow is a half-legitimate dig site turned excavation wound.")
+        prompt_index = rendered.rfind("How do you take the first measure of the dig?")
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(map_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
+
+    def test_act2_overworld_backtrack_returns_to_previous_site_with_context_text(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008542))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="act2_expedition_hub",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act2_node("stonehollow_dig")
+        game.return_to_act2_hub("You withdraw from Stonehollow Dig and return to Phandalin's expedition table.")
+
+        candidate = game.peek_act2_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "stonehollow_dig")
+        self.assertTrue(game.backtrack_act2_overworld_node())
+        self.assertEqual(game.state.current_scene, "stonehollow_dig")
+        self.assertEqual(game._act2_map_state_payload()["node_history"], ["act2_expedition_hub"])
+        rendered = self.plain_output(log)
+        self.assertIn("backtracking toward Stonehollow Dig", rendered)
+        self.assertIn("Halia, Linene, Elira, and Daran", rendered)
+        self.assertIn("Overworld Route Map", rendered)
+
+    def test_act2_overworld_backtrack_can_return_to_expedition_hub(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008543))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="act2_expedition_hub",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        game.travel_to_act2_node("stonehollow_dig")
+
+        candidate = game.peek_act2_overworld_backtrack_node()
+        assert candidate is not None
+        self.assertEqual(candidate.node_id, "act2_expedition_hub")
+        self.assertTrue(game.backtrack_act2_overworld_node())
+        self.assertEqual(game.state.current_scene, "act2_expedition_hub")
+        self.assertEqual(game._act2_map_state_payload()["current_node_id"], "act2_expedition_hub")
+        self.assertEqual(game._act2_map_state_payload()["node_history"], [])
+        rendered = self.plain_output(log)
+        self.assertIn("You backtrack from Stonehollow Dig toward Act II Expedition Hub", rendered)
+        self.assertIn("Overworld Route Map", rendered)
+
+    def test_act2_movement_renders_updated_map_before_next_room_scene_and_prompt(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "1"])
+
+        def fake_input(_: str) -> str:
+            try:
+                return next(answers)
+            except StopIteration as exc:
+                raise self._SceneExit() from exc
+
+        game = TextDnDGame(input_fn=fake_input, output_fn=log.append, rng=random.Random(900854))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="stonehollow_dig",
+            flags={
+                "act2_started": True,
+                "act2_town_stability": 3,
+                "act2_route_control": 2,
+                "act2_whisper_pressure": 2,
+            },
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act2_dungeon()
+        assert dungeon is not None
+        game.complete_act2_map_room(dungeon, "survey_mouth")
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: "victory"  # type: ignore[method-assign]
+        with self.assertRaises(self._SceneExit):
+            game.run_act2_dungeon("stonehollow_dig")
+        rendered = self.plain_output(log)
+        prior_prompt_index = rendered.rfind("What do you do from Survey Mouth?")
+        map_index = rendered.rfind("Current room: Slime Cut")
+        movement_index = rendered.rfind("You move east toward Slime Cut.")
+        scene_index = rendered.rfind("The main cut narrows around spilled lantern oil, acid-eaten timber")
+        prompt_index = rendered.rfind("How do you cross the slime cut?")
+        self.assertNotEqual(prior_prompt_index, -1)
+        self.assertNotEqual(map_index, -1)
+        self.assertNotEqual(movement_index, -1)
+        self.assertNotEqual(scene_index, -1)
+        self.assertNotEqual(prompt_index, -1)
+        self.assertLess(prior_prompt_index, map_index)
+        self.assertLess(map_index, movement_index)
+        self.assertLess(movement_index, scene_index)
+        self.assertLess(scene_index, prompt_index)
 
     def test_map_menu_offers_overworld_and_dungeon_views(self) -> None:
         player = build_character(
@@ -1405,11 +2269,11 @@ class CoreTests(unittest.TestCase):
 
         def fake_choose(prompt: str, options: list[str], **kwargs) -> int:
             captured["options"] = options
-            return 3
+            return 4
 
         game.choose = fake_choose  # type: ignore[method-assign]
         game.open_map_menu()
-        self.assertEqual(captured["options"], ["Overworld", "Old Owl Well Dig Ring", "Back"])
+        self.assertEqual(captured["options"], ["Travel Ledger", "Overworld", "Old Owl Well Dig Ring", "Back"])
 
     def test_act2_map_menu_offers_read_only_route_map(self) -> None:
         player = build_character(
@@ -1431,11 +2295,11 @@ class CoreTests(unittest.TestCase):
 
         def fake_choose(prompt: str, options: list[str], **kwargs) -> int:
             captured["options"] = options
-            return 3
+            return 4
 
         game.choose = fake_choose  # type: ignore[method-assign]
         game.open_map_menu()
-        self.assertEqual(captured["options"], ["Act II Route Map", "Current Site (not available here)", "Back"])
+        self.assertEqual(captured["options"], ["Travel Ledger", "Act II Route Map", "Current Site (not available here)", "Back"])
 
     def test_act2_route_map_unlocks_sabotage_from_any_two_early_leads(self) -> None:
         player = build_character(
@@ -2709,7 +3573,8 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         answers = iter(["2"])
-        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8042))
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(8042))
         game.state = GameState(
             player=player,
             current_scene="neverwinter_briefing",
@@ -2719,6 +3584,9 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(game.state.current_scene, "blackwake_crossing")
         self.assertTrue(game.state.flags["blackwake_started"])
         self.assertIn("trace_blackwake_cell", game.state.quests)
+        rendered = self.plain_output(log)
+        self.assertIn("Overworld Route Map", rendered)
+        self.assertIn("Blackwake Crossing", rendered)
 
     def test_road_ambush_flow_recruits_tolan(self) -> None:
         player = build_character(
@@ -4728,7 +5596,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(choice, 2)
         self.assertEqual(opened, ["dev"])
 
-    def test_choose_displays_compact_hud_for_active_game_prompts(self) -> None:
+    def test_choose_hides_compact_hud_for_active_game_prompts_by_default(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -4749,9 +5617,53 @@ class CoreTests(unittest.TestCase):
         choice = game.choose("Choose one.", ["First", "Second"])
         self.assertEqual(choice, 2)
         rendered = self.plain_output(log)
-        self.assertIn("[Act I] Phandalin | Objective: Stop the Watchtower Raids", rendered)
-        self.assertIn("Resources: 9 gp | Short rests: 2 | Carry:", rendered)
-        self.assertIn(f"Party: Velkor {player.current_hp}/{player.max_hp}", rendered)
+        self.assertNotIn("[Act I] Phandalin | Objective: Stop the Watchtower Raids", rendered)
+        self.assertIn("Choose one.", rendered)
+
+    def test_map_command_opens_map_menu_and_can_show_travel_ledger(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["map", "1", "4", "2"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(40011))
+        game.state = GameState(player=player, current_scene="blackwake_crossing", gold=9)
+        game.say("Cold floodwater chews at the ford stones while wrecked carts pin draft horses against the current.")
+        choice = game.choose("How do you approach Miller's Ford?", ["First", "Second"])
+        self.assertEqual(choice, 2)
+        rendered = self.plain_output(log)
+        menu_index = rendered.find("Map menu")
+        ledger_index = rendered.rfind("[Act I] Blackwake Crossing")
+        prompt_index = rendered.rfind("How do you approach Miller's Ford?")
+        self.assertNotEqual(menu_index, -1)
+        self.assertNotEqual(ledger_index, -1)
+        self.assertLess(menu_index, ledger_index)
+        self.assertLess(ledger_index, prompt_index)
+
+    def test_map_family_commands_open_map_menu_from_prompt(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        for command in ("map", "maps", "map menu"):
+            answers = iter([command, "2"])
+            opened: list[str] = []
+            game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(40012))
+            game.state = GameState(player=player, current_scene="old_owl_well", flags={"miners_exchange_lead": True})
+            game.ensure_state_integrity()
+            game.open_map_menu = lambda: opened.append("map-menu")  # type: ignore[method-assign]
+            choice = game.choose("Choose one.", ["First", "Second"])
+            self.assertEqual(choice, 2)
+            self.assertEqual(opened, ["map-menu"])
 
     def test_target_selection_suppresses_compact_hud(self) -> None:
         player = build_character(
@@ -4935,7 +5847,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("AC -1", rendered)
         self.assertIn("Perception +1", rendered)
 
-    def test_compact_hud_only_renders_once_per_scene(self) -> None:
+    def test_map_command_opens_map_menu_each_time_it_is_requested(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -4944,16 +5856,13 @@ class CoreTests(unittest.TestCase):
             base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
             class_skill_choices=["Athletics", "Survival"],
         )
-        log: list[str] = []
-        answers = iter(["1", "1"])
-        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(4003))
+        answers = iter(["map", "map", "1"])
+        opened: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(4003))
         game.state = GameState(player=player, current_scene="phandalin_hub")
-        game.banner("Phandalin")
+        game.open_map_menu = lambda: opened.append("map-menu")  # type: ignore[method-assign]
         game.choose("Choose one.", ["First", "Second"])
-        game.banner("Stonehill Inn")
-        game.choose("Choose again.", ["Only option"])
-        rendered = self.plain_output(log)
-        self.assertEqual(rendered.count("[Act I] Phandalin"), 1)
+        self.assertEqual(opened, ["map-menu", "map-menu"])
 
     def test_compact_hud_is_hidden_during_combat(self) -> None:
         player = build_character(
@@ -4965,14 +5874,16 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         log: list[str] = []
-        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(4004))
+        answers = iter(["map", "1"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(4004))
         game.state = GameState(player=player, current_scene="road_ambush")
         game._in_combat = True
         game.banner("Ambush")
-        game.choose("Choose one.", ["First"], allow_meta=False)
+        game.choose("Choose one.", ["First"])
         rendered = self.plain_output(log)
         self.assertNotIn("[Act I]", rendered)
         self.assertIn("=== Ambush ===", rendered)
+        self.assertIn("Maps are unavailable during combat.", rendered)
         self.assertIn("Choose one.", rendered)
 
     def test_settings_command_opens_settings_menu_from_prompt(self) -> None:

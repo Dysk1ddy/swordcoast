@@ -82,6 +82,20 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
         "                                      |",
         "                         {act2_scaffold_complete}",
     ),
+    overworld_positions={
+        "phandalin_claims_council": (1, 0),
+        "act2_expedition_hub": (1, 1),
+        "conyberry_agatha": (0, 2),
+        "neverwinter_wood_survey_camp": (1, 2),
+        "stonehollow_dig": (2, 2),
+        "act2_midpoint_convergence": (1, 3),
+        "broken_prospect": (0, 4),
+        "south_adit": (2, 4),
+        "wave_echo_outer_galleries": (1, 5),
+        "black_lake_causeway": (1, 6),
+        "forge_of_spells": (1, 7),
+        "act2_scaffold_complete": (1, 8),
+    },
     nodes={
         "phandalin_claims_council": TravelNode(
             node_id="phandalin_claims_council",

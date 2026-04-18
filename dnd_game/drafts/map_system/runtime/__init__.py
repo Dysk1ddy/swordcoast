@@ -1,6 +1,6 @@
 """Runtime helpers for the hybrid map draft."""
 
-from .engine import available_story_beats, available_travel_edges, current_room_exits, requirement_met, room_direction, room_travel_path, unlocked_nodes
+from .engine import available_story_beats, available_travel_edges, current_room_exits, requirement_met, room_direction, room_exit_directions, room_precise_direction, room_travel_path, unlocked_nodes
 from .models import (
     DraftMapState,
     DungeonMap,
@@ -45,6 +45,8 @@ __all__ = [
     "current_room_exits",
     "requirement_met",
     "room_direction",
+    "room_exit_directions",
+    "room_precise_direction",
     "room_travel_path",
     "unlocked_nodes",
     "build_act2_pressure_panel",

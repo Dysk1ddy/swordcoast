@@ -67,7 +67,9 @@
       "second_wind": 1
     },
     "inventory": {},
-    "conditions": {},
+    "conditions": {
+      "emboldened": 1
+    },
     "equipment_bonuses": {
       "Athletics": 1,
       "Intimidation": 1
@@ -134,24 +136,26 @@
     "Your soldier's opening leaves you with a live look at how hard Neverwinter is leaning on thin patrol lines and tired veterans to protect the road south.",
     "Word reaches you that Mira Thann is quietly gathering capable hands in Neverwinter against a new bandit threat around Phandalin.",
     "Reward from South Barracks Breakout: 50 XP, 8 gp.",
-    "Looted Frontier Ale x1 from South Barracks Breakout."
+    "Looted Potion of Healing x1 from South Barracks Breakout.",
+    "Looted Roadworn Shortsword x1 from South Barracks Breakout."
   ],
   "quests": {},
   "completed_acts": [],
   "xp": 50,
   "gold": 28,
   "inventory": {
-    "potion_healing": 2,
+    "potion_healing": 3,
     "bread_round": 4,
     "travel_biscuits": 4,
     "dried_fish": 3,
     "goat_cheese": 2,
-    "frontier_ale": 3,
+    "frontier_ale": 2,
     "root_vegetables": 2,
     "antitoxin_vial": 1,
     "chain_mail_common": 1,
     "longsword_common": 1,
-    "shield_common": 1
+    "shield_common": 1,
+    "shortsword_common": 1
   },
   "short_rests_remaining": 2
 }

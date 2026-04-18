@@ -558,6 +558,9 @@ class GameIOMixin:
     def should_render_compact_hud(self) -> bool:
         return self.compact_hud_scene_key() is not None
 
+    def request_compact_hud(self) -> None:
+        self._compact_hud_requested = True
+
     def hud_act_label(self) -> str:
         assert self.state is not None
         act_labels = getattr(self, "ACT_LABELS", {})
@@ -645,15 +648,22 @@ class GameIOMixin:
         self.output_fn("")
         self._compact_hud_last_scene_key = scene_key
 
-    def maybe_render_compact_hud(self, *, show_hud: bool) -> None:
+    def maybe_render_compact_hud(self, *, show_hud: bool) -> bool:
         if not show_hud:
-            return
+            return False
+        if not getattr(self, "_compact_hud_requested", False):
+            return False
         scene_key = self.compact_hud_scene_key()
         if scene_key is None:
-            return
-        if getattr(self, "_compact_hud_last_scene_key", None) == scene_key:
-            return
+            self._compact_hud_requested = False
+            return False
         self.render_compact_hud()
+        self._compact_hud_requested = False
+        return True
+
+    def replay_prompt_context(self, lines: tuple[str, ...]) -> None:
+        for line in lines:
+            self.output_fn(line)
 
     def choose_with_display_mode(
         self,
@@ -667,6 +677,7 @@ class GameIOMixin:
     ) -> int:
         if not options:
             raise ValueError("Choice lists must contain at least one option.")
+        prompt_context_lines = tuple(getattr(self, "_latest_narration_lines", ()))
         sticky_count = max(0, min(sticky_trailing_options, len(options) - 1))
         sticky_options = options[-sticky_count:] if sticky_count else []
         paged_options = options[:-sticky_count] if sticky_count else options
@@ -689,7 +700,8 @@ class GameIOMixin:
                     labels.append("Next page")
                     nav_map[len(labels)] = "next"
                 self.output_fn("")
-                self.maybe_render_compact_hud(show_hud=show_hud)
+                if self.maybe_render_compact_hud(show_hud=show_hud) and prompt_context_lines:
+                    self.replay_prompt_context(prompt_context_lines)
                 paged_prompt = f"{prompt} (page {page + 1})"
                 if self.should_use_keyboard_choice_menu():
                     selected = self.run_keyboard_choice_menu(paged_prompt, labels)
@@ -721,7 +733,8 @@ class GameIOMixin:
                 self.say("Please enter a listed number.")
         while True:
             self.output_fn("")
-            self.maybe_render_compact_hud(show_hud=show_hud)
+            if self.maybe_render_compact_hud(show_hud=show_hud) and prompt_context_lines:
+                self.replay_prompt_context(prompt_context_lines)
             if self.should_use_keyboard_choice_menu():
                 selected = self.run_keyboard_choice_menu(prompt, options)
                 if selected is not None:
@@ -761,18 +774,23 @@ class GameIOMixin:
             self.output_fn("")
             return
         narrator = getattr(self, "typewrite_narration", None)
+        rendered_lines: list[str] = []
         for paragraph in text.split("\n"):
             if not paragraph.strip():
                 self.output_fn("")
                 continue
             if ANSI_RE.search(paragraph):
                 self.output_fn(paragraph)
+                rendered_lines.append(paragraph)
                 continue
             wrapped = textwrap.fill(paragraph, width=88)
             if typed and callable(narrator) and getattr(self, "type_dialogue", False):
                 narrator(wrapped)
             else:
                 self.output_fn(wrapped)
+            rendered_lines.append(wrapped)
+        if rendered_lines:
+            self._latest_narration_lines = rendered_lines
 
     def inline_save(self) -> None:
         if self.state is None:

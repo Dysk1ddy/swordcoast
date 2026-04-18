@@ -835,6 +835,9 @@ class StoryAct2ScaffoldMixin:
                 options.append(("forge", self.action_option("Confront the Quiet Choir at the Forge of Spells.")))
             if self.state.flags.get("caldra_defeated"):
                 options.append(("complete", self.action_option("Close out Act II and record what happened beneath the cave.")))
+            backtrack_node = self.peek_act2_overworld_backtrack_node()
+            if backtrack_node is not None:
+                options.append(("backtrack", self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {backtrack_node.title}"))))
             options.extend(
                 [
                     ("status", self.action_option("Review the expedition pressures and current consequences.")),
@@ -848,38 +851,43 @@ class StoryAct2ScaffoldMixin:
             choice = self.scenario_choice("Where do you push next?", [text for _, text in options], allow_meta=False)
             selection_key, _ = options[choice - 1]
             if selection_key == "agatha":
-                self.state.current_scene = "conyberry_agatha"
+                self.travel_to_act2_node("conyberry_agatha")
                 return
             if selection_key == "wood":
-                self.state.current_scene = "neverwinter_wood_survey_camp"
+                self.travel_to_act2_node("neverwinter_wood_survey_camp")
                 return
             if selection_key == "stonehollow":
-                self.state.current_scene = "stonehollow_dig"
+                self.travel_to_act2_node("stonehollow_dig")
                 return
             if selection_key == "midpoint":
-                self.state.current_scene = "act2_midpoint_convergence"
+                self.travel_to_act2_node("act2_midpoint_convergence")
                 return
             if selection_key == "broken_prospect":
                 if not self.confirm_act2_late_route_priority("broken_prospect"):
                     continue
-                self.state.current_scene = "broken_prospect"
+                self.travel_to_act2_node("broken_prospect")
                 return
             if selection_key == "south_adit":
                 if not self.confirm_act2_late_route_priority("south_adit"):
                     continue
-                self.state.current_scene = "south_adit"
+                self.travel_to_act2_node("south_adit")
                 return
             if selection_key == "outer":
-                self.state.current_scene = "wave_echo_outer_galleries"
+                self.travel_to_act2_node("wave_echo_outer_galleries")
                 return
             if selection_key == "causeway":
-                self.state.current_scene = "black_lake_causeway"
+                self.travel_to_act2_node("black_lake_causeway")
                 return
             if selection_key == "forge":
-                self.state.current_scene = "forge_of_spells"
+                self.travel_to_act2_node("forge_of_spells")
                 return
             if selection_key == "complete":
-                self.state.current_scene = "act2_scaffold_complete"
+                self.travel_to_act2_node("act2_scaffold_complete")
+                return
+            if selection_key == "backtrack":
+                if not self.backtrack_act2_overworld_node():
+                    self.say("There is no familiar expedition route to backtrack right now.")
+                    continue
                 return
             if selection_key == "status":
                 self.show_act2_campaign_status()

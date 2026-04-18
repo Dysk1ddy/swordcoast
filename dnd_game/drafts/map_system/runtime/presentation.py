@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .engine import available_travel_edges, current_room_exits, requirement_met, room_direction, room_travel_path
-from .models import DraftMapState, DungeonMap, HybridMapBlueprint, TravelNode
+from .engine import available_travel_edges, current_room_exits, requirement_met, room_exit_directions, room_travel_path
+from .models import DraftMapState, DungeonMap, DungeonRoom, HybridMapBlueprint, TravelNode
 
 try:
     from rich import box
@@ -34,6 +34,34 @@ ROLE_SYMBOLS = {
     "boss": "B",
     "exit": "X",
 }
+
+DIRECTION_ORDER = {
+    "NORTH": 0,
+    "EAST": 2,
+    "SOUTH": 4,
+    "WEST": 6,
+    "HERE": 8,
+}
+
+
+def _direction_sort_key(direction: str) -> tuple[int, ...]:
+    return tuple(DIRECTION_ORDER.get(part, 99) for part in direction.split("-"))
+
+
+def _room_target_sort_key(from_room: DungeonRoom, to_room: DungeonRoom, direction: str) -> tuple[int, tuple[int, ...]]:
+    dx = to_room.x - from_room.x
+    dy = to_room.y - from_room.y
+    if dy < 0:
+        primary = DIRECTION_ORDER["NORTH"]
+    elif dy > 0:
+        primary = DIRECTION_ORDER["SOUTH"]
+    elif dx > 0:
+        primary = DIRECTION_ORDER["EAST"]
+    elif dx < 0:
+        primary = DIRECTION_ORDER["WEST"]
+    else:
+        primary = DIRECTION_ORDER["HERE"]
+    return (primary, _direction_sort_key(direction))
 
 ACT2_METRIC_LABELS = {
     "act2_town_stability": ("Fractured", "Shaken", "Strained", "Holding", "Steady", "United"),
@@ -196,6 +224,154 @@ def _unknown_travel_count(blueprint: HybridMapBlueprint, state: DraftMapState) -
     )
 
 
+_OVERWORLD_NODE_PATTERN = re.compile(r"\{([^}]+)\}")
+_OVERWORLD_X_SPACING = 24
+_OVERWORLD_Y_SPACING = 4
+_OVERWORLD_PADDING = 2
+
+
+def _render_overworld_template_line(blueprint: HybridMapBlueprint, state: DraftMapState, row: str) -> str:
+    rendered: list[str] = []
+    cursor = 0
+    for match in _OVERWORLD_NODE_PATTERN.finditer(row):
+        rendered.append(row[cursor : match.start()])
+        node = blueprint.nodes.get(match.group(1))
+        if node is None:
+            rendered.append(match.group(0))
+        else:
+            token = _node_card_token(node, blueprint, state)
+            rendered.append(token.center(max(len(match.group(0)), len(token))))
+        cursor = match.end()
+    rendered.append(row[cursor:])
+    return "".join(rendered).rstrip()
+
+
+def _render_overworld_template_line_rich(blueprint: HybridMapBlueprint, state: DraftMapState, row: str) -> Text:
+    rendered = Text()
+    cursor = 0
+    for match in _OVERWORLD_NODE_PATTERN.finditer(row):
+        if match.start() > cursor:
+            rendered.append(row[cursor : match.start()], style="dim")
+        node = blueprint.nodes.get(match.group(1))
+        if node is None:
+            rendered.append(match.group(0), style="dim")
+        else:
+            token = _node_card_token(node, blueprint, state)
+            field_width = max(len(match.group(0)), len(token))
+            left_padding = (field_width - len(token)) // 2
+            right_padding = field_width - len(token) - left_padding
+            if left_padding:
+                rendered.append(" " * left_padding, style="dim")
+            rendered.append(token, style=_node_style(node, state))
+            if right_padding:
+                rendered.append(" " * right_padding, style="dim")
+        cursor = match.end()
+    if cursor < len(row):
+        rendered.append(row[cursor:], style="dim")
+    return rendered
+
+
+def _overworld_position_centers(blueprint: HybridMapBlueprint) -> dict[str, tuple[int, int]]:
+    if not blueprint.overworld_positions:
+        return {}
+    token_width = _node_inner_width(blueprint) + 2
+    min_x = min(x for x, _ in blueprint.overworld_positions.values())
+    min_y = min(y for _, y in blueprint.overworld_positions.values())
+    return {
+        node_id: (
+            _OVERWORLD_PADDING + (x - min_x) * _OVERWORLD_X_SPACING + token_width // 2,
+            (y - min_y) * _OVERWORLD_Y_SPACING,
+        )
+        for node_id, (x, y) in blueprint.overworld_positions.items()
+    }
+
+
+def _put_overworld_connector(canvas: list[list[str]], x: int, y: int, glyph: str) -> None:
+    if y < 0 or y >= len(canvas) or x < 0 or x >= len(canvas[y]):
+        return
+    current = canvas[y][x]
+    if current == " " or current == glyph:
+        canvas[y][x] = glyph
+    elif current in {"|", "-"} and glyph in {"|", "-"}:
+        canvas[y][x] = "+"
+    elif current != "+":
+        canvas[y][x] = "+"
+
+
+def _draw_overworld_horizontal(canvas: list[list[str]], y: int, x1: int, x2: int) -> None:
+    start, end = sorted((x1, x2))
+    for x in range(start, end + 1):
+        _put_overworld_connector(canvas, x, y, "-")
+
+
+def _draw_overworld_vertical(canvas: list[list[str]], x: int, y1: int, y2: int) -> None:
+    start, end = sorted((y1, y2))
+    for y in range(start, end + 1):
+        _put_overworld_connector(canvas, x, y, "|")
+
+
+def _draw_overworld_edge(canvas: list[list[str]], source: tuple[int, int], target: tuple[int, int]) -> None:
+    source_x, source_y = source
+    target_x, target_y = target
+    if source_y == target_y:
+        _draw_overworld_horizontal(canvas, source_y, source_x, target_x)
+        return
+    if source_x == target_x:
+        _draw_overworld_vertical(canvas, source_x, source_y + 1, target_y - 1)
+        return
+
+    upper_y = min(source_y, target_y)
+    lower_y = max(source_y, target_y)
+    mid_y = upper_y + max(1, (lower_y - upper_y) // 2)
+    _draw_overworld_vertical(canvas, source_x, source_y + 1, mid_y)
+    _put_overworld_connector(canvas, source_x, mid_y, "+")
+    _draw_overworld_horizontal(canvas, mid_y, source_x, target_x)
+    _put_overworld_connector(canvas, target_x, mid_y, "+")
+    _draw_overworld_vertical(canvas, target_x, mid_y + 1, target_y - 1)
+
+
+def _coordinate_overworld_card_lines(blueprint: HybridMapBlueprint, state: DraftMapState) -> list[str]:
+    centers = _overworld_position_centers(blueprint)
+    if not centers:
+        return []
+    token_width = _node_inner_width(blueprint) + 2
+    half_token = token_width // 2
+    width = max(center_x + half_token + _OVERWORLD_PADDING for center_x, _ in centers.values())
+    height = max(center_y for _, center_y in centers.values()) + 1
+    canvas = [[" "] * width for _ in range(height)]
+
+    for edge in blueprint.edges:
+        if edge.from_node_id in centers and edge.to_node_id in centers:
+            _draw_overworld_edge(canvas, centers[edge.from_node_id], centers[edge.to_node_id])
+
+    for node_id, (center_x, center_y) in centers.items():
+        node = blueprint.nodes[node_id]
+        token = _node_card_token(node, blueprint, state)
+        left = center_x - len(token) // 2
+        for offset, char in enumerate(token):
+            column = left + offset
+            if 0 <= column < width:
+                canvas[center_y][column] = char
+
+    return ["".join(row).rstrip() for row in canvas]
+
+
+def _coordinate_overworld_card_lines_rich(blueprint: HybridMapBlueprint, state: DraftMapState) -> list[Text]:
+    lines = _coordinate_overworld_card_lines(blueprint, state)
+    if not lines:
+        return []
+    centers = _overworld_position_centers(blueprint)
+    rich_lines = [Text(line, style="dim") for line in lines]
+    for node_id, (center_x, center_y) in centers.items():
+        if center_y >= len(rich_lines):
+            continue
+        token = _node_card_token(blueprint.nodes[node_id], blueprint, state)
+        start = max(0, center_x - len(token) // 2)
+        end = min(len(rich_lines[center_y]), start + len(token))
+        rich_lines[center_y].stylize(_node_style(blueprint.nodes[node_id], state), start, end)
+    return rich_lines
+
+
 def _overworld_node_levels(blueprint: HybridMapBlueprint) -> list[list[TravelNode]]:
     levels: list[list[TravelNode]] = []
     for row in blueprint.overworld_template:
@@ -270,29 +446,15 @@ def _render_connection_lines(
 
 
 def _overworld_card_lines(blueprint: HybridMapBlueprint, state: DraftMapState) -> list[str]:
-    levels = _overworld_node_levels(blueprint)
-    token_width = _node_inner_width(blueprint) + 2
-    max_nodes = max((len(level) for level in levels), default=1)
-    width = max(60, token_width * max_nodes + max(0, max_nodes - 1) * 7, token_width + 10)
-    lines: list[str] = []
-    for index, level in enumerate(levels):
-        lines.append(_render_card_row(level, blueprint=blueprint, state=state, width=width))
-        if index < len(levels) - 1:
-            lines.extend(_render_connection_lines(blueprint, level, levels[index + 1], width=width))
-    return lines
+    return _coordinate_overworld_card_lines(blueprint, state) or [
+        _render_overworld_template_line(blueprint, state, row) for row in blueprint.overworld_template
+    ]
 
 
 def _overworld_card_lines_rich(blueprint: HybridMapBlueprint, state: DraftMapState) -> list[Text]:
-    levels = _overworld_node_levels(blueprint)
-    token_width = _node_inner_width(blueprint) + 2
-    max_nodes = max((len(level) for level in levels), default=1)
-    width = max(60, token_width * max_nodes + max(0, max_nodes - 1) * 7, token_width + 10)
-    lines: list[Text] = []
-    for index, level in enumerate(levels):
-        lines.append(_render_card_row_rich(level, blueprint=blueprint, state=state, width=width))
-        if index < len(levels) - 1:
-            lines.extend(Text(line, style="dim") for line in _render_connection_lines(blueprint, level, levels[index + 1], width=width))
-    return lines
+    return _coordinate_overworld_card_lines_rich(blueprint, state) or [
+        _render_overworld_template_line_rich(blueprint, state, row) for row in blueprint.overworld_template
+    ]
 
 
 def _directional_exit_lines(dungeon: DungeonMap, state: DraftMapState) -> list[str]:
@@ -300,7 +462,9 @@ def _directional_exit_lines(dungeon: DungeonMap, state: DraftMapState) -> list[s
     exits = current_room_exits(dungeon, state)
     if not exits:
         return ["- None"]
-    return [f"- {room_direction(room, exit_room, dungeon)} -> {exit_room.title}" for exit_room in exits]
+    directions = room_exit_directions(room, exits, dungeon=dungeon)
+    ordered_exits = sorted(exits, key=lambda exit_room: (_room_target_sort_key(room, exit_room, directions[exit_room.room_id]), exit_room.title))
+    return [f"- {directions[exit_room.room_id]} -> {exit_room.title}" for exit_room in ordered_exits]
 
 
 def _directional_exit_text(dungeon: DungeonMap, state: DraftMapState) -> str:
@@ -308,7 +472,9 @@ def _directional_exit_text(dungeon: DungeonMap, state: DraftMapState) -> str:
     exits = current_room_exits(dungeon, state)
     if not exits:
         return "None"
-    return ", ".join(f"{room_direction(room, exit_room, dungeon)} -> {exit_room.title}" for exit_room in exits)
+    directions = room_exit_directions(room, exits, dungeon=dungeon)
+    ordered_exits = sorted(exits, key=lambda exit_room: (_room_target_sort_key(room, exit_room, directions[exit_room.room_id]), exit_room.title))
+    return ", ".join(f"{directions[exit_room.room_id]} -> {exit_room.title}" for exit_room in ordered_exits)
 
 
 def build_hud_panel_text(
@@ -533,6 +699,61 @@ def _rich_corridor_glyph(directions: set[str]) -> Text:
     return Text(glyph, style="bold cyan")
 
 
+def _compass_lines() -> list[str]:
+    return [
+        "   NORTH",
+        "     |",
+        "WEST-+-EAST",
+        "     |",
+        "   SOUTH",
+    ]
+
+
+def _compass_text() -> Text:
+    return Text("\n".join(_compass_lines()), style="bold cyan", no_wrap=True, overflow="crop")
+
+
+def _compass_renderable():
+    compass = Table.grid(expand=True, padding=0)
+    compass.add_column(ratio=1)
+    compass.add_column(width=max(len(line) for line in _compass_lines()), justify="left", no_wrap=True)
+    compass.add_row("", _compass_text())
+    return compass
+
+
+def _dungeon_grid_lines(grid: list[list[str]]) -> list[str]:
+    border = "+" + "-" * (len(grid[0]) * 3) + "+"
+    lines = [border]
+    for row in grid:
+        lines.append("|" + "".join(f" {cell} " if len(cell) == 1 else cell for cell in row) + "|")
+    lines.append(border)
+    return lines
+
+
+def _dungeon_grid_with_compass_lines(grid: list[list[str]], *, content_width: int = 74) -> list[str]:
+    map_lines = _dungeon_grid_lines(grid)
+    compass_lines = _compass_lines()
+    map_width = max(len(line) for line in map_lines)
+    compass_width = max(len(line) for line in compass_lines)
+    right_padding = 2
+    compass_gap = 2
+    content_width = max(content_width, map_width + 2 * (compass_width + right_padding + compass_gap))
+    map_x = max(0, (content_width - map_width) // 2)
+    compass_x = max(0, content_width - compass_width - right_padding)
+    layer_height = max(len(map_lines), len(compass_lines))
+    canvas = [list(" " * content_width) for _ in range(layer_height)]
+
+    for y, map_line in enumerate(map_lines):
+        for x, char in enumerate(map_line):
+            canvas[y][map_x + x] = char
+
+    for y, compass_line in enumerate(compass_lines):
+        for x, char in enumerate(compass_line):
+            canvas[y][compass_x + x] = char
+
+    return ["".join(line).rstrip() for line in canvas]
+
+
 def _dungeon_render_rows(dungeon: DungeonMap, state: DraftMapState) -> list[list[str]]:
     fine_width = max(1, dungeon.width * 2 - 1)
     fine_height = max(1, dungeon.height * 2 - 1)
@@ -571,20 +792,25 @@ def _dungeon_render_rows_rich(dungeon: DungeonMap, state: DraftMapState) -> list
 
 def build_dungeon_panel_text(dungeon: DungeonMap, state: DraftMapState) -> str:
     grid = _dungeon_render_rows(dungeon, state)
-    lines: list[str] = []
-    border = "+" + "-" * (len(grid[0]) * 3) + "+"
-    lines.append(border)
-    for row in grid:
-        lines.append("|" + "".join(f" {cell} " if len(cell) == 1 else cell for cell in row) + "|")
-    lines.append(border)
-
     room = dungeon.rooms[state.current_room_id or dungeon.entrance_room_id]
+    move_lines = _directional_exit_lines(dungeon, state)
+    legend_line = "Legend: P you, . cleared, E combat, * event, T treasure, B boss, ? locked, corridors show open routes"
+    content_width = max(
+        74,
+        len(dungeon.title) + 2,
+        len(f"Current room: {room.title}"),
+        len("Available moves:"),
+        len(legend_line),
+        *(len(line) for line in move_lines),
+    )
+    lines: list[str] = []
+    lines.extend(_dungeon_grid_with_compass_lines(grid, content_width=content_width))
     lines.append("")
     lines.append(f"Current room: {room.title}")
     lines.append("Available moves:")
-    lines.extend(_directional_exit_lines(dungeon, state))
+    lines.extend(move_lines)
     lines.append("")
-    lines.append("Legend: P you, . cleared, E combat, * event, T treasure, B boss, ? locked, corridors show open routes")
+    lines.append(legend_line)
     return _box_panel(dungeon.title, lines, width=78)
 
 
@@ -619,7 +845,13 @@ def build_dungeon_panel(dungeon: DungeonMap, state: DraftMapState) -> Panel:
         Text("B boss  ? locked  corridors mark open routes", style="bold magenta"),
     )
 
-    group = Group(Align.center(grid), info, legend)
+    map_header = Table.grid(expand=True, padding=0)
+    map_header.add_column(ratio=1)
+    map_header.add_column(justify="center", width=len(rendered_rows[0]) * 3)
+    map_header.add_column(ratio=1)
+    map_header.add_row("", grid, _compass_renderable())
+
+    group = Group(map_header, info, legend)
     return Panel(group, title=dungeon.title, border_style="magenta", box=box.ROUNDED, padding=(0, 1))
 
 

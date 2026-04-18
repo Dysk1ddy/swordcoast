@@ -175,30 +175,72 @@ def room_travel_path(dungeon: DungeonMap, from_room: DungeonRoom, to_room: Dunge
     return path
 
 
-def room_direction(from_room: DungeonRoom, to_room: DungeonRoom, dungeon: DungeonMap | None = None) -> str:
-    if dungeon is not None:
-        path = room_travel_path(dungeon, from_room, to_room)
-        if path:
-            start_x, start_y = _room_anchor(from_room)
-            step_x, step_y = path[0]
-            dx = step_x - start_x
-            dy = step_y - start_y
-            if dx > 0:
-                return "RIGHT"
-            if dx < 0:
-                return "LEFT"
-            if dy > 0:
-                return "DOWN"
-            if dy < 0:
-                return "UP"
+def _coordinate_direction(from_room: DungeonRoom, to_room: DungeonRoom) -> str:
     dx = to_room.x - from_room.x
     dy = to_room.y - from_room.y
     if dx == 0 and dy == 0:
         return "HERE"
-    if dx == 0:
-        return "DOWN" if dy > 0 else "UP"
-    if dy == 0:
-        return "RIGHT" if dx > 0 else "LEFT"
-    if abs(dy) >= abs(dx):
-        return "DOWN" if dy > 0 else "UP"
-    return "RIGHT" if dx > 0 else "LEFT"
+
+    direction_parts: list[str] = []
+    if dy < 0:
+        direction_parts.append("NORTH")
+    elif dy > 0:
+        direction_parts.append("SOUTH")
+    if dx < 0:
+        direction_parts.append("WEST")
+    elif dx > 0:
+        direction_parts.append("EAST")
+    return "-".join(direction_parts)
+
+
+def _step_direction(from_position: tuple[int, int], to_position: tuple[int, int]) -> str:
+    dx = to_position[0] - from_position[0]
+    dy = to_position[1] - from_position[1]
+    if dx > 0:
+        return "EAST"
+    if dx < 0:
+        return "WEST"
+    if dy > 0:
+        return "SOUTH"
+    if dy < 0:
+        return "NORTH"
+    return "HERE"
+
+
+def _path_direction(dungeon: DungeonMap, from_room: DungeonRoom, to_room: DungeonRoom) -> str:
+    path = room_travel_path(dungeon, from_room, to_room)
+    if not path:
+        return _coordinate_direction(from_room, to_room)
+
+    previous = _room_anchor(from_room)
+    directions: list[str] = []
+    seen_directions: set[str] = set()
+    for step in path:
+        direction = _step_direction(previous, step)
+        previous = step
+        if direction == "HERE" or direction in seen_directions:
+            continue
+        directions.append(direction)
+        seen_directions.add(direction)
+    return "-".join(directions) or "HERE"
+
+
+def room_direction(from_room: DungeonRoom, to_room: DungeonRoom, dungeon: DungeonMap | None = None) -> str:
+    if dungeon is not None:
+        return _path_direction(dungeon, from_room, to_room)
+    return _coordinate_direction(from_room, to_room)
+
+
+def room_precise_direction(from_room: DungeonRoom, to_room: DungeonRoom, dungeon: DungeonMap | None = None) -> str:
+    return room_direction(from_room, to_room, dungeon)
+
+
+def room_exit_directions(
+    from_room: DungeonRoom,
+    exits: list[DungeonRoom],
+    *,
+    dungeon: DungeonMap | None = None,
+    reserved_directions: set[str] | None = None,
+) -> dict[str, str]:
+    _ = reserved_directions
+    return {exit_room.room_id: room_direction(from_room, exit_room, dungeon) for exit_room in exits}

@@ -242,6 +242,12 @@ class GameBase:
         self._animation_skip_latched = False
         self._animation_skip_scope_depth = 0
         self._compact_hud_last_scene_key: tuple[int, str] | None = None
+        self._compact_hud_requested = False
+        self._latest_narration_lines: list[str] = []
+        self._pending_act1_dungeon_map_refresh = False
+        self._pending_act1_dungeon_movement_text = ""
+        self._pending_act2_dungeon_map_refresh = False
+        self._pending_act2_dungeon_movement_text = ""
         self._music_enabled_preference = bool(
             persisted_settings.get("music_enabled", self._interactive_output) if play_music is None else play_music
         )
@@ -1912,7 +1918,7 @@ class GameBase:
             ("load", "Load another save slot immediately and continue from there."),
             ("saves / save files", "Open the Save Files manager to load or delete save slots."),
             ("quit", "Return to the main menu, or close the program if you are already there."),
-            ("map", "Open the overworld / dungeon map selector when the hybrid map is active."),
+            ("map / maps / map menu", "Open the map menu, including Travel Ledger, overworld, and current-site views when available."),
             ("party", "Review quick party combat stats, statuses, and roster state."),
             ("journal", "Open the journal and clues log."),
             ("inventory / backpack / bag", "Open the shared inventory and item management view."),
@@ -1927,7 +1933,7 @@ class GameBase:
             for command, description in commands:
                 table.add_row(self.rich_text(command, "light_yellow", bold=True), description)
             guidance = self.rich_text(
-                "Type any of these at most prompts. `map` is especially useful in Act I now that maps only auto-open on arrival.",
+                "Type any of these at most prompts. `map`, `maps`, and `map menu` all open the same map menu.",
                 "cyan",
             )
             if self.emit_rich(
