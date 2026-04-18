@@ -4343,6 +4343,217 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(any("Sereth Vane survived Blackwake" in clue for clue in game.state.clues))
         self.assertTrue(any("Sereth Vane's initials surfaced" in entry for entry in game.state.journal))
 
+    def test_cleared_high_road_can_branch_to_liars_circle(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "3", output_fn=log.append, rng=random.Random(9210))
+        game.state = GameState(
+            player=player,
+            current_scene="road_ambush",
+            flags={
+                "act1_started": True,
+                "road_ambush_cleared": True,
+                "liars_circle_branch_available": True,
+            },
+        )
+        game.scene_road_ambush()
+        self.assertEqual(game.state.current_scene, "high_road_liars_circle")
+        self.assertEqual(game.state.flags["map_state"]["current_node_id"], "liars_circle")
+        rendered = self.plain_output(log)
+        self.assertIn("[PUZZLE] *Follow the overgrown statue trail into the wilderness.", rendered)
+
+    def test_liars_circle_correct_answer_grants_blessing(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        deception_before = player.skill_bonus("Deception")
+        persuasion_before = player.skill_bonus("Persuasion")
+        answers = iter(["5", "3"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(9211))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_liars_circle",
+            flags={"act1_started": True, "road_ambush_cleared": True, "liars_circle_branch_available": True},
+        )
+        game.scene_high_road_liars_circle()
+        self.assertTrue(game.state.flags["liars_circle_solved"])
+        self.assertTrue(game.state.flags["liars_circle_locked"])
+        self.assertTrue(game.state.flags["liars_blessing_active"])
+        self.assertFalse(game.state.flags["liars_circle_branch_available"])
+        self.assertEqual(player.skill_bonus("Deception"), deception_before + 2)
+        self.assertEqual(player.skill_bonus("Persuasion"), persuasion_before + 1)
+        self.assertEqual(player.story_skill_bonuses, {"Deception": 2, "Persuasion": 1})
+
+    def test_liars_circle_wrong_answer_applies_curse(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        deception_before = player.skill_bonus("Deception")
+        persuasion_before = player.skill_bonus("Persuasion")
+        answers = iter(["5", "1"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(9212))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_liars_circle",
+            flags={"act1_started": True, "road_ambush_cleared": True, "liars_circle_branch_available": True},
+        )
+        game.scene_high_road_liars_circle()
+        self.assertTrue(game.state.flags["liars_circle_failed"])
+        self.assertTrue(game.state.flags["liars_circle_locked"])
+        self.assertTrue(game.state.flags["liars_curse_active"])
+        self.assertEqual(game.state.flags["liars_circle_answer"], "knight")
+        self.assertEqual(player.skill_bonus("Deception"), deception_before - 1)
+        self.assertEqual(player.skill_bonus("Persuasion"), persuasion_before - 1)
+        self.assertEqual(player.story_skill_bonuses, {"Deception": -1, "Persuasion": -1})
+
+    def test_liars_curse_clears_on_long_rest(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        deception_before = player.skill_bonus("Deception")
+        persuasion_before = player.skill_bonus("Persuasion")
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9213))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            inventory={"camp_stew_jar": 3, "bread_round": 4, "goat_cheese": 2},
+        )
+        game.apply_liars_curse()
+        self.assertEqual(player.skill_bonus("Deception"), deception_before - 1)
+        self.assertEqual(player.skill_bonus("Persuasion"), persuasion_before - 1)
+        game.long_rest()
+        self.assertFalse(game.state.flags["liars_curse_active"])
+        self.assertEqual(player.story_skill_bonuses, {})
+        self.assertEqual(player.skill_bonus("Deception"), deception_before)
+        self.assertEqual(player.skill_bonus("Persuasion"), persuasion_before)
+
+    def test_liars_blessing_is_removed_when_player_dies(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        deception_before = player.skill_bonus("Deception")
+        persuasion_before = player.skill_bonus("Persuasion")
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9214))
+        game.state = GameState(player=player, current_scene="road_ambush")
+        game.apply_liars_blessing()
+        player.current_hp = 0
+        player.death_failures = 2
+        game.apply_damage(player, 1)
+        self.assertTrue(player.dead)
+        self.assertFalse(game.state.flags["liars_blessing_active"])
+        self.assertTrue(game.state.flags["liars_blessing_lost_to_death"])
+        self.assertEqual(player.story_skill_bonuses, {})
+        self.assertEqual(player.skill_bonus("Deception"), deception_before)
+        self.assertEqual(player.skill_bonus("Persuasion"), persuasion_before)
+
+    def test_story_modifiers_show_on_party_status_and_character_sheet(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        answers = iter(["1", "2"])
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(9215))
+        game.state = GameState(player=player, current_scene="phandalin_hub")
+        game.apply_liars_blessing()
+        game.show_party()
+        game.show_character_sheets()
+        rendered = self.plain_output(log)
+        self.assertIn("Story modifiers: Liar's Blessing: Deception +2, Persuasion +1 (until death)", rendered)
+        self.assertIn("Story Modifiers:\n- Liar's Blessing: Deception +2, Persuasion +1 (until death)", rendered)
+
+    def test_false_tollstones_without_blessing_uses_harder_deception_check(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        checks: list[tuple[str, int]] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9216))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_false_tollstones",
+            flags={"act1_started": True, "road_ambush_cleared": True, "high_road_tollstones_branch_available": True},
+        )
+
+        def fake_skill_check(actor, skill, dc, context):
+            checks.append((skill, dc))
+            return True
+
+        game.skill_check = fake_skill_check
+        game.scene_high_road_false_tollstones()
+        self.assertEqual(checks, [("Deception", 14)])
+        self.assertTrue(game.state.flags["high_road_tollstones_ledger_taken"])
+        self.assertEqual(game.state.flags["high_road_tollstones_resolution"], "deception")
+        self.assertEqual(game.state.current_scene, "phandalin_hub")
+
+    def test_false_tollstones_blessing_path_skips_check_and_adds_passphrase(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9217))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_false_tollstones",
+            flags={"act1_started": True, "road_ambush_cleared": True, "high_road_tollstones_branch_available": True},
+        )
+        game.apply_liars_blessing()
+
+        def fail_skill_check(actor, skill, dc, context):
+            raise AssertionError("Liar's Blessing path should not require a skill check")
+
+        game.skill_check = fail_skill_check
+        game.scene_high_road_false_tollstones()
+        self.assertTrue(game.state.flags["high_road_tollstones_blessing_used"])
+        self.assertTrue(game.state.flags["high_road_tollstones_passphrase_known"])
+        self.assertEqual(game.state.flags["high_road_tollstones_resolution"], "blessing")
+        self.assertEqual(game.state.inventory.get("antitoxin_vial"), 1)
+        self.assertEqual(game.state.xp, 25)
+        self.assertEqual(game.state.gold, 16)
+        rendered = self.plain_output(log)
+        self.assertIn("[LIAR'S BLESSING]", rendered)
+        self.assertIn("The false paint almost seems to arrange itself", rendered)
+
     def test_point_buy_character_creation_flow(self) -> None:
         answers = iter(
             [

@@ -979,11 +979,266 @@ class StoryIntroMixin:
             self.state.flags["early_companion_recruited"] = "Rhogar Valeguard"
             self.say("Rhogar lifts his shield, swears to see the road cleared, and joins your company.")
 
+    def liars_circle_branch_available(self) -> bool:
+        assert self.state is not None
+        if not self.state.flags.get("liars_circle_branch_available"):
+            return False
+        return not (
+            self.state.flags.get("liars_circle_locked")
+            or self.state.flags.get("liars_circle_solved")
+            or self.state.flags.get("liars_circle_failed")
+        )
+
+    def discover_liars_circle_branch(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("liars_circle_branch_discovered"):
+            return
+        self.state.flags["liars_circle_branch_discovered"] = True
+        self.state.flags["liars_circle_branch_available"] = True
+        self.say(
+            "Past the broken ambush wagon, a deer track slips west into thorn and old stone. Four weathered shapes wait there "
+            "in a clearing just far enough from the road to feel deliberate."
+        )
+        self.add_clue("A side trail near the High Road ambush leads to a circle of four talking statues.")
+        self.add_journal("A wilderness side trail from the High Road leads to a statue puzzle called Liar's Circle.")
+
+    def high_road_tollstones_branch_available(self) -> bool:
+        assert self.state is not None
+        return bool(self.state.flags.get("high_road_tollstones_branch_available")) and not bool(
+            self.state.flags.get("high_road_tollstones_resolved")
+        )
+
+    def discover_high_road_tollstones_branch(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("high_road_tollstones_branch_discovered"):
+            return
+        self.state.flags["high_road_tollstones_branch_discovered"] = True
+        self.state.flags["high_road_tollstones_branch_available"] = True
+        self.say(
+            "Beyond the wagon wreck, a second mark catches your eye: fresh black paint on a broken roadwarden milemarker, "
+            "laid too neatly to be weather or accident."
+        )
+        self.add_clue("A broken High Road milemarker still carries fresh false-roadwarden paint.")
+        self.add_journal("A broken milemarker near the High Road ambush points to another false toll operation.")
+
+    def discover_high_road_side_branches(self) -> None:
+        self.discover_liars_circle_branch()
+        self.discover_high_road_tollstones_branch()
+
+    def scene_high_road_liars_circle(self) -> None:
+        assert self.state is not None
+        self.banner("Liar's Circle")
+        self.state.flags["liars_circle_seen"] = True
+        self.say(
+            "The trail opens into a small clearing where four stone statues stand in a ring: Knight, Priest, Thief, and King. "
+            "Their carved eyes point inward, as if the answer has been standing between them for years.",
+            typed=True,
+        )
+        self.say('A cracked plaque reads: "Exactly one of us speaks the truth. The others always lie."')
+        if self.state.flags.get("liars_circle_locked"):
+            self.say("The statues are locked in their chosen silence now. Whatever judgment they made will not be remade today.")
+            self.travel_to_act1_node(
+                "phandalin_hub",
+                transition_text="You return to the High Road and continue toward Phandalin.",
+            )
+            return
+
+        statue_lines = {
+            "knight": ("Knight", "If the Priest is lying, then the King is telling the truth."),
+            "priest": ("Priest", "Exactly one of the Knight or the King is telling the truth."),
+            "thief": ("Thief", "Exactly one of the Priest or I is telling the truth."),
+            "king": ("King", "The Priest is lying if and only if I am telling the truth."),
+        }
+        inspect_options = [
+            ("knight", self.action_option("Inspect the Knight statue.")),
+            ("priest", self.action_option("Inspect the Priest statue.")),
+            ("thief", self.action_option("Inspect the Thief statue.")),
+            ("king", self.action_option("Inspect the King statue.")),
+            ("answer", self.skill_tag("LOGIC", self.action_option("Name the only truthful statue."))),
+            ("leave", self.action_option("Leave the circle unresolved.")),
+        ]
+        while True:
+            choice = self.scenario_choice(
+                "What do you do in Liar's Circle?",
+                [text for _, text in inspect_options],
+                allow_meta=False,
+            )
+            selection_key, selection_text = inspect_options[choice - 1]
+            if selection_key in statue_lines:
+                self.player_choice_output(selection_text)
+                speaker_name, line = statue_lines[selection_key]
+                self.speaker(speaker_name, line)
+                self.state.flags[f"liars_circle_inspected_{selection_key}"] = True
+                continue
+            if selection_key == "answer":
+                self.player_choice_output(selection_text)
+                answer_options = [
+                    ("knight", self.quoted_option("KNIGHT", "The Knight tells the truth.")),
+                    ("priest", self.quoted_option("PRIEST", "The Priest tells the truth.")),
+                    ("thief", self.quoted_option("THIEF", "The Thief tells the truth.")),
+                    ("king", self.quoted_option("KING", "The King tells the truth.")),
+                    ("back", self.action_option("Step back and keep thinking.")),
+                ]
+                answer_choice = self.scenario_choice(
+                    "Which statue is the only truthful one?",
+                    [text for _, text in answer_options],
+                    allow_meta=False,
+                )
+                answer_key, answer_text = answer_options[answer_choice - 1]
+                if answer_key == "back":
+                    self.player_choice_output(answer_text)
+                    continue
+                self.resolve_liars_circle_answer(answer_key, answer_text)
+                break
+            self.player_choice_output(selection_text)
+            self.say("You leave the four statues arguing with the wind and follow the trail back to the High Road.")
+            break
+
+        self.travel_to_act1_node(
+            "phandalin_hub",
+            transition_text="You return to the High Road and continue toward Phandalin.",
+        )
+
+    def resolve_liars_circle_answer(self, answer_key: str, answer_text: str) -> None:
+        assert self.state is not None
+        self.player_choice_output(answer_text)
+        self.state.flags["liars_circle_locked"] = True
+        self.state.flags["liars_circle_branch_available"] = False
+        self.state.flags["liars_circle_answer"] = answer_key
+        if answer_key == "thief":
+            self.state.flags["liars_circle_solved"] = True
+            self.speaker("Thief", "Finally. Someone heard the shape of the lie instead of the polish on the crown.")
+            self.say("The Thief statue bows with a scrape of old stone, and the circle exhales like a held secret.")
+            self.apply_liars_blessing()
+            return
+        self.state.flags["liars_circle_failed"] = True
+        self.speaker("King", "A confident answer is still an answer.")
+        self.say("The ring snaps shut with a sound like a lock turning under your tongue.")
+        self.apply_liars_curse()
+
+    def scene_high_road_false_tollstones(self) -> None:
+        assert self.state is not None
+        self.banner("False Tollstones")
+        self.state.flags["high_road_tollstones_seen"] = True
+        self.say(
+            "The broken milemarker stands beside a narrow service path, its old roadwarden notches painted over with "
+            "Ashen Brand ash-black lines. Two nervous spotters wait in the scrub with a ledger, a lockbox, and the wrong kind of confidence.",
+            typed=True,
+        )
+        if self.state.flags.get("high_road_tollstones_resolved"):
+            self.say("The false toll is already broken. Only trampled brush and a scraped-clean milemarker remain.")
+            self.travel_to_act1_node(
+                "phandalin_hub",
+                transition_text="You leave the milemarker behind and follow the High Road south.",
+            )
+            return
+
+        has_blessing = self.has_story_skill_modifier(self.state.player, self.LIARS_BLESSING_MODIFIER_ID)
+        if has_blessing:
+            self.say("Liar's Blessing warms behind your teeth. The false paint almost seems to arrange itself into a passphrase.")
+
+        options: list[tuple[str, str]] = []
+        if has_blessing:
+            options.append(
+                (
+                    "blessing",
+                    self.skill_tag(
+                        "LIAR'S BLESSING",
+                        self.action_option("Speak the lie the false tollkeepers expect to hear."),
+                    ),
+                )
+            )
+        options.extend(
+            [
+                ("deception", self.skill_tag("DECEPTION", self.action_option("Bluff as an Ashen Brand courier."))),
+                ("persuasion", self.skill_tag("PERSUASION", self.action_option("Offer the spotters a cleaner way out."))),
+                ("leave", self.action_option("Leave the milemarker and stay on the main road.")),
+            ]
+        )
+        choice = self.scenario_choice("How do you handle the false toll?", [text for _, text in options], allow_meta=False)
+        selection_key, selection_text = options[choice - 1]
+        if selection_key == "leave":
+            self.player_choice_output(selection_text)
+            self.say("You mark the painted stone for later and keep the party moving before the spotters find their nerve.")
+            self.travel_to_act1_node(
+                "phandalin_hub",
+                transition_text="You leave the milemarker behind and follow the High Road south.",
+            )
+            return
+
+        self.player_choice_output(selection_text)
+        if selection_key == "blessing":
+            self.say(
+                "You give them a courier's lie with a thief-statue's perfect angle. The ledger opens before either spotter realizes "
+                "they never asked for proof."
+            )
+            self.resolve_high_road_tollstones(success=True, method="blessing")
+        elif selection_key == "deception":
+            dc = 12 if has_blessing else 14
+            success = self.skill_check(
+                self.state.player,
+                "Deception",
+                dc,
+                context="to pass as a courier collecting the false toll ledger",
+            )
+            self.resolve_high_road_tollstones(success=success, method="deception")
+        else:
+            dc = 11 if has_blessing else 13
+            success = self.skill_check(
+                self.state.player,
+                "Persuasion",
+                dc,
+                context="to convince the spotters that running now is wiser than dying loyal",
+            )
+            self.resolve_high_road_tollstones(success=success, method="persuasion")
+
+        self.travel_to_act1_node(
+            "phandalin_hub",
+            transition_text="You leave the milemarker behind and follow the High Road south.",
+        )
+
+    def resolve_high_road_tollstones(self, *, success: bool, method: str) -> None:
+        assert self.state is not None
+        self.state.flags["high_road_tollstones_resolved"] = True
+        self.state.flags["high_road_tollstones_branch_available"] = False
+        self.state.flags["high_road_tollstones_resolution"] = method if success else "failed"
+        if not success:
+            self.state.flags["high_road_tollstones_spotters_scattered"] = True
+            self.apply_status(self.state.player, "reeling", 1, source="a false toll scramble")
+            self.say("The spotters panic, scatter the ledger leaves into the brush, and leave you with only smoke, bootprints, and a foul mood.")
+            self.add_journal("The false toll at the broken milemarker scattered before you could secure its ledger.")
+            return
+
+        self.state.flags["high_road_tollstones_ledger_taken"] = True
+        self.add_inventory_item("antitoxin_vial", 1, source="the false toll lockbox")
+        if method == "blessing":
+            self.state.flags["high_road_tollstones_blessing_used"] = True
+            self.state.flags["high_road_tollstones_passphrase_known"] = True
+            self.say(
+                "The lockbox yields a vial of antitoxin, a neat stack of toll coins, and a passphrase keyed to Ashen Brand patrols farther south."
+            )
+            self.add_clue("Liar's Blessing exposed an Ashen Brand passphrase from the false tollstone ledger.")
+            self.reward_party(xp=25, gold=16, reason="turning Liar's Blessing against the false tollstones")
+            self.add_journal("Liar's Blessing cracked the false tollstone operation and revealed an Ashen Brand passphrase.")
+        elif method == "persuasion":
+            self.state.flags["high_road_tollstones_contact_spared"] = True
+            self.say("One spotter drops the ledger and runs. The other leaves the lockbox behind after whispering where the next Brand patrol listens.")
+            self.add_clue("A frightened tollstone spotter named a southern Ashen Brand listening post.")
+            self.reward_party(xp=20, gold=10, reason="breaking the false tollstones without bloodshed")
+            self.add_journal("You talked the false tollstone spotters into abandoning their post.")
+        else:
+            self.say("Your bluff opens the ledger long enough to lift the lockbox and copy the next patrol mark before the spotters bolt.")
+            self.add_clue("The false tollstone ledger names a southern Ashen Brand patrol mark.")
+            self.reward_party(xp=20, gold=12, reason="bluffing through the false tollstones")
+            self.add_journal("You bluffed through the false tollstone post and took its ledger mark.")
+
     def scene_road_ambush(self) -> None:
         assert self.state is not None
         self._sync_map_state_with_scene(force_node_id="high_road_ambush")
         self.banner("High Road")
         if self.state.flags.get("road_ambush_cleared") or self.state.flags.get("phandalin_arrived"):
+            if self.state.flags.get("road_ambush_cleared"):
+                self.discover_high_road_side_branches()
             self.render_act1_overworld_map(force=True)
             self.say(
                 "The ambush site has gone quiet: ash-dark wagon ribs, old hoof churn, and the track south toward Phandalin "
@@ -995,12 +1250,40 @@ class StoryIntroMixin:
             backtrack_node = self.peek_act1_overworld_backtrack_node()
             if backtrack_node is not None:
                 options.append(("backtrack", self.skill_tag("BACKTRACK", self.action_option(f"Backtrack to {backtrack_node.title}"))))
+            if self.liars_circle_branch_available():
+                options.append(
+                    (
+                        "liars_circle",
+                        self.skill_tag("PUZZLE", self.action_option("Follow the overgrown statue trail into the wilderness.")),
+                    )
+                )
+            if self.high_road_tollstones_branch_available():
+                options.append(
+                    (
+                        "tollstones",
+                        self.skill_tag("PARLEY", self.action_option("Investigate the broken roadwarden milemarker.")),
+                    )
+                )
             choice = self.scenario_choice("Where do you go from the High Road?", [text for _, text in options], allow_meta=False)
             selection_key, _ = options[choice - 1]
             if selection_key == "backtrack":
                 if not self.backtrack_act1_overworld_node():
                     self.say("There is no familiar road behind you to backtrack right now.")
                     return
+                return
+            if selection_key == "liars_circle":
+                self.player_action("Follow the overgrown statue trail into the wilderness.")
+                self.travel_to_act1_node(
+                    "liars_circle",
+                    transition_text="You follow the thorn track away from the road until four old statues come into view.",
+                )
+                return
+            if selection_key == "tollstones":
+                self.player_action("Investigate the broken roadwarden milemarker.")
+                self.travel_to_act1_node(
+                    "false_tollstones",
+                    transition_text="You follow the paint-scarred markers to a broken roadwarden stone and a waiting false toll.",
+                )
                 return
             self.travel_to_act1_node(
                 "phandalin_hub",
@@ -1233,4 +1516,5 @@ class StoryIntroMixin:
             self.reward_party(xp=20, gold=7, reason="breaking the High Road reserve wave")
 
         self.state.flags["road_ambush_cleared"] = True
+        self.discover_high_road_side_branches()
         self.travel_to_act1_node("phandalin_hub")

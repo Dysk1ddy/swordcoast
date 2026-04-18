@@ -1140,6 +1140,8 @@ class CombatResolutionMixin:
             target.death_failures += 1
             if target.death_failures >= 3:
                 target.dead = True
+                if self.is_player_actor(target):
+                    self.clear_liars_blessing_on_player_death()
             return damage
         target.current_hp = max(0, target.current_hp - damage)
         if target.current_hp == 0:
@@ -1218,6 +1220,8 @@ class CombatResolutionMixin:
             self.say(f"{self.style_name(actor)} stabilizes at 0 hit points.")
         if actor.death_failures >= 3:
             actor.dead = True
+            if self.is_player_actor(actor):
+                self.clear_liars_blessing_on_player_death()
 
     def skill_check(self, actor, skill: str, dc: int, *, context: str) -> bool:
         dc = self.effective_skill_dc(dc, context=context)

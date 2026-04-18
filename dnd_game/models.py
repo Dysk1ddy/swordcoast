@@ -90,6 +90,7 @@ class Character:
     lore: list[str] = field(default_factory=list)
     bond_flags: dict[str, Any] = field(default_factory=dict)
     relationship_bonuses: dict[str, int] = field(default_factory=dict)
+    story_skill_bonuses: dict[str, int] = field(default_factory=dict)
     stable: bool = False
     dead: bool = False
     death_successes: int = 0
@@ -114,6 +115,7 @@ class Character:
         bonus += self.equipment_bonuses.get(skill, 0)
         bonus += self.gear_bonuses.get(skill, 0)
         bonus += self.relationship_bonuses.get(skill, 0)
+        bonus += self.story_skill_bonuses.get(skill, 0)
         return bonus
 
     def save_bonus(self, ability: str) -> int:

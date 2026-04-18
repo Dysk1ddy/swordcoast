@@ -31,6 +31,8 @@ SCENE_MUSIC_CONTEXTS: dict[str, str] = {
     "blackwake_crossing": "dungeon",
     "road_decision_post_blackwake": "wilderness",
     "road_ambush": "wilderness",
+    "high_road_liars_circle": "wilderness",
+    "high_road_false_tollstones": "wilderness",
     "phandalin_hub": "city",
     "old_owl_well": "dungeon",
     "wyvern_tor": "dungeon",

@@ -29,7 +29,7 @@ from ..items import (
     initial_merchant_stock,
     starter_item_ids_for_character,
 )
-from ..models import Character, GameState, Weapon
+from ..models import Character, GameState, SKILL_TO_ABILITY, Weapon
 from ..ui.colors import rich_style_name, strip_ansi
 from ..ui.rich_render import Columns, Group, Panel, Table, Text, box, render_rich_lines
 from .constants import InputFn, LEVEL_XP_THRESHOLDS, MENU_PAGE_SIZE, OutputFn
@@ -90,6 +90,8 @@ class GameBase:
         "background_prologue": "Prologue",
         "neverwinter_briefing": "Neverwinter",
         "road_ambush": "High Road",
+        "high_road_liars_circle": "Liar's Circle",
+        "high_road_false_tollstones": "False Tollstones",
         "phandalin_hub": "Phandalin",
         "old_owl_well": "Old Owl Well",
         "wyvern_tor": "Wyvern Tor",
@@ -116,6 +118,8 @@ class GameBase:
         "blackwake_crossing": "Trace the Blackwake supply cell before committing to the High Road.",
         "road_decision_post_blackwake": "Choose whether to report back to Neverwinter or press south after Blackwake.",
         "road_ambush": "Survive the High Road attack and reach Phandalin.",
+        "high_road_liars_circle": "Solve the four-statue liar's puzzle or leave the circle alone.",
+        "high_road_false_tollstones": "Break or outtalk the false roadwarden toll at the broken milemarker.",
         "phandalin_hub": "Choose which pressure in Phandalin to answer next.",
         "old_owl_well": "Break the grave-salvage line at Old Owl Well.",
         "wyvern_tor": "Break the Wyvern Tor raiders.",
@@ -145,6 +149,9 @@ class GameBase:
     }
     DEV_GOD_MODE_FLAG = "dev_god_mode"
     DEV_PASS_CHECKS_FLAG = "dev_pass_every_dice_check"
+    STORY_SKILL_MODIFIER_KEY = "story_skill_modifiers"
+    LIARS_BLESSING_MODIFIER_ID = "liars_blessing"
+    LIARS_CURSE_MODIFIER_ID = "liars_curse"
     NAMED_CHARACTER_INTROS = {
         "Mira Thann": "Mira Thann is a sharp-eyed Neverwinter officer who wears quiet authority like armor and studies every answer for weakness or leverage.",
         "Tessa Harrow": "Tessa Harrow is Phandalin's exhausted steward, all ink-stained hands, sleepless focus, and frontier resolve held together by sheer will.",
@@ -299,6 +306,8 @@ class GameBase:
             "blackwake_crossing": self.scene_blackwake_crossing,
             "road_decision_post_blackwake": self.scene_road_decision_post_blackwake,
             "road_ambush": self.scene_road_ambush,
+            "high_road_liars_circle": self.scene_high_road_liars_circle,
+            "high_road_false_tollstones": self.scene_high_road_false_tollstones,
             "phandalin_hub": self.scene_phandalin_hub,
             "old_owl_well": self.scene_old_owl_well,
             "wyvern_tor": self.scene_wyvern_tor,
@@ -1550,6 +1559,7 @@ class GameBase:
             member.inventory.clear()
             self.reconcile_level_progression(member)
             self.sync_equipment(member)
+            self.rebuild_story_skill_bonuses(member)
             refresh_companion_state = getattr(self, "refresh_companion_state", None)
             if callable(refresh_companion_state):
                 refresh_companion_state(member)
@@ -1786,6 +1796,169 @@ class GameBase:
         if self.state is None:
             return False
         return any(member is actor for member in self.state.party_members())
+
+    def is_player_actor(self, actor) -> bool:
+        return self.state is not None and actor is self.state.player
+
+    def story_skill_modifier_payloads(self, actor: Character) -> dict[str, dict[str, object]]:
+        raw_modifiers = actor.bond_flags.get(self.STORY_SKILL_MODIFIER_KEY)
+        if not isinstance(raw_modifiers, dict):
+            raw_modifiers = {}
+        normalized: dict[str, dict[str, object]] = {}
+        for modifier_id, raw_payload in raw_modifiers.items():
+            if not isinstance(modifier_id, str) or not isinstance(raw_payload, dict):
+                continue
+            bonuses_payload = raw_payload.get("bonuses") if "bonuses" in raw_payload else raw_payload
+            if not isinstance(bonuses_payload, dict):
+                continue
+            bonuses: dict[str, int] = {}
+            for skill, value in bonuses_payload.items():
+                if not isinstance(skill, str) or skill not in SKILL_TO_ABILITY:
+                    continue
+                try:
+                    amount = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if amount:
+                    bonuses[skill] = amount
+            if not bonuses:
+                continue
+            normalized[modifier_id] = {
+                "bonuses": bonuses,
+                "source": str(raw_payload.get("source") or modifier_id),
+                "duration": str(raw_payload.get("duration") or ""),
+            }
+        actor.bond_flags[self.STORY_SKILL_MODIFIER_KEY] = normalized
+        return normalized
+
+    def rebuild_story_skill_bonuses(self, actor: Character) -> None:
+        totals: dict[str, int] = {}
+        for payload in self.story_skill_modifier_payloads(actor).values():
+            bonuses = payload.get("bonuses", {})
+            if not isinstance(bonuses, dict):
+                continue
+            for skill, value in bonuses.items():
+                if isinstance(skill, str) and skill in SKILL_TO_ABILITY:
+                    totals[skill] = totals.get(skill, 0) + int(value)
+        actor.story_skill_bonuses = totals
+
+    def apply_story_skill_modifier(
+        self,
+        actor: Character,
+        modifier_id: str,
+        bonuses: dict[str, int],
+        *,
+        source: str,
+        duration: str,
+    ) -> bool:
+        clean_bonuses: dict[str, int] = {}
+        for skill, amount in bonuses.items():
+            if skill not in SKILL_TO_ABILITY:
+                continue
+            try:
+                numeric_amount = int(amount)
+            except (TypeError, ValueError):
+                continue
+            if numeric_amount:
+                clean_bonuses[skill] = numeric_amount
+        if not clean_bonuses:
+            return self.remove_story_skill_modifier(actor, modifier_id)
+        modifiers = self.story_skill_modifier_payloads(actor)
+        previous = modifiers.get(modifier_id)
+        modifiers[modifier_id] = {"bonuses": clean_bonuses, "source": source, "duration": duration}
+        actor.bond_flags[self.STORY_SKILL_MODIFIER_KEY] = modifiers
+        self.rebuild_story_skill_bonuses(actor)
+        return previous != modifiers[modifier_id]
+
+    def remove_story_skill_modifier(self, actor: Character, modifier_id: str) -> bool:
+        modifiers = self.story_skill_modifier_payloads(actor)
+        if modifier_id not in modifiers:
+            return False
+        modifiers.pop(modifier_id, None)
+        actor.bond_flags[self.STORY_SKILL_MODIFIER_KEY] = modifiers
+        self.rebuild_story_skill_bonuses(actor)
+        return True
+
+    def has_story_skill_modifier(self, actor: Character, modifier_id: str) -> bool:
+        return modifier_id in self.story_skill_modifier_payloads(actor)
+
+    def story_skill_modifier_display_lines(self, actor: Character) -> list[str]:
+        lines: list[str] = []
+        for modifier_id, payload in sorted(self.story_skill_modifier_payloads(actor).items()):
+            bonuses = payload.get("bonuses", {})
+            if not isinstance(bonuses, dict):
+                continue
+            bonus_parts = [
+                f"{skill} {int(amount):+d}"
+                for skill, amount in sorted(bonuses.items())
+                if isinstance(skill, str) and skill in SKILL_TO_ABILITY and int(amount) != 0
+            ]
+            if not bonus_parts:
+                continue
+            source = str(payload.get("source") or modifier_id)
+            duration = str(payload.get("duration") or "").strip()
+            suffix = f" ({duration})" if duration else ""
+            lines.append(f"{source}: {', '.join(bonus_parts)}{suffix}")
+        return lines
+
+    def story_skill_modifier_summary(self, actor: Character) -> str:
+        lines = self.story_skill_modifier_display_lines(actor)
+        return "; ".join(lines) if lines else "None"
+
+    def apply_liars_blessing(self) -> None:
+        assert self.state is not None
+        player = self.state.player
+        self.remove_story_skill_modifier(player, self.LIARS_CURSE_MODIFIER_ID)
+        changed = self.apply_story_skill_modifier(
+            player,
+            self.LIARS_BLESSING_MODIFIER_ID,
+            {"Deception": 2, "Persuasion": 1},
+            source="Liar's Blessing",
+            duration="until death",
+        )
+        self.state.flags["liars_blessing_active"] = True
+        self.state.flags["liars_curse_active"] = False
+        if changed:
+            self.say("The answer settles on your tongue as Liar's Blessing: +2 Deception and +1 Persuasion until death.")
+            self.add_journal("Liar's Blessing grants +2 Deception and +1 Persuasion until death.")
+
+    def apply_liars_curse(self) -> None:
+        assert self.state is not None
+        player = self.state.player
+        self.remove_story_skill_modifier(player, self.LIARS_BLESSING_MODIFIER_ID)
+        changed = self.apply_story_skill_modifier(
+            player,
+            self.LIARS_CURSE_MODIFIER_ID,
+            {"Deception": -1, "Persuasion": -1},
+            source="Liar's Curse",
+            duration="until long rest",
+        )
+        self.state.flags["liars_blessing_active"] = False
+        self.state.flags["liars_curse_active"] = True
+        if changed:
+            self.say("The statues' laughter leaves Liar's Curse behind: -1 Deception and -1 Persuasion until your next long rest.")
+            self.add_journal("Liar's Curse imposes -1 Deception and -1 Persuasion until the next long rest.")
+
+    def clear_liars_curse_after_long_rest(self) -> bool:
+        if self.state is None:
+            return False
+        cleared = self.remove_story_skill_modifier(self.state.player, self.LIARS_CURSE_MODIFIER_ID)
+        if cleared or self.state.flags.get("liars_curse_active"):
+            self.state.flags["liars_curse_active"] = False
+            self.say("By morning, Liar's Curse has thinned from your voice.")
+            self.add_journal("A long rest cleared Liar's Curse.")
+        return cleared
+
+    def clear_liars_blessing_on_player_death(self) -> bool:
+        if self.state is None or not self.state.player.dead:
+            return False
+        cleared = self.remove_story_skill_modifier(self.state.player, self.LIARS_BLESSING_MODIFIER_ID)
+        if cleared or self.state.flags.get("liars_blessing_active"):
+            self.state.flags["liars_blessing_active"] = False
+            self.state.flags["liars_blessing_lost_to_death"] = True
+            self.say("Liar's Blessing goes silent as death closes around you.")
+            self.add_journal("Death ended Liar's Blessing.")
+        return cleared
 
     def developer_flag_enabled(self, flag_key: str) -> bool:
         if self.state is None:

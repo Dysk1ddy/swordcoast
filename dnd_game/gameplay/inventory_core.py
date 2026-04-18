@@ -266,6 +266,9 @@ class InventoryCoreMixin:
                 member.conditions["exhaustion"] -= 1
                 if member.conditions["exhaustion"] <= 0:
                     member.conditions.pop("exhaustion", None)
+        clear_liars_curse_after_long_rest = getattr(self, "clear_liars_curse_after_long_rest", None)
+        if callable(clear_liars_curse_after_long_rest):
+            clear_liars_curse_after_long_rest()
         self.state.short_rests_remaining = 2
 
     def long_rest(self) -> None:

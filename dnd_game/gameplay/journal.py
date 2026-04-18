@@ -51,6 +51,9 @@ class JournalMixin:
             ),
             self.rich_from_ansi(f"Conditions: {self.character_condition_summary(member)}"),
         ]
+        story_modifiers = self.story_skill_modifier_display_lines(member)
+        if story_modifiers:
+            details.append(self.rich_from_ansi("Story modifiers: " + "; ".join(story_modifiers)))
         if relationship_line is not None:
             details.append(relationship_line)
         color = self.member_panel_border_color(member)
@@ -154,6 +157,15 @@ class JournalMixin:
         if resources_text != "None":
             feature_lines.append(self.rich_text(f"Resources: {resources_text}", "light_aqua"))
 
+        story_modifier_lines = self.story_skill_modifier_display_lines(member)
+        story_modifier_panel = None
+        if story_modifier_lines:
+            story_modifier_panel = self.character_sheet_panel(
+                "Story Modifiers",
+                "purple",
+                Group(*(self.rich_text(line, "purple") for line in story_modifier_lines)),
+            )
+
         equipment_lines = [
             self.rich_text(
                 f"{self.equipment_slot_label(slot)}: {get_item(item_id).name if item_id is not None else 'Empty'}",
@@ -182,11 +194,14 @@ class JournalMixin:
                 ),
             ]
         )
-        return Group(
+        renderables = [
             self.character_sheet_panel(f"Character Sheet: {member.name}", "light_yellow", header),
             stats_grid,
-            detail_grid,
-        )
+        ]
+        if story_modifier_panel is not None:
+            renderables.append(story_modifier_panel)
+        renderables.append(detail_grid)
+        return Group(*renderables)
 
     def render_rich_journal_view(
         self,
@@ -443,6 +458,9 @@ class JournalMixin:
                 f"{self.character_health_summary(member)}, AC {member.armor_class}{temp_hp}, "
                 f"conditions [{conditions}]"
             )
+            story_modifiers = self.story_skill_modifier_summary(member)
+            if story_modifiers != "None":
+                self.output_fn(f"  Story modifiers: {story_modifiers}")
             if getattr(member, "companion_id", ""):
                 self.output_fn(f"  Relationship: {self.relationship_label_for(member)} ({member.disposition})")
         if self.state.camp_companions:
@@ -521,6 +539,12 @@ class JournalMixin:
                 f"- Spellcasting: {member.spellcasting_ability} | spell attack +{spell_attack} | "
                 f"spell slots {spell_slot_summary(member)}"
             )
+        story_modifiers = self.story_skill_modifier_display_lines(member)
+        if story_modifiers:
+            self.output_fn("")
+            self.say("Story Modifiers:")
+            for line in story_modifiers:
+                self.output_fn(f"- {line}")
         self.output_fn("")
         self.say("Saving Throws:")
         for ability in ABILITY_ORDER:

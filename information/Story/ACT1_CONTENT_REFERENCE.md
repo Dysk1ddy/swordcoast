@@ -37,6 +37,10 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 11. Emberhall finale:
    antechamber fight -> chained clerk / ledger event -> Varyn boss fight
 
+## Drafted Future Inserts
+
+- `information/Story/HIGH_ROAD_LIARS_CIRCLE_PUZZLE_DRAFT.md`: optional post-ambush High Road wilderness branch built around four lying statues, with `Liar's Blessing` or `Liar's Curse` social-skill consequences.
+
 ## Companion Reference
 
 | Companion | Race / Class | Summary | Recruitment point | Relationship bonuses |

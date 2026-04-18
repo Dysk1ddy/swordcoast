@@ -94,8 +94,11 @@
     "companion_id": "",
     "disposition": 0,
     "lore": [],
-    "bond_flags": {},
+    "bond_flags": {
+      "story_skill_modifiers": {}
+    },
     "relationship_bonuses": {},
+    "story_skill_bonuses": {},
     "stable": false,
     "dead": false,
     "death_successes": 0,
@@ -211,9 +214,11 @@
         "He trusts steady action more than speeches, but remembers every promise anyone makes in his hearing."
       ],
       "bond_flags": {
-        "talked_topics": []
+        "talked_topics": [],
+        "story_skill_modifiers": {}
       },
       "relationship_bonuses": {},
+      "story_skill_bonuses": {},
       "stable": false,
       "dead": false,
       "death_successes": 0,
@@ -324,9 +329,11 @@
         "Under stress she gets quieter, not colder, as though she is measuring every word for whether it heals or harms."
       ],
       "bond_flags": {
-        "talked_topics": []
+        "talked_topics": [],
+        "story_skill_modifiers": {}
       },
       "relationship_bonuses": {},
+      "story_skill_bonuses": {},
       "stable": false,
       "dead": false,
       "death_successes": 0,
@@ -438,9 +445,11 @@
         "He rarely speaks first in a room, but once he commits to someone he watches over them with relentless attention."
       ],
       "bond_flags": {
-        "talked_topics": []
+        "talked_topics": [],
+        "story_skill_modifiers": {}
       },
       "relationship_bonuses": {},
+      "story_skill_bonuses": {},
       "stable": false,
       "dead": false,
       "death_successes": 0,
