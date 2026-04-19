@@ -40,9 +40,13 @@ from dnd_game.gameplay.sound_effects import (
     closest_dice_roll_sound_effect,
 )
 from dnd_game.gameplay.music import (
+    MUSIC_AREA_TRANSITION_SECONDS,
     MUSIC_BOSS_TRANSITION_SECONDS,
     MUSIC_COMBAT_EXIT_TRANSITION_SECONDS,
     MUSIC_COMBAT_TRANSITION_SECONDS,
+    MUSIC_INITIAL_FADE_SECONDS,
+    MUSIC_LOCAL_TRANSITION_SECONDS,
+    MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS,
     MUSIC_ASSET_EXTENSIONS,
     MUSIC_CONTEXT_FOLDERS,
     MUSIC_TRANSITION_CURVE,
@@ -210,6 +214,37 @@ class CoreTests(unittest.TestCase):
             {path.resolve() for path in music_files_for_context("wilderness")},
         )
 
+    def test_music_picker_exhausts_folder_tracks_before_repeating(self) -> None:
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9003140))
+        tracks = [
+            Path("Town/first.mp3"),
+            Path("Town/second.mp3"),
+            Path("Town/third.mp3"),
+        ]
+        game.music_files_for_context = lambda context: list(tracks)
+
+        first_cycle = [game.choose_music_file("city") for _ in tracks]
+        next_pick = game.choose_music_file("city")
+
+        self.assertEqual({track.name for track in first_cycle if track is not None}, {track.name for track in tracks})
+        self.assertIsNotNone(next_pick)
+        self.assertNotEqual(next_pick, first_cycle[-1])
+
+    def test_music_picker_shares_history_across_contexts_for_same_folder(self) -> None:
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9003141))
+        tracks = [
+            Path("Town/market.mp3"),
+            Path("Town/inn.mp3"),
+        ]
+        game.music_files_for_context = lambda context: list(tracks)
+
+        town_pick = game.choose_music_file("city")
+        inn_pick = game.choose_music_file("inn")
+
+        self.assertIsNotNone(town_pick)
+        self.assertIsNotNone(inn_pick)
+        self.assertNotEqual(inn_pick, town_pick)
+
     def test_music_backend_uses_mci_when_pygame_is_missing(self) -> None:
         commands: list[str] = []
         fake_winmm = SimpleNamespace(
@@ -256,10 +291,207 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(any(command.startswith('open "') and "Main menu" in command for command in commands))
         self.assertIn("play dnd_game_music repeat", commands)
 
+    def test_pygame_channel_music_does_not_fallback_when_channel_play_returns_none(self) -> None:
+        class FakeMusic:
+            def __init__(self) -> None:
+                self.load_calls: list[str] = []
+                self.play_calls: list[dict[str, int]] = []
+
+            def get_busy(self) -> bool:
+                return False
+
+            def stop(self) -> None:
+                pass
+
+            def unload(self) -> None:
+                pass
+
+            def load(self, path: str) -> None:
+                self.load_calls.append(path)
+
+            def play(self, **kwargs: int) -> None:
+                self.play_calls.append(kwargs)
+
+        class FakeChannel:
+            def __init__(self) -> None:
+                self.busy = False
+                self.play_calls: list[tuple[object, int]] = []
+                self.volumes: list[float] = []
+
+            def stop(self) -> None:
+                self.busy = False
+
+            def set_volume(self, volume: float) -> None:
+                self.volumes.append(volume)
+
+            def play(self, sound: object, *, loops: int = 0) -> None:
+                self.busy = True
+                self.play_calls.append((sound, loops))
+
+            def get_busy(self) -> bool:
+                return self.busy
+
+        class FakeMixer:
+            def __init__(self) -> None:
+                self.music = FakeMusic()
+                self.channels = {0: FakeChannel(), 1: FakeChannel()}
+
+            def get_init(self) -> tuple[int, int, int]:
+                return (44100, -16, 2)
+
+            def Channel(self, index: int) -> FakeChannel:
+                return self.channels[index]
+
+        fake_mixer = FakeMixer()
+        fake_pygame = SimpleNamespace(error=RuntimeError, mixer=fake_mixer)
+        fake_sound = object()
+        threads: list[tuple[object, tuple[object, ...], bool]] = []
+
+        class FakeThread:
+            def __init__(self, *, target, args: tuple[object, ...], daemon: bool) -> None:
+                self.target = target
+                self.args = args
+                self.daemon = daemon
+
+            def start(self) -> None:
+                threads.append((self.target, self.args, self.daemon))
+
+        with (
+            patch.object(audio_backend, "pygame", fake_pygame),
+            patch.object(audio_backend.threading, "Thread", FakeThread),
+            patch.object(audio_backend, "ensure_mixer", return_value=True),
+            patch.object(audio_backend, "load_music_sound", return_value=fake_sound),
+            patch.object(audio_backend, "_MUSIC_ACTIVE_CHANNEL_INDEX", None),
+            patch.object(audio_backend, "_MUSIC_CHANNEL_MODE", False),
+            patch.object(audio_backend, "_MUSIC_TRANSITION_TOKEN", 0),
+            patch.object(audio_backend, "_MCI_MUSIC_OPEN", False),
+        ):
+            self.assertTrue(audio_backend.play_pygame_channel_music(Path("town.mp3"), fade_ms=800))
+
+        self.assertEqual(fake_mixer.channels[0].play_calls, [])
+        self.assertEqual(fake_mixer.channels[0].volumes, [0.0])
+        self.assertEqual(len(threads), 1)
+        self.assertIs(threads[0][0], audio_backend._finish_sequential_transition)
+        self.assertEqual(threads[0][1][1:6], (None, 0, fake_sound, -1, 800))
+        self.assertTrue(threads[0][2])
+        self.assertEqual(fake_mixer.music.load_calls, [])
+        self.assertEqual(fake_mixer.music.play_calls, [])
+
+    def test_pygame_music_stream_fades_out_waits_then_fades_in_next_track(self) -> None:
+        calls: list[tuple[object, ...]] = []
+        sleeps: list[float] = []
+
+        class FakeMusic:
+            def get_busy(self) -> bool:
+                return True
+
+            def fadeout(self, fade_ms: int) -> None:
+                calls.append(("fadeout", fade_ms))
+
+            def unload(self) -> None:
+                calls.append(("unload",))
+
+            def load(self, path: str) -> None:
+                calls.append(("load", Path(path).name))
+
+            def play(self, **kwargs: int) -> None:
+                calls.append(("play", kwargs))
+
+        class FakeChannel:
+            def stop(self) -> None:
+                calls.append(("channel_stop",))
+
+        class FakeMixer:
+            def __init__(self) -> None:
+                self.music = FakeMusic()
+                self.channels = {0: FakeChannel(), 1: FakeChannel()}
+
+            def get_init(self) -> tuple[int, int, int]:
+                return (44100, -16, 2)
+
+            def Channel(self, index: int) -> FakeChannel:
+                return self.channels[index]
+
+        fake_pygame = SimpleNamespace(error=RuntimeError, mixer=FakeMixer())
+        with (
+            patch.object(audio_backend, "pygame", fake_pygame),
+            patch.object(audio_backend.time, "sleep", sleeps.append),
+            patch.object(audio_backend, "_MUSIC_ACTIVE_CHANNEL_INDEX", None),
+            patch.object(audio_backend, "_MUSIC_CHANNEL_MODE", False),
+            patch.object(audio_backend, "_MUSIC_TRANSITION_TOKEN", 0),
+            patch.object(audio_backend, "_MCI_MUSIC_OPEN", False),
+        ):
+            self.assertTrue(audio_backend.play_music(Path("next_theme.mp3"), fade_ms=2500, curve="linear"))
+
+        self.assertEqual(sleeps, [2.5 + audio_backend._MUSIC_SILENCE_GAP_SECONDS])
+        self.assertEqual(
+            calls,
+            [
+                ("channel_stop",),
+                ("channel_stop",),
+                ("fadeout", 2500),
+                ("unload",),
+                ("load", "next_theme.mp3"),
+                ("play", {"loops": -1, "fade_ms": 2500}),
+            ],
+        )
+
+    def test_pygame_channel_music_fades_out_then_starts_next_track(self) -> None:
+        events: list[tuple[object, ...]] = []
+
+        class FakeChannel:
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            def set_volume(self, volume: float) -> None:
+                events.append((self.name, "volume", round(volume, 3)))
+
+            def stop(self) -> None:
+                events.append((self.name, "stop"))
+
+            def play(self, sound: object, *, loops: int = 0) -> None:
+                events.append((self.name, "play", sound, loops))
+
+        class FakeMixer:
+            def __init__(self) -> None:
+                self.channels = {0: FakeChannel("old"), 1: FakeChannel("new")}
+
+            def get_init(self) -> tuple[int, int, int]:
+                return (44100, -16, 2)
+
+            def Channel(self, index: int) -> FakeChannel:
+                return self.channels[index]
+
+        fake_pygame = SimpleNamespace(error=RuntimeError, mixer=FakeMixer())
+        fake_sound = object()
+        sleeps: list[float] = []
+        with (
+            patch.object(audio_backend, "pygame", fake_pygame),
+            patch.object(audio_backend, "_MUSIC_TRANSITION_TOKEN", 1),
+            patch.object(audio_backend, "_MUSIC_ACTIVE_CHANNEL_INDEX", 0),
+            patch.object(audio_backend.time, "perf_counter", side_effect=[0.0, 0.0, 1.0, 1.0, 1.0, 2.0]),
+            patch.object(audio_backend.time, "sleep", sleeps.append),
+        ):
+            audio_backend._finish_sequential_transition(1, 0, 1, fake_sound, -1, 1000, "linear")
+
+        old_stop_index = events.index(("old", "stop"))
+        new_play_index = events.index(("new", "play", fake_sound, -1))
+        self.assertLess(old_stop_index, new_play_index)
+        self.assertEqual(events[old_stop_index - 1], ("old", "volume", 0.0))
+        self.assertEqual(events[new_play_index - 1], ("new", "volume", 0.0))
+        self.assertIn(("new", "volume", 1.0), events[new_play_index + 1 :])
+        self.assertIn(audio_backend._MUSIC_SILENCE_GAP_SECONDS, sleeps)
+
     def test_music_transition_profiles_match_scene_energy(self) -> None:
+        self.assertEqual(MUSIC_TRANSITION_CURVE, "linear")
         self.assertEqual(music_transition_seconds("wilderness", "combat"), MUSIC_COMBAT_TRANSITION_SECONDS)
         self.assertEqual(music_transition_seconds("dungeon", "boss_combat"), MUSIC_BOSS_TRANSITION_SECONDS)
         self.assertEqual(music_transition_seconds("combat", "city"), MUSIC_COMBAT_EXIT_TRANSITION_SECONDS)
+        self.assertEqual(music_transition_seconds("wilderness", "random_encounter"), MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS)
+        self.assertEqual(music_transition_seconds("city", "inn"), MUSIC_LOCAL_TRANSITION_SECONDS)
+        self.assertEqual(music_transition_seconds("wilderness", "dungeon"), MUSIC_AREA_TRANSITION_SECONDS)
+        self.assertLess(MUSIC_BOSS_TRANSITION_SECONDS, MUSIC_COMBAT_TRANSITION_SECONDS)
+        self.assertLess(MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS, MUSIC_COMBAT_EXIT_TRANSITION_SECONDS)
         self.assertGreater(music_transition_seconds("city", "dungeon"), MUSIC_COMBAT_TRANSITION_SECONDS)
 
     def test_play_music_for_context_passes_contextual_crossfade(self) -> None:
@@ -280,6 +512,74 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(kwargs["curve"], MUSIC_TRANSITION_CURVE)
         self.assertEqual(game._music_context, "combat")
         self.assertEqual(game._music_track_name, "combat.mp3")
+
+    def test_refresh_scene_music_fades_in_main_menu_by_default(self) -> None:
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9003150))
+        game.music_enabled = True
+        game._music_supported = True
+        game._music_context = None
+        game._music_track_name = None
+        game.choose_music_file = lambda context: Path(f"{context}.mp3")
+
+        with patch.object(audio_backend, "play_music", return_value=True) as play_music:
+            game.refresh_scene_music(default_to_menu=True)
+
+        play_music.assert_called_once()
+        track_path, kwargs = play_music.call_args.args[0], play_music.call_args.kwargs
+        self.assertEqual(track_path, Path("main_menu.mp3"))
+        self.assertEqual(kwargs["fade_ms"], int(MUSIC_INITIAL_FADE_SECONDS * 1000))
+        self.assertEqual(kwargs["curve"], MUSIC_TRANSITION_CURVE)
+        self.assertEqual(game._music_context, "main_menu")
+        self.assertEqual(game._music_track_name, "main_menu.mp3")
+
+    def test_rapid_combat_scene_random_encounter_music_transitions_all_fire(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9003151))
+        game.state = GameState(player=player, current_scene="road_ambush")
+        game.music_enabled = True
+        game._music_supported = True
+        game._music_context = "wilderness"
+        game._music_track_name = "wilderness_old.mp3"
+        game._last_music_transition_at = 90.0
+        calls: list[tuple[str, int, str]] = []
+        game.choose_music_file = lambda context: Path(f"{context}_{len(calls)}.mp3")
+
+        def capture_music(path: Path, **kwargs: object) -> bool:
+            calls.append((path.name, int(kwargs["fade_ms"]), str(kwargs["curve"])))
+            return True
+
+        encounter = Encounter(
+            title="Roadside Snap Fight",
+            description="The danger arrives before the dust settles.",
+            enemies=[],
+        )
+        with (
+            patch("dnd_game.gameplay.music.time.perf_counter", side_effect=[100.0, 100.12, 100.24]),
+            patch.object(audio_backend, "play_music", side_effect=capture_music),
+        ):
+            game.play_encounter_music(encounter)
+            game.refresh_scene_music()
+            game._random_encounter_active = True
+            game.refresh_scene_music()
+
+        self.assertEqual(
+            calls,
+            [
+                ("combat_0.mp3", int(MUSIC_COMBAT_TRANSITION_SECONDS * 1000), MUSIC_TRANSITION_CURVE),
+                ("wilderness_1.mp3", int(MUSIC_COMBAT_EXIT_TRANSITION_SECONDS * 1000), MUSIC_TRANSITION_CURVE),
+                ("random_encounter_2.mp3", int(MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS * 1000), MUSIC_TRANSITION_CURVE),
+            ],
+        )
+        self.assertEqual(game._music_context, "random_encounter")
+        self.assertEqual(game._music_track_name, "random_encounter_2.mp3")
+        self.assertEqual(game._last_music_transition_at, 100.24)
 
     def test_stop_music_fades_to_silence(self) -> None:
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900316))
@@ -1838,6 +2138,7 @@ class CoreTests(unittest.TestCase):
         game._old_owl_supply_trench(dungeon, dungeon.rooms["supply_trench"])
         self.assertTrue(game.state.flags["hidden_route_unlocked"])
         self.assertTrue(game.state.flags["old_owl_notes_found"])
+        self.assertTrue(game.state.flags["varyn_filter_logic_seen"])
         self.assertEqual(game.act1_metric_value("act1_ashen_strength"), 3)
         self.assertTrue(any("Cinderfall" in clue for clue in game.state.clues))
 
@@ -1941,6 +2242,7 @@ class CoreTests(unittest.TestCase):
         game._wyvern_high_shelf(dungeon, dungeon.rooms["high_shelf"])
         boss_encounter = encounters[-1]
         self.assertTrue(game.state.flags["wyvern_beast_stampede"])
+        self.assertTrue(game.state.flags["varyn_detour_logic_seen"])
         self.assertIn("surprised", boss_encounter.enemies[1].conditions)
         self.assertLess(boss_encounter.enemies[1].current_hp, boss_encounter.enemies[1].max_hp)
 
@@ -2016,6 +2318,338 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(len(encounters[1].enemies), 3)
         self.assertGreater(encounters[1].enemies[0].max_hp, 29)
 
+    def test_tresendar_nothic_kill_route_records_choice_and_tolan_approval(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        tolan = create_tolan_ironshield()
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008341))
+        game.state = GameState(player=player, companions=[tolan], current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.scenario_choice = lambda prompt, options, **kwargs: 1  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_route"], "kill")
+        self.assertTrue(game.state.flags["tresendar_nothic_tolan_kill_approved"])
+        self.assertEqual(tolan.disposition, 1)
+        self.assertEqual(len(encounters), 1)
+
+    def test_tresendar_nothic_deception_failure_sets_ambush_fallback(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Charlatan",
+            base_ability_scores={"STR": 14, "DEX": 14, "CON": 13, "INT": 10, "WIS": 10, "CHA": 15},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "4", output_fn=lambda _: None, rng=random.Random(9008342))
+        game.state = GameState(player=player, current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.scenario_choice = lambda prompt, options, **kwargs: 4  # type: ignore[method-assign]
+        game.skill_check = lambda actor, skill, dc, context: False  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_route"], "deceive")
+        self.assertTrue(game.state.flags["tresendar_nothic_deception_failed"])
+        self.assertEqual(encounters[0].enemy_initiative_bonus, 2)
+        self.assertIn("surprised", player.conditions)
+        self.assertIn("reeling", player.conditions)
+
+    def test_tresendar_nothic_memory_trade_reads_background_and_costs_player(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Cleric",
+            background="Acolyte",
+            base_ability_scores={"STR": 10, "DEX": 12, "CON": 13, "INT": 10, "WIS": 15, "CHA": 14},
+            class_skill_choices=["Insight", "Medicine"],
+        )
+        log: list[str] = []
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(9008343))
+        game.state = GameState(player=player, current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_memory_trade(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "TRADE")
+            if prompt == "What price do you let the Cistern Eye taste?":
+                return self.option_index_containing(options, "memory from your own past")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_memory_trade  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        rendered = self.plain_output(log)
+        self.assertIn("You washed blood from temple cloth", rendered)
+        self.assertEqual(game.state.flags["tresendar_nothic_route"], "trade")
+        self.assertEqual(game.state.flags["tresendar_nothic_trade"], "memory")
+        self.assertTrue(game.state.flags["tresendar_nothic_memory_paid"])
+        self.assertTrue(game.state.flags["tresendar_nothic_trade_info_gained"])
+        self.assertEqual(game.state.flags["deep_ledger_hint_count"], 1)
+        self.assertIn("reeling", player.conditions)
+        self.assertTrue(any("The Cistern Eye names Emberhall" in clue for clue in game.state.clues))
+        self.assertEqual(encounters[0].hero_initiative_bonus, 0)
+
+    def test_tresendar_nothic_self_truth_trade_grants_clear_eyed_wound(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Wizard",
+            background="Sage",
+            base_ability_scores={"STR": 8, "DEX": 13, "CON": 12, "INT": 15, "WIS": 14, "CHA": 10},
+            class_skill_choices=["Arcana", "History"],
+        )
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008344))
+        game.state = GameState(player=player, current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_truth_trade(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "TRADE")
+            if prompt == "What price do you let the Cistern Eye taste?":
+                return self.option_index_containing(options, "truth I keep walking around")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_truth_trade  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_trade"], "self_truth")
+        self.assertTrue(game.state.flags["tresendar_nothic_self_truth_spoken"])
+        self.assertEqual(player.story_skill_bonuses, {"Arcana": 1, "Insight": 1, "Persuasion": 1})
+        self.assertEqual(encounters[0].hero_initiative_bonus, 1)
+        self.assertIn(
+            "Clear-Eyed Wound grants +1 Arcana, +1 Insight, and +1 Persuasion through the Act 1 finale.",
+            game.state.journal,
+        )
+
+    def test_tresendar_nothic_bryn_betrayal_exposes_secret_and_penalizes_active_quest(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        bryn = create_bryn_underbough()
+        bryn.disposition = 3
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008345))
+        game.state = GameState(player=player, companions=[bryn], current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        game.grant_quest("bryn_loose_ends")
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_bryn_trade(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "TRADE")
+            if prompt == "What price do you let the Cistern Eye taste?":
+                return self.option_index_containing(options, "BETRAY BRYN")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_bryn_trade  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_trade"], "betray_bryn")
+        self.assertTrue(game.state.flags["bryn_secret_exposed"])
+        self.assertTrue(game.state.flags["tresendar_nothic_trade_info_gained"])
+        self.assertEqual(bryn.disposition, 0)
+        self.assertEqual(len(encounters), 1)
+
+    def test_tresendar_nothic_rhogar_betrayal_sets_conflict_arc(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        rhogar = create_rhogar_valeguard()
+        rhogar.disposition = 4
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008346))
+        game.state = GameState(player=player, companions=[rhogar], current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_rhogar_trade(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "TRADE")
+            if prompt == "What price do you let the Cistern Eye taste?":
+                return self.option_index_containing(options, "BETRAY RHOGAR")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_rhogar_trade  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_trade"], "betray_rhogar")
+        self.assertTrue(game.state.flags["rhogar_secret_exposed"])
+        self.assertTrue(game.state.flags["rhogar_cistern_conflict_pending"])
+        self.assertEqual(rhogar.disposition, 2)
+        self.assertEqual(len(encounters), 1)
+
+    def test_tresendar_nothic_bargain_tier_two_reveals_cinderfall_and_costs_trust(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Outlander",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        bryn = create_bryn_underbough()
+        tolan = create_tolan_ironshield()
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008347))
+        game.state = GameState(
+            player=player,
+            companions=[bryn, tolan],
+            current_scene="tresendar_manor",
+            flags={"tresendar_revealed": True, "cinderfall_relay_destroyed": True},
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_cinderfall_bargain(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "every secret")
+            if prompt == "The Eye's first truth leaves another shape under the water.":
+                return self.option_index_containing(options, "Cinderfall")
+            if prompt == "The second truth tastes like ash, but the Eye is still grinning.":
+                return self.option_index_containing(options, "Stop before")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_cinderfall_bargain  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_route"], "bargain")
+        self.assertEqual(game.state.flags["tresendar_nothic_bargain_tier"], 2)
+        self.assertEqual(game.state.flags["tresendar_nothic_sanity_cost"], 2)
+        self.assertTrue(game.state.flags["tresendar_nothic_cinderfall_lore"])
+        self.assertNotIn("tresendar_nothic_wave_echo_lore", game.state.flags)
+        self.assertEqual(game.state.flags["deep_ledger_hint_count"], 2)
+        self.assertTrue(any("destroying it cut Ashfall's reserve channel" in clue for clue in game.state.clues))
+        self.assertIn("reeling", player.conditions)
+        self.assertIn("frightened", player.conditions)
+        self.assertEqual(bryn.disposition, -1)
+        self.assertEqual(tolan.disposition, -1)
+        self.assertEqual(encounters[0].enemy_initiative_bonus, 1)
+
+    def test_tresendar_nothic_bargain_tier_three_reveals_wave_echo_and_whispers_through(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        rhogar = create_rhogar_valeguard()
+        rhogar.disposition = 4
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9008348))
+        game.state = GameState(player=player, companions=[rhogar], current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+
+        def choose_wave_echo_bargain(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The Cistern Eye waits to learn what kind of answer you are.":
+                return self.option_index_containing(options, "every secret")
+            if prompt == "The Eye's first truth leaves another shape under the water.":
+                return self.option_index_containing(options, "Cinderfall")
+            if prompt == "The second truth tastes like ash, but the Eye is still grinning.":
+                return self.option_index_containing(options, "past the Ashen Brand")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_wave_echo_bargain  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_bargain_tier"], 3)
+        self.assertEqual(game.state.flags["tresendar_nothic_sanity_cost"], 3)
+        self.assertTrue(game.state.flags["tresendar_nothic_cinderfall_lore"])
+        self.assertTrue(game.state.flags["tresendar_nothic_wave_echo_lore"])
+        self.assertTrue(game.state.flags["tresendar_nothic_bargain_whispered_through"])
+        self.assertEqual(game.state.flags["deep_ledger_hint_count"], 3)
+        self.assertTrue(any("keeping Wave Echo unreachable" in clue for clue in game.state.clues))
+        self.assertTrue(any("Forge of Spells can listen" in clue for clue in game.state.clues))
+        self.assertEqual(player.story_skill_bonuses, {"Insight": -1, "Persuasion": -1})
+        self.assertEqual(player.conditions["reeling"], 2)
+        self.assertEqual(player.conditions["frightened"], 2)
+        self.assertEqual(rhogar.disposition, 2)
+        self.assertEqual(encounters[0].enemy_initiative_bonus, 3)
+
+    def test_tresendar_nothic_deception_success_grants_full_lore_without_sanity_cost(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Rogue",
+            background="Charlatan",
+            base_ability_scores={"STR": 8, "DEX": 15, "CON": 12, "INT": 10, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Acrobatics", "Perception", "Sleight of Hand", "Stealth"],
+        )
+        encounters: list[Encounter] = []
+        game = TextDnDGame(input_fn=lambda _: "4", output_fn=lambda _: None, rng=random.Random(9008349))
+        game.state = GameState(player=player, current_scene="tresendar_manor", flags={"tresendar_revealed": True})
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.scenario_choice = lambda prompt, options, **kwargs: 4  # type: ignore[method-assign]
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game._tresendar_nothic_lair(dungeon, dungeon.rooms["nothic_lair"])
+
+        self.assertEqual(game.state.flags["tresendar_nothic_route"], "deceive")
+        self.assertTrue(game.state.flags["tresendar_nothic_deceived"])
+        self.assertTrue(game.state.flags["tresendar_nothic_trade_info_gained"])
+        self.assertTrue(game.state.flags["tresendar_nothic_cinderfall_lore"])
+        self.assertTrue(game.state.flags["tresendar_nothic_wave_echo_lore"])
+        self.assertEqual(game.state.flags["deep_ledger_hint_count"], 3)
+        self.assertNotIn("tresendar_nothic_sanity_cost", game.state.flags)
+        self.assertEqual(player.conditions, {})
+        self.assertEqual(player.story_skill_bonuses, {})
+        self.assertEqual(encounters[0].hero_initiative_bonus, 2)
+        self.assertIn("reeling", encounters[0].enemies[0].conditions)
+
     def test_emberhall_and_forge_encounters_reinforce_for_full_party(self) -> None:
         player = build_character(
             name="Vale",
@@ -2073,6 +2707,69 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(encounters[6].title, "Boss: Sister Caldra Voss")
         self.assertEqual(len(encounters[6].enemies), 4)
         self.assertGreater(encounters[6].enemies[0].max_hp, 42)
+
+    def test_varyn_finale_records_route_displacement_without_killing_act1_victory(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "3", output_fn=log.append, rng=random.Random(9008351))
+        game.state = GameState(
+            player=player,
+            current_scene="emberhall_cellars",
+            flags={
+                "emberhall_ledger_read": True,
+                "act1_town_fear": 4,
+                "act1_ashen_strength": 3,
+                "act1_survivors_saved": 0,
+            },
+        )
+        game.ensure_state_integrity()
+        dungeon = game.current_act1_dungeon()
+        assert dungeon is not None
+        game.run_encounter = lambda encounter: "victory"  # type: ignore[method-assign]
+        game.save_game = lambda slot_name: ""  # type: ignore[method-assign]
+
+        game._emberhall_varyn_sanctum(dungeon, dungeon.rooms["varyn_sanctum"])
+
+        rendered = self.plain_output(log)
+        self.assertTrue(game.state.flags["varyn_body_defeated_act1"])
+        self.assertTrue(game.state.flags["varyn_route_displaced"])
+        self.assertTrue(game.state.flags["act1_ashen_brand_broken"])
+        self.assertTrue(game.state.flags["emberhall_impossible_exit_seen"])
+        self.assertEqual(game.state.flags["act1_victory_tier"], "fractured_victory")
+        self.assertIn("folds the wrong way", rendered)
+        self.assertIn("appears in the ledger only after Varyn is gone", rendered)
+        self.assertNotIn("Varyn is dead", rendered)
+
+    def test_pre_act3_runtime_text_does_not_name_secret_villain(self) -> None:
+        runtime_paths = [
+            Path("dnd_game/gameplay/story_intro.py"),
+            Path("dnd_game/gameplay/story_act1_expanded.py"),
+            Path("dnd_game/gameplay/story_act2_scaffold.py"),
+            Path("dnd_game/gameplay/story_act3_scaffold.py"),
+            Path("dnd_game/gameplay/map_system.py"),
+        ]
+        forbidden_terms = ("Malzurath", "Keeper of the Ninth Ledger", "Quiet Architect", "true master", "second villain")
+        runtime_chunks: list[str] = []
+        for path in runtime_paths:
+            text = path.read_text(encoding="utf-8")
+            if path.name == "story_act3_scaffold.py":
+                text = re.sub(
+                    r"# ACT3_POST_REVEAL_TEXT_START.*?# ACT3_POST_REVEAL_TEXT_END",
+                    "",
+                    text,
+                    flags=re.S,
+                )
+            runtime_chunks.append(text)
+        runtime_text = "\n".join(runtime_chunks)
+        for term in forbidden_terms:
+            self.assertNotIn(term, runtime_text)
 
     def test_black_lake_barracks_raid_removes_forge_reserve_without_strong_gear(self) -> None:
         player = build_character(
@@ -3043,6 +3740,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(game.state.flags["wave_echo_reached"])
         self.assertTrue(game.state.flags["quiet_choir_identified"])
         self.assertTrue(game.state.flags["irielle_contact_made"])
+        self.assertTrue(game.state.flags["counter_cadence_known"])
         self.assertEqual(game.state.flags["act2_captive_outcome"], "few_saved")
         self.assertIsNotNone(game.find_companion("Irielle Ashwake"))
         self.assertCountEqual(
@@ -3333,6 +4031,10 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(game.state.flags["forge_lens_mapped"])
         self.assertTrue(game.state.flags["caldra_defeated"])
         self.assertTrue(game.state.flags["irielle_counter_cadence"])
+        self.assertTrue(game.state.flags["counter_cadence_known"])
+        self.assertTrue(game.state.flags["act3_signal_carried"])
+        self.assertTrue(game.state.flags["act3_lens_understood"])
+        self.assertNotIn("act3_lens_blinded", game.state.flags)
         self.assertCountEqual(
             game.state.flags["act2_map_state"]["cleared_rooms"],
             ["forge_threshold", "shard_channels", "resonance_lens", "caldra_dais"],
@@ -3358,6 +4060,7 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("The chamber's still honest in the margins. Read the traffic, not the glow", rendered)
         self.assertIn("The lens wants one obedience note under everything else.", rendered)
+        self.assertIn("The Forge does not create. It clarifies.", rendered)
 
     def test_act2_status_and_journal_summarize_rescues_and_route_intel(self) -> None:
         player = build_character(
@@ -3501,6 +4204,8 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(state.flags["act3_forge_route_state"], "broken")
         self.assertEqual(state.flags["act3_forge_subroutes_cleared"], ["forge_choir_pit_silenced", "forge_pact_rhythm_found"])
         self.assertEqual(state.flags["act3_forge_lens_state"], "mapped")
+        self.assertTrue(state.flags["act3_lens_understood"])
+        self.assertNotIn("act3_lens_blinded", state.flags)
         self.assertIn("hazardous cargo corridors that must stay locked down.", rendered)
         self.assertIn("Inside the Forge, you silenced the choir pit and recovered the Pact anvil's rhythm", rendered)
         self.assertIn("one live subroute stayed dangerous to the end.", rendered)
@@ -3508,6 +4213,332 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Act 3 inherits a Forge where you already silenced the choir pit", rendered)
         self.assertIn("one forge line still escaped a clean ruin.", rendered)
         self.assertIn("reliable read on how Caldra held witness, ritual", rendered)
+
+    def test_act2_record_epilogue_flags_marks_carried_signal_and_blind_lens(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900872))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            flags={
+                "act2_town_stability": 3,
+                "act2_route_control": 3,
+                "act2_whisper_pressure": 4,
+                "caldra_defeated": True,
+            },
+        )
+
+        game.act2_record_epilogue_flags()
+
+        assert game.state is not None
+        self.assertEqual(game.state.flags["act3_whisper_state"], "carried_out")
+        self.assertEqual(game.state.flags["act3_forge_lens_state"], "shattered_blind")
+        self.assertTrue(game.state.flags["act3_signal_carried"])
+        self.assertTrue(game.state.flags["act3_lens_blinded"])
+        self.assertNotIn("act3_lens_understood", game.state.flags)
+
+    def test_sabotage_night_records_midpoint_pattern_from_choice(self) -> None:
+        pattern_cases = [
+            (1, "pattern_preserves_institutions"),
+            (2, "pattern_preserves_people"),
+            (3, "pattern_hunts_systems"),
+        ]
+        pattern_flags = [expected for _, expected in pattern_cases]
+        for choice, expected_flag in pattern_cases:
+            with self.subTest(choice=choice):
+                player = build_character(
+                    name="Vale",
+                    race="Human",
+                    class_name="Fighter",
+                    background="Soldier",
+                    base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+                    class_skill_choices=["Athletics", "Survival"],
+                )
+                game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900873 + choice))
+                game.state = GameState(
+                    player=player,
+                    current_act=2,
+                    current_scene="act2_midpoint_convergence",
+                    flags={
+                        "act2_started": True,
+                        "agatha_truth_secured": True,
+                        "stonehollow_dig_cleared": True,
+                        "woodland_survey_cleared": True,
+                        "act2_town_stability": 3,
+                        "act2_route_control": 3,
+                        "act2_whisper_pressure": 2,
+                    },
+                )
+                game.scenario_choice = lambda prompt, options, **kwargs: choice  # type: ignore[method-assign]
+                game.skill_check = lambda actor, skill, dc, context: False  # type: ignore[method-assign]
+                game.run_encounter = lambda encounter: "victory"  # type: ignore[method-assign]
+
+                game.scene_act2_midpoint_convergence()
+
+                assert game.state is not None
+                self.assertTrue(game.state.flags[expected_flag])
+                self.assertEqual([flag for flag in pattern_flags if game.state.flags.get(flag)], [expected_flag])
+                self.assertNotIn("act2_midpoint_priority", game.state.flags)
+
+    def test_act3_scaffold_map_integrity_formula_uses_existing_handoff_flags(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900874))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            flags={
+                "act1_victory_tier": "clean_victory",
+                "act3_claims_balance": "secured",
+                "act3_forge_route_state": "mastered",
+                "act3_forge_lens_state": "mapped",
+                "act3_whisper_state": "lingering",
+            },
+        )
+        self.assertEqual(game.act3_map_integrity(), 5)
+
+        game.state.flags = {
+            "act1_victory_tier": "fractured_victory",
+            "act3_claims_balance": "chaotic",
+            "act3_forge_route_state": "direct",
+            "act3_forge_lens_state": "shattered_blind",
+            "act3_whisper_state": "carried_out",
+        }
+        self.assertEqual(game.act3_map_integrity(), 1)
+
+    def test_act3_scaffold_player_pattern_profile_derives_varyn_read(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        profile_cases = [
+            (
+                {
+                    "pattern_preserves_people": True,
+                    "elira_mercy_blessing": True,
+                    "act2_sponsor": "wardens",
+                    "act2_first_late_route": "south_adit",
+                },
+                "mercy_first",
+            ),
+            (
+                {
+                    "pattern_hunts_systems": True,
+                    "act2_first_late_route": "broken_prospect",
+                    "act2_sponsor": "lionshield",
+                },
+                "route_first",
+            ),
+            ({}, "balanced"),
+        ]
+        for flags, expected_profile in profile_cases:
+            with self.subTest(expected_profile=expected_profile):
+                game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900875))
+                game.state = GameState(player=player, current_act=3, flags=dict(flags))
+                self.assertEqual(game.act3_player_pattern_profile(), expected_profile)
+
+    def test_act3_scaffold_records_setup_flags_and_round_trips(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        bryn = create_bryn_underbough()
+        bryn.disposition = 6
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900876))
+        game.state = GameState(
+            player=player,
+            companions=[bryn],
+            current_act=2,
+            flags={
+                "act1_victory_tier": "clean_victory",
+                "act3_claims_balance": "secured",
+                "act3_forge_route_state": "broken",
+                "act3_forge_lens_state": "mapped",
+                "act3_whisper_state": "lingering",
+                "counter_cadence_known": True,
+                "act3_lens_understood": True,
+                "pattern_preserves_institutions": True,
+                "act2_sponsor": "lionshield",
+                "bryn_ledger_burned": True,
+                "bryn_loose_ends_resolved": True,
+            },
+        )
+
+        game.act3_record_scaffold_flags()
+
+        assert game.state is not None
+        self.assertEqual(game.state.current_act, 3)
+        self.assertTrue(game.state.flags["act3_started"])
+        self.assertFalse(game.state.flags["malzurath_revealed"])
+        self.assertTrue(game.state.flags["act3_varyn_apparent_primary"])
+        self.assertEqual(game.state.flags["act3_map_integrity"], 5)
+        self.assertEqual(game.state.flags["player_pattern_profile"], "institution_first")
+        self.assertEqual(game.state.flags["unrecorded_choice_tokens"], 5)
+        self.assertNotIn("ninth_ledger_pressure", game.state.flags)
+
+        restored = GameState.from_dict(game.state.to_dict())
+        self.assertEqual(restored.flags["act3_map_integrity"], 5)
+        self.assertEqual(restored.flags["player_pattern_profile"], "institution_first")
+        self.assertEqual(restored.flags["unrecorded_choice_tokens"], 5)
+        self.assertTrue(restored.flags["act3_varyn_apparent_primary"])
+
+    def test_act3_hidden_pressure_label_stays_masked_before_reveal(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        label_cases = [
+            ({"act3_signal_carried": True}, "Signal Pressure"),
+            ({"act3_whisper_state": "lingering"}, "Whisper Pressure"),
+            ({}, "Map Pressure"),
+        ]
+        for flags, expected_label in label_cases:
+            with self.subTest(expected_label=expected_label):
+                game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900877))
+                game.state = GameState(player=player, current_act=3, flags=dict(flags))
+                label = game.act3_hidden_pressure_label()
+                self.assertEqual(label, expected_label)
+                self.assertNotIn("Ninth Ledger", label)
+
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900878))
+        game.state = GameState(player=player, current_act=3, flags={"malzurath_revealed": True})
+        self.assertEqual(game.act3_hidden_pressure_label(), "Ninth Ledger Pressure")
+
+    def test_act3_ninth_ledger_opens_reveals_secret_villain_and_converts_pressure(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        irielle = create_irielle_ashwake()
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(900879))
+        game.state = GameState(
+            player=player,
+            companions=[irielle],
+            current_act=3,
+            current_scene="act3_ninth_ledger_opens",
+            flags={
+                "act1_victory_tier": "clean_victory",
+                "act3_claims_balance": "secured",
+                "act3_forge_route_state": "broken",
+                "act3_forge_lens_state": "mapped",
+                "act3_whisper_state": "carried_out",
+                "act3_signal_carried": True,
+                "act3_lens_understood": True,
+                "counter_cadence_known": True,
+                "pattern_hunts_systems": True,
+                "act2_first_late_route": "broken_prospect",
+            },
+        )
+        game.scenario_choice = lambda prompt, options, **kwargs: 2  # type: ignore[method-assign]
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+
+        game.scene_act3_ninth_ledger_opens()
+
+        assert game.state is not None
+        self.assertTrue(game.state.flags["malzurath_revealed"])
+        self.assertTrue(game.state.flags["act3_ninth_ledger_opened"])
+        self.assertFalse(game.state.flags["act3_varyn_apparent_primary"])
+        self.assertTrue(game.state.flags["act3_reveal_false_author_named"])
+        self.assertEqual(game.state.flags["act3_reveal_profile_named"], "route_first")
+        self.assertEqual(game.state.flags["ninth_ledger_pressure"], 1)
+        self.assertEqual(game.state.flags["unrecorded_choice_tokens"], 2)
+        self.assertEqual(game.state.current_scene, "act3_ninth_ledger_aftermath")
+        self.assertTrue(
+            any("Malzurath, Keeper of the Ninth Ledger, has been using route logic" in clue for clue in game.state.clues)
+        )
+        rendered = self.plain_output(log)
+        self.assertIn("No. That route is not mine.", rendered)
+        self.assertIn("Malzurath, Keeper of the Ninth Ledger", rendered)
+        self.assertIn("Ninth Ledger Pressure 1/5", rendered)
+
+    def test_act3_ninth_ledger_pressure_rewards_lens_and_counter_cadence(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900880))
+        game.state = GameState(
+            player=player,
+            current_act=3,
+            flags={
+                "act3_signal_carried": True,
+                "act3_whisper_state": "carried_out",
+                "act3_lens_blinded": True,
+                "act3_forge_lens_state": "shattered_blind",
+                "act3_map_integrity": 1,
+            },
+        )
+        self.assertEqual(game.act3_ninth_ledger_pressure(), 5)
+
+        game.state.flags = {
+            "act3_signal_carried": True,
+            "act3_whisper_state": "carried_out",
+            "act3_lens_understood": True,
+            "act3_forge_lens_state": "mapped",
+            "counter_cadence_known": True,
+            "act3_map_integrity": 5,
+            "act3_reveal_resistance_bonus": 1,
+        }
+        self.assertEqual(game.act3_ninth_ledger_pressure(), 1)
+
+    def test_act3_unrecorded_choice_tokens_can_be_spent_after_reveal(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900881))
+        game.state = GameState(player=player, current_act=3, flags={"unrecorded_choice_tokens": 1})
+        self.assertFalse(game.act3_use_unrecorded_choice_token("before reveal"))
+        self.assertEqual(game.state.flags["unrecorded_choice_tokens"], 1)
+
+        game.state.flags["malzurath_revealed"] = True
+        self.assertTrue(game.act3_use_unrecorded_choice_token("refuse a recorded outcome"))
+        self.assertEqual(game.state.flags["unrecorded_choice_tokens"], 0)
+        self.assertIn("Unrecorded choice spent: refuse a recorded outcome", game.state.journal)
+        self.assertFalse(game.act3_use_unrecorded_choice_token("no tokens left"))
+
+    def test_act3_reveal_scene_is_registered_in_scene_handlers(self) -> None:
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900882))
+        self.assertIn("act3_ninth_ledger_opens", game._scene_handlers)
+        self.assertIn("act3_ninth_ledger_aftermath", game._scene_handlers)
 
     def test_help_menu_lists_map_command(self) -> None:
         player = build_character(
@@ -3554,6 +4585,12 @@ class CoreTests(unittest.TestCase):
         state = GameState(
             player=player,
             current_scene="phandalin_hub",
+            flags={
+                "varyn_body_defeated_act1": True,
+                "varyn_route_displaced": True,
+                "act1_ashen_brand_broken": True,
+                "deep_ledger_hint_count": 2,
+            },
             clues=["one"],
             journal=["entry"],
             xp=125,
@@ -3575,6 +4612,10 @@ class CoreTests(unittest.TestCase):
         restored = GameState.from_dict(loaded)
         self.assertEqual(restored.player.name, "Iri")
         self.assertEqual(restored.current_scene, "phandalin_hub")
+        self.assertTrue(restored.flags["varyn_body_defeated_act1"])
+        self.assertTrue(restored.flags["varyn_route_displaced"])
+        self.assertTrue(restored.flags["act1_ashen_brand_broken"])
+        self.assertEqual(restored.flags["deep_ledger_hint_count"], 2)
         self.assertEqual(restored.clues, ["one"])
         self.assertEqual(restored.xp, 125)
         self.assertEqual(restored.gold, 37)
@@ -3971,6 +5012,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(game.state.current_scene, "phandalin_hub")
         self.assertTrue(game.state.flags["cinderfall_ruins_cleared"])
         self.assertTrue(game.state.flags["cinderfall_relay_destroyed"])
+        self.assertTrue(game.state.flags["varyn_relay_broken"])
         self.assertEqual(game.state.flags["act1_ashen_strength"], 0)
         self.assertEqual(game.state.flags["act1_survivors_saved"], 3)
         self.assertEqual(game.state.flags["act1_town_fear"], 1)
@@ -4045,6 +5087,110 @@ class CoreTests(unittest.TestCase):
         )
         self.assertEqual(game.act1_record_epilogue_flags(), "fractured_victory")
         self.assertEqual(game.state.flags["act2_starting_pressure"], 4)
+
+    def test_edermath_old_cache_stealth_success_grants_reward_and_hook(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Rogue",
+            background="Criminal",
+            base_ability_scores={"STR": 8, "DEX": 15, "CON": 12, "INT": 10, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Acrobatics", "Perception", "Sleight of Hand", "Stealth"],
+            expertise_choices=["Stealth", "Perception"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(3031))
+        game.state = GameState(player=player, current_scene="phandalin_hub", inventory={})
+        checks: list[tuple[str, int, str]] = []
+        encounters: list[Encounter] = []
+        game.skill_check = lambda actor, skill, dc, context: checks.append((skill, dc, context)) or True  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game.run_edermath_old_cache_scene()
+
+        self.assertEqual(checks, [("Stealth", 12, "to reach Daran's buried adventuring cache without alerting the orchard watchers")])
+        self.assertEqual(encounters, [])
+        self.assertEqual(game.state.inventory["edermath_cache_compass"], 1)
+        self.assertEqual(game.state.gold, 12)
+        self.assertEqual(game.state.xp, 35)
+        self.assertTrue(game.state.flags["edermath_old_cache_recovered"])
+        self.assertTrue(game.state.flags["edermath_old_cache_quiet"])
+        self.assertTrue(game.state.flags["edermath_old_cache_trust"])
+        self.assertTrue(game.state.flags["act2_edermath_cache_routework"])
+
+    def test_edermath_old_cache_reacts_to_completed_wyvern_tor(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Rogue",
+            background="Criminal",
+            base_ability_scores={"STR": 8, "DEX": 15, "CON": 12, "INT": 10, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Acrobatics", "Perception", "Sleight of Hand", "Stealth"],
+            expertise_choices=["Stealth", "Perception"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(30311))
+        game.state = GameState(
+            player=player,
+            current_scene="phandalin_hub",
+            inventory={},
+            flags={"wyvern_tor_cleared": True},
+        )
+        game.skill_check = lambda actor, skill, dc, context: True  # type: ignore[method-assign]
+
+        game.run_edermath_old_cache_scene()
+
+        rendered = self.plain_output(log)
+        self.assertIn("After Wyvern Tor, I believe you can follow ugly ground", rendered)
+        self.assertIn("After Wyvern Tor, I hoped you knew patience as well as pressure", rendered)
+        self.assertTrue(game.state.flags["edermath_old_cache_recovered"])
+
+    def test_edermath_old_cache_failed_stealth_runs_watcher_encounter(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(3032))
+        game.state = GameState(player=player, current_scene="phandalin_hub", inventory={})
+        encounters: list[Encounter] = []
+        game.skill_check = lambda actor, skill, dc, context: False  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: encounters.append(encounter) or "victory"  # type: ignore[method-assign]
+
+        game.run_edermath_old_cache_scene()
+
+        self.assertEqual(len(encounters), 1)
+        self.assertEqual(encounters[0].title, "Edermath Orchard Watchers")
+        self.assertFalse(encounters[0].allow_post_combat_random_encounter)
+        self.assertEqual([enemy.archetype for enemy in encounters[0].enemies], ["brand_saboteur", "bandit_archer"])
+        self.assertEqual(game.state.inventory["edermath_cache_compass"], 1)
+        self.assertTrue(game.state.flags["edermath_old_cache_recovered"])
+        self.assertTrue(game.state.flags["edermath_old_cache_watchers_defeated"])
+        self.assertTrue(game.state.flags["edermath_old_cache_trust"])
+        self.assertTrue(game.state.flags["act2_edermath_cache_routework"])
+        self.assertNotIn("edermath_old_cache_quiet", game.state.flags)
+
+    def test_edermath_old_cache_routework_improves_act2_starting_control(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(3033))
+        game.state = GameState(player=player, current_act=2, flags={"act2_edermath_cache_routework": True})
+
+        game.act2_initialize_metrics(force=True)
+
+        self.assertEqual(game.state.flags["act2_route_control"], 3)
+        self.assertIn(
+            "Route intelligence: Daran's old cache map preserves a quiet orchard-to-highland control line.",
+            game.act2_campaign_focus_lines(),
+        )
 
     def test_turning_in_quest_grants_rewards(self) -> None:
         player = build_character(
@@ -4148,6 +5294,7 @@ class CoreTests(unittest.TestCase):
             "kestrel_ledger_clasp",
             "gravequiet_amulet",
             "edermath_scout_buckle",
+            "edermath_cache_compass",
             "bryns_cache_keyring",
             "dawnmantle_mercy_charm",
             "pact_waymap_case",
@@ -4642,6 +5789,8 @@ class CoreTests(unittest.TestCase):
         game.scene_high_road_false_tollstones()
         self.assertEqual(checks, [("Deception", 14)])
         self.assertTrue(game.state.flags["high_road_tollstones_ledger_taken"])
+        self.assertTrue(game.state.flags["system_profile_seeded"])
+        self.assertTrue(game.state.flags["varyn_route_pattern_seen"])
         self.assertEqual(game.state.flags["high_road_tollstones_resolution"], "deception")
         self.assertEqual(game.state.current_scene, "phandalin_hub")
 
@@ -4670,6 +5819,8 @@ class CoreTests(unittest.TestCase):
         game.scene_high_road_false_tollstones()
         self.assertTrue(game.state.flags["high_road_tollstones_blessing_used"])
         self.assertTrue(game.state.flags["high_road_tollstones_passphrase_known"])
+        self.assertTrue(game.state.flags["system_profile_seeded"])
+        self.assertTrue(game.state.flags["varyn_route_pattern_seen"])
         self.assertEqual(game.state.flags["high_road_tollstones_resolution"], "blessing")
         self.assertEqual(game.state.inventory.get("antitoxin_vial"), 1)
         self.assertEqual(game.state.xp, 25)
@@ -4677,6 +5828,121 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("[LIAR'S BLESSING]", rendered)
         self.assertIn("The false paint almost seems to arrange itself", rendered)
+
+    def test_cleared_high_road_can_branch_to_false_checkpoint(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(92171))
+        game.state = GameState(
+            player=player,
+            current_scene="road_ambush",
+            flags={"act1_started": True, "road_ambush_cleared": True},
+        )
+
+        def choose_checkpoint(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "Where do you go from the High Road?":
+                return self.option_index_containing(options, "false roadwarden checkpoint")
+            raise AssertionError(prompt)
+
+        game.scenario_choice = choose_checkpoint  # type: ignore[method-assign]
+
+        game.scene_road_ambush()
+
+        self.assertEqual(game.state.current_scene, "high_road_false_checkpoint")
+        self.assertEqual(game.state.flags["map_state"]["current_node_id"], "false_checkpoint")
+        rendered = self.plain_output(log)
+        self.assertIn("*Challenge the false roadwarden checkpoint.", rendered)
+
+    def test_false_checkpoint_contract_house_proof_skips_skill_check_and_sets_blackwake_leads(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 12},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(92172))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_false_checkpoint",
+            flags={
+                "act1_started": True,
+                "road_ambush_cleared": True,
+                "high_road_false_checkpoint_available": True,
+                "false_manifest_oren_detail": True,
+                "false_manifest_garren_detail": True,
+            },
+        )
+        game.grant_quest("false_manifest_circuit")
+
+        def fail_skill_check(actor, skill, dc, context):
+            raise AssertionError("Contract-house checkpoint proof should not require a skill check")
+
+        game.skill_check = fail_skill_check
+
+        game.scene_high_road_false_checkpoint()
+
+        self.assertTrue(game.state.flags["high_road_false_checkpoint_contract_proof_used"])
+        self.assertTrue(game.state.flags["neverwinter_contract_house_checkpoint_pressure"])
+        self.assertTrue(game.state.flags["blackwake_false_checkpoint_exposed"])
+        self.assertTrue(game.state.flags["blackwake_millers_ford_lead"])
+        self.assertTrue(game.state.flags["blackwake_gallows_copse_lead"])
+        self.assertTrue(game.state.flags["road_patrol_writ"])
+        self.assertTrue(game.state.flags["system_profile_seeded"])
+        self.assertTrue(game.state.flags["varyn_route_pattern_seen"])
+        self.assertEqual(game.state.flags["high_road_false_checkpoint_resolution"], "proof")
+        self.assertEqual(game.state.xp, 30)
+        self.assertEqual(game.state.gold, 14)
+        self.assertEqual(game.state.current_scene, "phandalin_hub")
+        rendered = self.plain_output(log)
+        self.assertIn("[CONTRACT HOUSE PROOF]", rendered)
+        self.assertIn("Oren's room line, Sabra's corrected manifest", rendered)
+
+    def test_false_checkpoint_insight_path_uses_social_check(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 12},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        checks: list[tuple[str, int, str]] = []
+        game = TextDnDGame(input_fn=lambda _: "2", output_fn=lambda _: None, rng=random.Random(92173))
+        game.state = GameState(
+            player=player,
+            current_scene="high_road_false_checkpoint",
+            flags={
+                "act1_started": True,
+                "road_ambush_cleared": True,
+                "high_road_false_checkpoint_available": True,
+            },
+        )
+
+        def fake_skill_check(actor, skill: str, dc: int, context: str) -> bool:
+            checks.append((skill, dc, context))
+            return True
+
+        game.skill_check = fake_skill_check  # type: ignore[method-assign]
+
+        game.scene_high_road_false_checkpoint()
+
+        self.assertEqual(checks, [("Insight", 12, "to expose the false roadwarden cadence in their demand")])
+        self.assertEqual(game.state.flags["high_road_false_checkpoint_resolution"], "insight")
+        self.assertTrue(game.state.flags["blackwake_millers_ford_lead"])
+        self.assertTrue(game.state.flags["road_patrol_writ"])
+        self.assertTrue(game.state.flags["system_profile_seeded"])
+        self.assertTrue(game.state.flags["varyn_route_pattern_seen"])
+        self.assertEqual(game.state.current_scene, "phandalin_hub")
 
     def test_point_buy_character_creation_flow(self) -> None:
         answers = iter(
@@ -4745,6 +6011,7 @@ class CoreTests(unittest.TestCase):
                 game.scene_background_prologue()
                 self.assertEqual(game.state.current_scene, "neverwinter_briefing")
                 self.assertEqual(game.state.flags["background_prologue_completed"], background)
+                self.assertTrue(game.state.flags["system_profile_seeded"])
 
     def test_background_prologue_shows_starting_rundown(self) -> None:
         player = build_character(
@@ -7315,6 +8582,69 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(game.state.flags["elira_neverwinter_recruited"])
         self.assertTrue(game.state.flags["elira_helped"])
         self.assertEqual(len(game.state.party_members()), 3)
+
+    def test_neverwinter_tymora_shrine_elira_checks_are_dc_8(self) -> None:
+        check_cases = [
+            ("1", "2", "Medicine", "to slow the ash-bitter poison"),
+            ("2", "2", "Religion", "to steady the shrine and caravan"),
+            ("3", "2", "Investigation", "to connect poison, harness marks, and forged authority"),
+            ("4", "1", "Persuasion", "to convince Elira the field needs her now"),
+        ]
+        for shrine_choice, recruit_choice, expected_skill, expected_context in check_cases:
+            with self.subTest(expected_skill=expected_skill):
+                player = build_character(
+                    name="Velkor",
+                    race="Human",
+                    class_name="Fighter",
+                    background="Soldier",
+                    base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+                    class_skill_choices=["Athletics", "Survival"],
+                )
+                answers = iter([shrine_choice, recruit_choice])
+                checks: list[tuple[str, int, str]] = []
+                game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(900901))
+                game.state = GameState(player=player, current_scene="neverwinter_briefing")
+
+                def capture_check(actor, skill: str, dc: int, context: str) -> bool:
+                    checks.append((skill, dc, context))
+                    return False
+
+                game.skill_check = capture_check  # type: ignore[method-assign]
+
+                game.handle_neverwinter_tymora_shrine()
+
+                self.assertEqual(checks, [(expected_skill, 8, expected_context)])
+
+    def test_phandalin_shrine_elira_checks_are_dc_8(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        answers = iter(["1", "1", "2", "2"])
+        checks: list[tuple[str, int, str]] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(900902))
+        game.state = GameState(player=player, current_scene="phandalin_hub")
+
+        def capture_check(actor, skill: str, dc: int, context: str) -> bool:
+            checks.append((skill, dc, context))
+            return False
+
+        game.skill_check = capture_check  # type: ignore[method-assign]
+
+        game.visit_shrine()
+
+        self.assertEqual(
+            checks,
+            [
+                ("Medicine", 8, "to stabilize the miner"),
+                ("Religion", 8, "to guide a steady prayer"),
+                ("Persuasion", 8, "to ask Elira into danger"),
+            ],
+        )
 
     def test_neverwinter_high_road_milehouse_sets_route_effect_for_three_member_party(self) -> None:
         player = build_character(

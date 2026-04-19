@@ -42,6 +42,7 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 | `steward_vow_made`, `phandalin_council_seen` | choosing to speak for the town and help shape its defenses | raises starting `Town Stability`; the town enters the claims war with more nerve |
 | `elira_helped` and whether Elira joined | shrine aid and recruitment | lowers starting `Whisper Pressure`; Agatha and Black Lake scenes become more grounded in mercy instead of panic |
 | `miners_exchange_dispute_resolved`, `miners_exchange_ledgers_checked` | Act 1 Miner's Exchange path | raises starting `Route Control`; Halia is easier to justify as a sponsor, but the player also sees her more clearly |
+| `act2_edermath_cache_routework` | recovering Daran Edermath's old adventurer's cache at the orchard | raises starting `Route Control`; Act 2 status text can cite the quiet orchard-to-highland control line |
 | `early_companion_recruited` | Kaelis or Rhogar in Neverwinter | Kaelis improves route logic; Rhogar improves civic steadiness |
 | `neverwinter_contract_house_political_callback` | spending contract-house intel in Blackwake or Mira's Neverwinter follow-up report | raises starting `Route Control`; Oren, Sabra, Vessa, and Garren create city-side witness pressure against copied road authority |
 | `bryn_ledger_sold` vs `bryn_ledger_burned` | `Loose Ends` personal quest | selling the ledger pushes more pressure and distrust into the expedition opening; burning it makes the town start cleaner but poorer |

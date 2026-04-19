@@ -334,6 +334,8 @@ class StoryAct2ScaffoldMixin:
             whisper -= 1
         if self.state.flags.get("quest_reward_edermath_scout_network"):
             route += 1
+        if self.state.flags.get("act2_edermath_cache_routework"):
+            route += 1
         if self.state.flags.get("quest_reward_bryn_underworld_favor"):
             route += 1
         if self.state.flags.get("quest_reward_elira_mercy_blessing"):
@@ -424,6 +426,8 @@ class StoryAct2ScaffoldMixin:
             lines.append(f"Rescue summary: {'; '.join(rescue_parts)}.")
 
         route_parts: list[str] = []
+        if self.state.flags.get("act2_edermath_cache_routework"):
+            route_parts.append("Daran's old cache map preserves a quiet orchard-to-highland control line")
         if self.state.flags.get("nim_countermeasure_notes"):
             route_parts.append("Nim's Stonehollow countermeasure notes survived")
         if self.state.flags.get("prospect_markers_decoded") or self.state.flags.get("prospect_route_cache_read"):
@@ -654,6 +658,55 @@ class StoryAct2ScaffoldMixin:
         )
         return choice == 1
 
+    def act2_set_midpoint_pattern(self, pattern_key: str) -> None:
+        assert self.state is not None
+        pattern_flags = {
+            "hall": "pattern_preserves_institutions",
+            "shrine": "pattern_preserves_people",
+            "infiltrator": "pattern_hunts_systems",
+        }
+        for flag_name in pattern_flags.values():
+            self.state.flags[flag_name] = False
+        selected_flag = pattern_flags.get(pattern_key)
+        if selected_flag is not None:
+            self.state.flags[selected_flag] = True
+
+    def act2_refresh_secret_handoff_flags(self) -> None:
+        assert self.state is not None
+        whisper = self.act2_metric_value("act2_whisper_pressure")
+        counter_cadence_known = any(
+            bool(self.state.flags.get(flag_name))
+            for flag_name in (
+                "counter_cadence_known",
+                "south_adit_counter_cadence_learned",
+                "irielle_counter_cadence",
+                "act3_choir_cadence_known",
+            )
+        )
+        if counter_cadence_known:
+            self.state.flags["counter_cadence_known"] = True
+
+        carries_signal = any(
+            bool(self.state.flags.get(flag_name))
+            for flag_name in (
+                "act3_shard_notes_carried",
+                "nim_countermeasure_notes",
+                "act3_choir_cadence_known",
+                "irielle_counter_cadence",
+            )
+        )
+        self.state.flags["act3_signal_carried"] = bool(whisper >= 4 or carries_signal)
+
+        if self.state.flags.get("forge_lens_mapped"):
+            self.state.flags["act3_lens_understood"] = True
+            self.state.flags.pop("act3_lens_blinded", None)
+        elif self.state.flags.get("caldra_defeated"):
+            self.state.flags["act3_lens_blinded"] = True
+            self.state.flags.pop("act3_lens_understood", None)
+        else:
+            self.state.flags.pop("act3_lens_understood", None)
+            self.state.flags.pop("act3_lens_blinded", None)
+
     def act2_record_epilogue_flags(self) -> None:
         assert self.state is not None
         town = self.act2_metric_value("act2_town_stability")
@@ -673,6 +726,7 @@ class StoryAct2ScaffoldMixin:
         else:
             self.state.flags["act3_forge_route_state"] = "direct"
         self.state.flags["act3_forge_lens_state"] = "mapped" if self.state.flags.get("forge_lens_mapped") else "shattered_blind"
+        self.act2_refresh_secret_handoff_flags()
 
     def start_act2_scaffold(self) -> None:
         assert self.state is not None
@@ -1306,6 +1360,7 @@ class StoryAct2ScaffoldMixin:
                 self.player_speaker("Teach it to us. We use what they built against them.")
                 self.state.flags["irielle_counter_cadence"] = True
                 self.state.flags["act3_choir_cadence_known"] = True
+                self.state.flags["counter_cadence_known"] = True
                 self.act2_shift_metric(
                     "act2_whisper_pressure",
                     1,
@@ -1651,6 +1706,12 @@ class StoryAct2ScaffoldMixin:
             ],
             allow_meta=False,
         )
+        if choice == 1:
+            self.act2_set_midpoint_pattern("hall")
+        elif choice == 2:
+            self.act2_set_midpoint_pattern("shrine")
+        else:
+            self.act2_set_midpoint_pattern("infiltrator")
         hero_bonus = 0
         if choice == 1:
             self.player_speaker("Hold the claims hall together. If the council breaks tonight, the mine owns the aftermath.")
@@ -1935,6 +1996,7 @@ class StoryAct2ScaffoldMixin:
                 allow_meta=False,
             )
             self.recruit_companion(create_irielle_ashwake())
+            self.state.flags["counter_cadence_known"] = True
             irielle = self.find_companion("Irielle Ashwake")
             if irielle is not None and delayed:
                 self.adjust_companion_disposition(
@@ -2128,6 +2190,9 @@ class StoryAct2ScaffoldMixin:
             enemies.append(self.act2_pick_enemy(("starblighted_miner", "obelisk_eye", "iron_prayer_horror")))
         if self.state.flags.get("black_lake_shrine_purified"):
             self.apply_status(self.state.player, "blessed", 2, source="the reclaimed Black Lake shrine")
+        self.speaker("Sister Caldra Voss", "The Forge does not create. It clarifies.")
+        self.speaker("Sister Caldra Voss", "Every vow has an echo. Every echo has an owner.")
+        self.speaker("Sister Caldra Voss", "The world is loud because it fears being counted.")
         choice = self.scenario_choice(
             "How do you open the final confrontation?",
             [
@@ -2139,6 +2204,7 @@ class StoryAct2ScaffoldMixin:
         )
         hero_bonus = self.apply_scene_companion_support("forge_of_spells")
         if self.state.flags.get("irielle_counter_cadence"):
+            self.state.flags["counter_cadence_known"] = True
             hero_bonus += 1
             enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
             self.say("Irielle's counter-cadence lands first and steals part of the forge's certainty before steel ever crosses it.")

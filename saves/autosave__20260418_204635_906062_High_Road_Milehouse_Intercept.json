@@ -51,7 +51,7 @@
       "stealth_disadvantage": true
     },
     "hit_die": 10,
-    "current_hp": 4,
+    "current_hp": 11,
     "max_hp": 12,
     "shield": true,
     "spellcasting_ability": null,
@@ -99,8 +99,11 @@
     "companion_id": "",
     "disposition": 0,
     "lore": [],
-    "bond_flags": {},
+    "bond_flags": {
+      "story_skill_modifiers": {}
+    },
     "relationship_bonuses": {},
+    "story_skill_bonuses": {},
     "stable": false,
     "dead": false,
     "death_successes": 0,
@@ -218,6 +221,121 @@
         "talked_topics": []
       },
       "relationship_bonuses": {},
+      "story_skill_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    },
+    {
+      "name": "Elira Dawnmantle",
+      "race": "Human",
+      "class_name": "Cleric",
+      "background": "Acolyte",
+      "level": 1,
+      "ability_scores": {
+        "STR": 11,
+        "DEX": 13,
+        "CON": 14,
+        "INT": 11,
+        "WIS": 16,
+        "CHA": 15
+      },
+      "skill_proficiencies": [
+        "Insight",
+        "Medicine",
+        "Persuasion",
+        "Religion"
+      ],
+      "saving_throw_proficiencies": [
+        "WIS",
+        "CHA"
+      ],
+      "features": [
+        "cleric_spellcasting"
+      ],
+      "weapon": {
+        "name": "Roadworn Mace",
+        "damage": "1d6",
+        "ability": "STR",
+        "weapon_type": "mace",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": []
+      },
+      "armor": {
+        "name": "Roadworn Scale Mail",
+        "base_ac": 14,
+        "armor_type": "medium",
+        "dex_cap": 2,
+        "heavy": false,
+        "stealth_disadvantage": true
+      },
+      "hit_die": 8,
+      "current_hp": 10,
+      "max_hp": 10,
+      "shield": true,
+      "spellcasting_ability": "WIS",
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Calligrapher's Supplies",
+        "Celestial"
+      ],
+      "resources": {
+        "spell_slots_1": 2
+      },
+      "max_resources": {
+        "spell_slots_1": 2
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Medicine": 1,
+        "Religion": 1
+      },
+      "gear_bonuses": {
+        "AC": 0
+      },
+      "notes": [
+        "Healer's satchel: +1 to Medicine and Religion checks.",
+        "A priestess of Tymora tending the frontier faithful in Phandalin.",
+        "A priestess of Tymora whose compassion is sharpened, not softened, by the frontier's cruelty."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "scale_mail_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "mace_common",
+        "off_hand": "shield_common",
+        "cape": null
+      },
+      "archetype": "cleric",
+      "companion_id": "elira_dawnmantle",
+      "disposition": 0,
+      "lore": [
+        "Elira learned battlefield triage from roadside shrines that treated lumber crews, miners, and pilgrims with equal urgency.",
+        "She believes luck is not random mercy but a chance people build for one another with courage and timing.",
+        "Under stress she gets quieter, not colder, as though she is measuring every word for whether it heals or harms."
+      ],
+      "bond_flags": {
+        "talked_topics": []
+      },
+      "relationship_bonuses": {},
+      "story_skill_bonuses": {},
       "stable": false,
       "dead": false,
       "death_successes": 0,
@@ -229,89 +347,75 @@
   ],
   "camp_companions": [],
   "current_act": 1,
-  "current_scene": "blackwake_crossing",
+  "current_scene": "neverwinter_briefing",
   "flags": {
     "act1_started": true,
     "map_state": {
-      "current_node_id": "blackwake_crossing",
-      "current_dungeon_id": "blackwake_crossing_branch",
-      "current_room_id": "charred_tollhouse",
-      "visited_nodes": [
-        "blackwake_crossing",
-        "neverwinter_briefing",
-        "high_road_ambush",
-        "phandalin_hub"
-      ],
+      "current_node_id": "neverwinter_briefing",
+      "current_dungeon_id": null,
+      "current_room_id": null,
+      "visited_nodes": [],
       "cleared_rooms": [],
       "seen_story_beats": [],
-      "node_history": [
-        "neverwinter_briefing"
-      ],
+      "node_history": [],
       "room_history": []
     },
     "introduced_characters": [
       "Ashen Brand Runner",
+      "Elira Dawnmantle",
       "Mira Thann",
+      "Oren Vale",
       "Rhogar Valeguard"
     ],
     "background_prologue_completed": "Soldier",
     "briefing_seen": true,
-    "briefing_q_neverwinter": true,
+    "neverwinter_contract_house_seen": true,
     "early_companion_recruited": "Rhogar Valeguard",
-    "blackwake_started": true,
-    "blackwake_return_destination": "undecided",
-    "act1_town_fear": 2,
-    "act1_ashen_strength": 3,
-    "act1_survivors_saved": 0,
-    "blackwake_millers_ford_lead": true
+    "neverwinter_tymora_shrine_seen": true,
+    "neverwinter_elira_met": true,
+    "elira_neverwinter_recruited": true,
+    "shrine_recruit_attempted": true,
+    "neverwinter_high_road_milehouse_seen": true
   },
   "clues": [
-    "A stolen dispatch confirms the attacks around Phandalin are organized enough to rattle Neverwinter's quartermasters.",
-    "The tollhouse thieves wanted seals, route slates, and ledgers tied to Miller's Ford inspections."
+    "A stolen dispatch confirms the attacks around Phandalin are organized enough to rattle Neverwinter's quartermasters."
   ],
   "journal": [
     "Your soldier's opening leaves you with a live look at how hard Neverwinter is leaning on thin patrol lines and tired veterans to protect the road south.",
     "Word reaches you that Mira Thann is quietly gathering capable hands in Neverwinter against a new bandit threat around Phandalin.",
     "Reward from South Barracks Breakout: 50 XP, 8 gp.",
+    "Looted Frontier Ale x1 from South Barracks Breakout.",
+    "Looted Potion of Healing x1 from South Barracks Breakout.",
     "Reward from holding the barracks line: 15 XP, 6 gp.",
     "Clue: A stolen dispatch confirms the attacks around Phandalin are organized enough to rattle Neverwinter's quartermasters.",
     "Your soldier prologue ends with the trail leading toward Mira Thann's private briefing in Neverwinter.",
     "Rhogar Valeguard joined the active party.",
-    "Mira Thann sent you south with a writ for Phandalin's steward.",
-    "Quest accepted: Embers Before the Road.",
-    "You turned off toward Blackwake Crossing to trace smoke, forged toll seals, and missing caravans.",
-    "Clue: The tollhouse thieves wanted seals, route slates, and ledgers tied to Miller's Ford inspections.",
-    "Reward from Charred Tollhouse Breakout: 110 XP, 16 gp.",
-    "Looted Antitoxin Vial x1 from Charred Tollhouse Breakout.",
-    "Looted Roadworn Leather Armor x1 from Charred Tollhouse Breakout.",
-    "Looted Travel Biscuits x1 from Charred Tollhouse Breakout."
+    "Elira Dawnmantle joined the active party.",
+    "Reward from High Road Milehouse Intercept: 160 XP, 25 gp.",
+    "Looted Roadworn Leather Armor x1 from High Road Milehouse Intercept.",
+    "Looted Potion of Healing x1 from High Road Milehouse Intercept.",
+    "Looted Roadworn Shortbow x1 from High Road Milehouse Intercept."
   ],
-  "quests": {
-    "trace_blackwake_cell": {
-      "quest_id": "trace_blackwake_cell",
-      "status": "active",
-      "notes": [
-        "The road to Phandalin can wait long enough to answer one ugly question: why are caravans vanishing before they even reach the wider High Road?",
-        "Smoke outside Neverwinter points toward Blackwake Crossing before the wider High Road opens."
-      ]
-    }
-  },
+  "quests": {},
   "completed_acts": [],
-  "xp": 175,
-  "gold": 50,
+  "xp": 225,
+  "gold": 59,
   "inventory": {
-    "potion_healing": 3,
+    "potion_healing": 6,
     "bread_round": 4,
-    "travel_biscuits": 5,
+    "travel_biscuits": 4,
     "dried_fish": 3,
     "goat_cheese": 2,
-    "frontier_ale": 2,
+    "frontier_ale": 3,
     "root_vegetables": 2,
-    "antitoxin_vial": 2,
+    "antitoxin_vial": 1,
     "chain_mail_common": 2,
     "longsword_common": 2,
-    "shield_common": 2,
-    "leather_armor_common": 1
+    "shield_common": 3,
+    "scale_mail_common": 1,
+    "mace_common": 1,
+    "leather_armor_common": 1,
+    "shortbow_common": 1
   },
   "short_rests_remaining": 2
 }

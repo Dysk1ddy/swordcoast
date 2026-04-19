@@ -226,10 +226,16 @@ class StoryEndgameMixin:
             return
 
         self.say(
-            "Varyn falls, the remaining brigands scatter, and the people above finally get a quiet night. "
-            "Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, "
-            "with whispers that tie back toward the lost wealth and buried secrets near Wave Echo Cave."
+            "Varyn falls, but not cleanly. Body, cloak, and blade hit the cellar stones while the route behind him folds the wrong way. "
+            "The remaining brigands scatter, the Ashen Brand breaks around that absence, and the people above finally get a quiet night. "
+            "Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, with whispers that tie back toward the lost wealth and buried secrets near Wave Echo Cave."
         )
+        self.state.flags["varyn_body_defeated_act1"] = True
+        self.state.flags["varyn_route_displaced"] = True
+        self.state.flags["act1_ashen_brand_broken"] = True
+        if self.state.flags.get("emberhall_ledger_read") or self.state.flags.get("emberhall_archive_tip"):
+            self.state.flags["emberhall_impossible_exit_seen"] = True
+            self.say("The exits you decoded before the fight all account for themselves except one: a route that appears in the ledger only after Varyn is gone.")
         self.add_journal("You broke the Ashen Brand and secured Phandalin through the end of Act 1.")
         self.reward_party(xp=250, gold=80, reason="securing Phandalin at the end of Act I")
         self.state.completed_acts.append(1)

@@ -1,6 +1,6 @@
 # Item Catalog
 
-Total items: 306
+Total items: 307
 
 Each entry lists rarity, category, combat rules, weight, supply value, and where it is obtained.
 
@@ -180,6 +180,7 @@ Each entry lists rarity, category, combat rules, weight, supply value, and where
 - **Blackseal Taster Pin** (`blackseal_taster_pin`) [equipment] 0.1 lb, no supply value, 84 gp, type `ring`. A small dark pin once used by couriers to test whether a message room felt honest enough to survive. Rules: skills Deception +1, Perception +1; initiative +1; Nera says the pin is for people who can hear the knife before it leaves the whisper.. Obtain from: Quest reward from Quiet Table, Sharp Knives.
 - **Bryn's Cache Keyring** (`bryns_cache_keyring`) [equipment] 0.1 lb, no supply value, 70 gp, type `ring`. A ring of old cache tags and tiny picks, each filed down until it looks harmless. Rules: skills Sleight of Hand +1, Stealth +1; initiative +1; Bryn's old routes are closed, but the habits that kept them alive are still useful.. Obtain from: Quest reward from Loose Ends.
 - **Dawnmantle Mercy Charm** (`dawnmantle_mercy_charm`) [equipment] 0.2 lb, no supply value, 85 gp, type `amulet`. A small dawnburst charm wrapped in field bandage thread and quiet Tymoran prayer knots. Rules: skills Medicine +1; saves WIS save +1; received healing +1; Elira's answer to hard justice: carry mercy where it can still change the next choice.. Obtain from: Quest reward from Faith Under Ash.
+- **Edermath Cache Compass** (`edermath_cache_compass`) [equipment] 0.2 lb, no supply value, 100 gp, type `amulet`. A palm-sized trail compass in a dented brass case, its needle steadier near old field marks than ordinary north. Rules: skills Stealth +1, Survival +1; initiative +1; Its scratched backplate marks a quiet orchard-to-highland route Daran no longer trusts to memory alone.. Obtain from: Recovered from Daran Edermath's old adventurer's cache.
 - **Edermath Scout Buckle** (`edermath_scout_buckle`) [equipment] 0.3 lb, no supply value, 85 gp, type `boots`. A battered boot-buckle from an old adventuring harness, polished back to use. Rules: skills Perception +1, Survival +1; initiative +1; Daran gives it only to people he trusts to read dangerous ground before it reads them.. Obtain from: Quest reward from Break the Wyvern Tor Raiders.
 - **Gravequiet Amulet** (`gravequiet_amulet`) [equipment] 0.2 lb, no supply value, 95 gp, type `amulet`. A dull silver charm etched with a closed eye and old warding numerals. Rules: skills Religion +1; saves WIS save +1; received healing +1; Made for crews who learned that some graves dislike being robbed.. Obtain from: Quest reward from Silence Old Owl Well.
 - **Harl Road-Knot** (`harl_road_knot`) [equipment] 0.2 lb, no supply value, 82 gp, type `amulet`. A strip of Dain Harl's blue scarf rebound into a tight courier's knot and set on a simple neck cord. Rules: skills Insight +1, Survival +1; saves CON save +1; Jerek says the knot is for people who bring truth back before the road can grind it flat.. Obtain from: Quest reward from Bring Back Dain's Name.

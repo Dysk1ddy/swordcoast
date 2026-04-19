@@ -36,7 +36,8 @@ _MUSIC_LOCK = threading.RLock()
 _MUSIC_TRANSITION_TOKEN = 0
 _MUSIC_ACTIVE_CHANNEL_INDEX: int | None = None
 _MUSIC_CHANNEL_MODE = False
-_MUSIC_FADE_STEP_SECONDS = 0.04
+_MUSIC_FADE_STEP_SECONDS = 0.02
+_MUSIC_SILENCE_GAP_SECONDS = 0.18
 
 
 def pygame_is_available() -> bool:
@@ -198,29 +199,54 @@ def _stop_channel_music_unlocked() -> None:
     _MUSIC_CHANNEL_MODE = False
 
 
-def _finish_crossfade(token: int, old_index: int | None, new_index: int, fade_ms: int, curve: str) -> None:
+def _fade_channel(token: int, channel_index: int, fade_ms: int, curve: str, *, fade_in: bool) -> bool:
     duration = max(0.001, fade_ms / 1000.0)
     started_at = time.perf_counter()
     while True:
         progress = min(1.0, (time.perf_counter() - started_at) / duration)
         with _MUSIC_LOCK:
             if token != _MUSIC_TRANSITION_TOKEN or pygame is None or not mixer_is_ready():
-                return
+                return False
             try:
-                if old_index is not None:
-                    _music_channel(old_index).set_volume(_transition_volume(progress, curve, fade_in=False))
-                _music_channel(new_index).set_volume(_transition_volume(progress, curve, fade_in=True))
+                _music_channel(channel_index).set_volume(_transition_volume(progress, curve, fade_in=fade_in))
             except pygame.error:
-                return
+                return False
         if progress >= 1.0:
             break
         time.sleep(_MUSIC_FADE_STEP_SECONDS)
+    return True
+
+
+def _finish_sequential_transition(token: int, old_index: int | None, new_index: int, sound, loops: int, fade_ms: int, curve: str) -> None:
+    global _MUSIC_ACTIVE_CHANNEL_INDEX, _MUSIC_CHANNEL_MODE
+    if old_index is not None:
+        if not _fade_channel(token, old_index, fade_ms, curve, fade_in=False):
+            return
+        with _MUSIC_LOCK:
+            if token != _MUSIC_TRANSITION_TOKEN or pygame is None or not mixer_is_ready():
+                return
+        try:
+            _music_channel(old_index).stop()
+        except pygame.error:
+            return
+        time.sleep(_MUSIC_SILENCE_GAP_SECONDS)
     with _MUSIC_LOCK:
         if token != _MUSIC_TRANSITION_TOKEN or pygame is None or not mixer_is_ready():
             return
         try:
-            if old_index is not None:
-                _music_channel(old_index).stop()
+            new_channel = _music_channel(new_index)
+            new_channel.set_volume(0.0)
+            new_channel.play(sound, loops=loops)
+            _MUSIC_ACTIVE_CHANNEL_INDEX = new_index
+            _MUSIC_CHANNEL_MODE = True
+        except pygame.error:
+            return
+    if not _fade_channel(token, new_index, fade_ms, curve, fade_in=True):
+        return
+    with _MUSIC_LOCK:
+        if token != _MUSIC_TRANSITION_TOKEN or pygame is None or not mixer_is_ready():
+            return
+        try:
             _music_channel(new_index).set_volume(1.0)
         except pygame.error:
             return
@@ -274,21 +300,25 @@ def play_pygame_channel_music(path: Path, *, loops: int = -1, fade_ms: int = 0, 
         new_channel = _music_channel(new_index)
         try:
             new_channel.stop()
-            new_channel.set_volume(0.0 if fade_ms > 0 and old_channel is not None else 1.0)
-            if new_channel.play(sound, loops=loops) is None:
-                return False
+            new_channel.set_volume(0.0 if fade_ms > 0 else 1.0)
         except pygame.error:
             return False
         _MUSIC_CHANNEL_MODE = True
-        _MUSIC_ACTIVE_CHANNEL_INDEX = new_index
-        if old_index is None or fade_ms <= 0:
+        if fade_ms <= 0:
+            try:
+                new_channel.play(sound, loops=loops)
+            except pygame.error:
+                return False
+            _MUSIC_ACTIVE_CHANNEL_INDEX = new_index
             if old_channel is not None:
                 old_channel.stop()
             new_channel.set_volume(1.0)
             return True
+        if old_index is None:
+            _MUSIC_ACTIVE_CHANNEL_INDEX = new_index
         thread = threading.Thread(
-            target=_finish_crossfade,
-            args=(token, old_index, new_index, fade_ms, curve),
+            target=_finish_sequential_transition,
+            args=(token, old_index, new_index, sound, loops, fade_ms, curve),
             daemon=True,
         )
         thread.start()
@@ -296,16 +326,43 @@ def play_pygame_channel_music(path: Path, *, loops: int = -1, fade_ms: int = 0, 
 
 
 def play_pygame_music(path: Path, *, loops: int = -1, fade_ms: int = 0, curve: str = "equal_power") -> bool:
-    if play_pygame_channel_music(path, loops=loops, fade_ms=fade_ms, curve=curve):
-        return True
+    if pygame is None or not ensure_mixer():
+        return False
+    fade_ms = max(0, int(fade_ms))
+    token: int
+    should_wait_for_fadeout = False
     try:
         with _MUSIC_LOCK:
-            _cancel_music_transition()
+            token = _cancel_music_transition()
             _stop_channel_music_unlocked()
+            if pygame.mixer.music.get_busy():
+                if fade_ms > 0:
+                    pygame.mixer.music.fadeout(fade_ms)
+                    should_wait_for_fadeout = True
+                else:
+                    pygame.mixer.music.stop()
+                    if hasattr(pygame.mixer.music, "unload"):
+                        pygame.mixer.music.unload()
+    except pygame.error:
+        return False
+    if should_wait_for_fadeout:
+        time.sleep((fade_ms / 1000.0) + _MUSIC_SILENCE_GAP_SECONDS)
+        with _MUSIC_LOCK:
+            if token != _MUSIC_TRANSITION_TOKEN:
+                return True
+            try:
+                if hasattr(pygame.mixer.music, "unload"):
+                    pygame.mixer.music.unload()
+            except pygame.error:
+                return False
+    try:
+        with _MUSIC_LOCK:
+            if token != _MUSIC_TRANSITION_TOKEN:
+                return True
             pygame.mixer.music.load(str(path))
             kwargs = {"loops": loops}
             if fade_ms > 0:
-                kwargs["fade_ms"] = max(0, int(fade_ms))
+                kwargs["fade_ms"] = fade_ms
             pygame.mixer.music.play(**kwargs)
     except (pygame.error, FileNotFoundError):
         return False

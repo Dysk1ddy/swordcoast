@@ -278,6 +278,7 @@ Act 1 reward and callback flags influence Act 2 starting metrics in `act2_initia
 | `quest_reward_lionshield_logistics` | +1 route control. |
 | `quest_reward_gravequiet_contacts` | -1 whisper pressure. |
 | `quest_reward_edermath_scout_network` | +1 route control. |
+| `act2_edermath_cache_routework` | +1 route control from Daran's old adventurer's cache; Act 2 status text can mention the quiet orchard-to-highland control line. |
 | `quest_reward_bryn_underworld_favor` | +1 route control. |
 | `quest_reward_elira_mercy_blessing` | +1 town stability, -1 whisper pressure. |
 | `neverwinter_contract_house_political_callback` | +1 route control, Act 2 witness-pressure status text, and claims-council dialogue from Oren, Sabra, Vessa, and Garren. |

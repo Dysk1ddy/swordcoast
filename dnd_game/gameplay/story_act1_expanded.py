@@ -377,6 +377,13 @@ class StoryAct1ExpandedMixin:
                         self.quoted_option("ATHLETICS", "If you still drill, put me through a frontier warm-up."),
                     )
                 )
+            if not self.state.flags.get("edermath_old_cache_recovered"):
+                options.append(
+                    (
+                        "cache",
+                        self.quoted_option("STEALTH", "If your old cache is still buried, we can reach it quietly."),
+                    )
+                )
             options.append(("leave", self.action_option("Leave the orchard and head back toward town.")))
             choice = self.scenario_choice("Daran wipes orchard dust from his hands and waits.", [text for _, text in options])
             selection_key, _ = options[choice - 1]
@@ -443,9 +450,102 @@ class StoryAct1ExpandedMixin:
                         "Daran Edermath",
                         "Not bad. Frontier fighting is mostly staying useful after the first ugly surprise.",
                     )
+            elif selection_key == "cache":
+                self.run_edermath_old_cache_scene()
             else:
                 self.player_action("You leave the orchard and head back toward the busier lanes.")
                 return
+
+    def run_edermath_old_cache_scene(self) -> None:
+        assert self.state is not None
+        self.banner("Edermath Orchard: Old Adventurer's Cache")
+        self.player_speaker("If your old cache is still buried, we can reach it quietly.")
+        if self.state.flags.get("wyvern_tor_cleared"):
+            self.speaker(
+                "Daran Edermath",
+                "After Wyvern Tor, I believe you can follow ugly ground without flattering it. That helps. The map is still half-wrong because I drew it half-drunk and thirty years too confident. The other half is worse: somebody has been watching the orchard walls.",
+            )
+            self.say(
+                "Daran adds a fresh correction from the tor fight: any watcher patient enough to hold this line will favor the low ditch, not the obvious gap in the wall."
+            )
+        else:
+            self.speaker(
+                "Daran Edermath",
+                "Maybe. The map is half-wrong because I drew it half-drunk and thirty years too confident. The other half is worse: somebody has been watching the orchard walls.",
+            )
+        self.say(
+            "Daran marks three old apple trees, a split stone, and a ditch that no longer exists. The true path is the negative space between them: low through root-shadow, then still beside the broken wall."
+        )
+        success = self.skill_check(
+            self.state.player,
+            "Stealth",
+            12,
+            context="to reach Daran's buried adventuring cache without alerting the orchard watchers",
+        )
+        if success:
+            self.say(
+                "You move when the wind worries the branches and freeze when a watcher turns. By the time the spade bites earth, nobody outside the orchard knows you were there."
+            )
+            self.state.flags["edermath_old_cache_quiet"] = True
+            self.grant_edermath_old_cache_rewards(quiet=True)
+            return
+
+        self.say(
+            "A loose stone clicks underfoot. The watching shape beyond the wall answers with a low whistle, and two Ashen Brand scouts come over the orchard edge with knives already out."
+        )
+        enemies = [create_enemy("brand_saboteur"), create_enemy("bandit_archer")]
+        if self.act1_party_size() >= 3:
+            enemies.append(create_enemy("bandit"))
+        encounter = Encounter(
+            "Edermath Orchard Watchers",
+            "Ashen Brand scouts caught watching Daran's old cache route turn a failed stealth approach into a close orchard fight.",
+            enemies,
+            allow_flee=True,
+            allow_parley=False,
+            allow_post_combat_random_encounter=False,
+        )
+        outcome = self.run_encounter(encounter)
+        if outcome == "victory":
+            self.say(
+                "Daran wipes one blade clean, then points with the other to a root knot the watchers never understood. The cache comes up dented, dry, and still useful."
+            )
+            self.state.flags["edermath_old_cache_watchers_defeated"] = True
+            self.grant_edermath_old_cache_rewards(quiet=False)
+        else:
+            self.say("The watchers keep enough of the orchard line to force you off the cache for now.")
+
+    def grant_edermath_old_cache_rewards(self, *, quiet: bool) -> None:
+        assert self.state is not None
+        if self.state.flags.get("edermath_old_cache_recovered"):
+            return
+        self.state.flags["edermath_old_cache_recovered"] = True
+        self.state.flags["edermath_old_cache_trust"] = True
+        self.state.flags["act2_edermath_cache_routework"] = True
+        self.add_inventory_item("edermath_cache_compass", source="Daran Edermath's old adventurer's cache")
+        self.reward_party(xp=35, gold=12, reason="recovering Daran Edermath's old adventurer's cache")
+        self.add_clue(
+            "Daran's old cache map preserves a quiet orchard-to-highland route that can help control Act 2 approaches."
+        )
+        if quiet:
+            self.speaker(
+                "Daran Edermath",
+                "Clean work. After Wyvern Tor, I hoped you knew patience as well as pressure. Now I know it."
+                if self.state.flags.get("wyvern_tor_cleared")
+                else "Clean work. Old routes reward patience more often than courage. Remember that when everyone else starts calling haste a plan.",
+            )
+            self.add_journal(
+                "You recovered Daran Edermath's old adventuring cache without alerting the orchard watchers, earning his trust and a route-control hook for Act 2."
+            )
+        else:
+            self.speaker(
+                "Daran Edermath",
+                "Wyvern Tor taught you to finish hard ground. This was messier than I hoped, but you finished it again, and now we know exactly who wanted that cache watched."
+                if self.state.flags.get("wyvern_tor_cleared")
+                else "Messier than I hoped. Still, you finished it, and now we know exactly who wanted that cache watched.",
+            )
+            self.add_journal(
+                "You recovered Daran Edermath's old adventuring cache after fighting the orchard watchers, earning his trust and a route-control hook for Act 2."
+            )
 
     def visit_miners_exchange(self) -> None:
         assert self.state is not None
@@ -1288,6 +1388,11 @@ class StoryAct1ExpandedMixin:
         second_enemies = [create_enemy("nothic", name="Cistern Eye")]
         if party_size >= 3:
             second_enemies.append(self.act1_pick_enemy(("skeletal_sentry", "stonegaze_skulker", "whispermaw_blob", "lantern_fen_wisp")))
+        enemy_bonus = 0
+        route_shell = getattr(self, "_tresendar_nothic_route_shell", None)
+        if callable(route_shell):
+            route_bonus, enemy_bonus = route_shell(second_enemies[0])
+            second_bonus += route_bonus
         second_encounter = Encounter(
             title="The Cistern Eye",
             description="A warped cellar horror rises from the dark water below Tresendar Manor.",
@@ -1295,6 +1400,7 @@ class StoryAct1ExpandedMixin:
             allow_flee=True,
             allow_parley=False,
             hero_initiative_bonus=second_bonus,
+            enemy_initiative_bonus=enemy_bonus,
             allow_post_combat_random_encounter=False,
         )
         outcome = self.run_encounter(second_encounter)
@@ -1492,9 +1598,16 @@ class StoryAct1ExpandedMixin:
             return
 
         self.say(
-            "Varyn falls, the remaining brigands scatter, and the pressure that has bent every road into Phandalin finally breaks. Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, "
-            "with whispers pointing toward deeper ruins, buried wealth, and unfinished business near Wave Echo Cave."
+            "Varyn falls, but not cleanly. Body, cloak, and blade hit the cellar stones while the route behind him folds the wrong way. "
+            "The remaining brigands scatter, the Ashen Brand breaks around that absence, and the pressure that has bent every road into Phandalin finally snaps. "
+            "Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, with whispers pointing toward deeper ruins, buried wealth, and unfinished business near Wave Echo Cave."
         )
+        self.state.flags["varyn_body_defeated_act1"] = True
+        self.state.flags["varyn_route_displaced"] = True
+        self.state.flags["act1_ashen_brand_broken"] = True
+        if self.state.flags.get("emberhall_ledger_read") or self.state.flags.get("emberhall_archive_tip"):
+            self.state.flags["emberhall_impossible_exit_seen"] = True
+            self.say("The exits you decoded before the fight all account for themselves except one: a route that appears in the ledger only after Varyn is gone.")
         self.add_journal("You broke the Ashen Brand and secured Phandalin through the end of Act 1.")
         self.reward_party(xp=250, gold=80, reason="securing Phandalin at the end of Act I")
         if 1 not in self.state.completed_acts:

@@ -36,6 +36,7 @@ This file is a source-oriented reference for reading and debugging the current g
 - Overworld travel is node-based around `Phandalin`
 - Hostile sites use room-based dungeon progression from `dnd_game/drafts/map_system/data/act1_hybrid_map.py`
 - The live mid-Act route can now include `Old Owl Well`, `Wyvern Tor`, and an optional hidden `Cinderfall Ruins` strike before `Ashfall Watch`
+- The High Road now has post-ambush side branches for `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones`; the checkpoint is non-combat and can spend contract-house proof before Blackwake.
 
 ### Act 1 metrics and carryover
 

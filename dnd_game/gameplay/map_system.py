@@ -3383,6 +3383,7 @@ class MapSystemMixin:
             allow_meta=False,
         )
         self.recruit_companion(create_irielle_ashwake())
+        self.state.flags["counter_cadence_known"] = True
         irielle = self.find_companion("Irielle Ashwake")
         if irielle is not None and delayed:
             self.adjust_companion_disposition(
@@ -3418,6 +3419,7 @@ class MapSystemMixin:
         skill = "Arcana" if choice == 1 else "Persuasion" if choice == 2 else "Religion"
         if self.skill_check(self.state.player, skill, 14, context="to make clean contact with Irielle Ashwake"):
             self.state.flags["south_adit_counter_cadence_learned"] = True
+            self.state.flags["counter_cadence_known"] = True
             self.reward_party(xp=15, reason="making contact with Irielle in the South Adit")
             self.say("The counter-cadence catches. For the first time in the adit, the wall sounds like stone instead of a mouth.")
         else:
@@ -4297,6 +4299,7 @@ class MapSystemMixin:
             self.state.flags["forge_anvil_tuned"] = True
             if self.state.flags.get("south_adit_counter_cadence_learned") and self.find_companion("Irielle Ashwake") is not None:
                 self.state.flags["irielle_counter_cadence"] = True
+                self.state.flags["counter_cadence_known"] = True
             self.add_clue("The Pact anvil still carries a discipline that can crack the Choir's forge-tempo if you hit it cleanly.")
             self.add_journal("You woke the Pact anvil's older discipline and proved the Forge still remembers craft beneath the Choir's ritual.")
             self.reward_party(xp=15, reason="recovering the Forge's older rhythm")
@@ -4422,6 +4425,7 @@ class MapSystemMixin:
         if success:
             if self.state.flags.get("south_adit_counter_cadence_learned") and irielle is not None:
                 self.state.flags["irielle_counter_cadence"] = True
+                self.state.flags["counter_cadence_known"] = True
             if self.state.flags.get("forge_choir_pit_silenced"):
                 self.state.flags["forge_support_line_broken"] = True
             if self.state.flags.get("forge_pact_rhythm_found"):
@@ -4468,12 +4472,17 @@ class MapSystemMixin:
             enemies[0].current_hp = max(1, enemies[0].current_hp - 6)
         if self.state.flags.get("south_adit_counter_cadence_learned") and self.find_companion("Irielle Ashwake") is not None:
             self.state.flags["irielle_counter_cadence"] = True
+            self.state.flags["counter_cadence_known"] = True
         if self.state.flags.get("irielle_counter_cadence"):
+            self.state.flags["counter_cadence_known"] = True
             hero_bonus += 1
             enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
             self.say("Irielle's counter-cadence lands first and steals part of the forge's certainty before steel ever crosses it.")
             parley_dc -= 1
 
+        self.speaker("Sister Caldra Voss", "The Forge does not create. It clarifies.")
+        self.speaker("Sister Caldra Voss", "Every vow has an echo. Every echo has an owner.")
+        self.speaker("Sister Caldra Voss", "The world is loud because it fears being counted.")
         choice = self.scenario_choice(
             "How do you open the final confrontation?",
             [
@@ -4739,6 +4748,7 @@ class MapSystemMixin:
             self.reward_party(xp=10, reason="letting Bryn read the trench ledgers")
 
         self.add_clue("The recovered route slips mention Cinderfall Ruins, a backup ember relay still feeding Ashfall Watch from the east scrub.")
+        self.state.flags["varyn_filter_logic_seen"] = True
         self.unlock_act1_hidden_route(
             "The soot-black route slips expose a hidden approach: Cinderfall Ruins, an abandoned ember relay still feeding Ashfall's reserve line."
         )
@@ -4961,6 +4971,7 @@ class MapSystemMixin:
             self.state.flags["wyvern_beast_stampede"] = True
             self.say("A moment later the upper shelf erupts in bells, hooves, and furious shouting as the pack animals tear through the camp line.")
         self.add_clue("The rescued drover heard raiders talk about Cinderfall, an abandoned relay they used to keep Ashfall supplied off the main road.")
+        self.state.flags["varyn_detour_logic_seen"] = True
         self.unlock_act1_hidden_route(
             "The freed drover points you toward Cinderfall Ruins, a hidden relay route the raiders still use when Ashfall needs reserve supplies unseen."
         )
@@ -5303,6 +5314,7 @@ class MapSystemMixin:
 
         self.complete_map_room(dungeon, room.room_id)
         self.act1_adjust_metric("act1_ashen_strength", -1)
+        self.state.flags["varyn_relay_broken"] = True
         self.add_clue("Destroying the Cinderfall relay cuts Ashfall Watch off from its reserve line and emergency signal fuel.")
         self.add_journal("You broke the hidden Cinderfall relay before the Ashfall assault.")
         self.reward_party(xp=35, gold=12, reason="breaking the Cinderfall relay")
@@ -5874,6 +5886,271 @@ class MapSystemMixin:
 
         self.complete_map_room(dungeon, room.room_id)
 
+    def _tresendar_nothic_background_read(self) -> None:
+        assert self.state is not None
+        background_reads = {
+            "Soldier": "You still count the people who did not answer roll. Discipline did not save them all.",
+            "Acolyte": "You washed blood from temple cloth and called it service. Some stains learned your name.",
+            "Criminal": "False manifests. Back doors. The relief of being gone before blame arrives.",
+            "Sage": "You hate missing records because you know gaps are where cowards hide knives.",
+            "Outlander": "The birds warned you before the city did. You trusted silence, and silence was right.",
+            "Charlatan": "You wear lies like good gloves. Soft inside. Clean outside. Useful in a crowd.",
+            "Guild Artisan": "You know the difference between a shortage and a theft wearing numbers.",
+            "Hermit": "You heard the road getting sick before anyone important learned to pronounce the fever.",
+        }
+        background = self.state.player.background
+        self.state.flags["tresendar_nothic_background_read"] = background
+        self.speaker(
+            "Cistern Eye",
+            background_reads.get(background, "You came south with one story on your tongue and another locked behind your teeth."),
+        )
+
+    def _active_tresendar_secret_companion(self, name: str):
+        assert self.state is not None
+        companion = self.find_companion(name)
+        return companion if companion in self.state.companions else None
+
+    def _record_tresendar_nothic_trade_info(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("tresendar_nothic_trade_info_gained"):
+            self.state.flags["deep_ledger_hint_count"] = int(self.state.flags.get("deep_ledger_hint_count", 0) or 0) + 1
+        self.state.flags["tresendar_nothic_trade_info_gained"] = True
+        self.add_clue("The Cistern Eye names Emberhall as Varyn's deeper refuge and calls Tresendar only the Ashen Brand's intake throat.")
+
+    def _record_tresendar_nothic_cinderfall_lore(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("tresendar_nothic_cinderfall_lore"):
+            self.state.flags["deep_ledger_hint_count"] = int(self.state.flags.get("deep_ledger_hint_count", 0) or 0) + 1
+        self.state.flags["tresendar_nothic_cinderfall_lore"] = True
+        if self.state.flags.get("cinderfall_relay_destroyed"):
+            self.add_clue(
+                "The Cistern Eye confirms Cinderfall was an Ashen Brand relay; destroying it cut Ashfall's reserve channel before Rukhar could lean on it."
+            )
+            self.say("The Eye shows Cinderfall as a black hinge already broken: ash, route slates, and a reserve line that never answered Rukhar in time.")
+        else:
+            self.add_clue(
+                "The Cistern Eye reveals Cinderfall was an Ashen Brand relay moving route slates, reserve orders, and supplies into Ashfall Watch."
+            )
+            self.say("The Eye shows Cinderfall as a relay, not a ruin: route slates, reserve orders, and supplies breathing toward Ashfall Watch.")
+
+    def _record_tresendar_nothic_wave_echo_lore(self) -> None:
+        assert self.state is not None
+        if not self.state.flags.get("tresendar_nothic_wave_echo_lore"):
+            self.state.flags["deep_ledger_hint_count"] = int(self.state.flags.get("deep_ledger_hint_count", 0) or 0) + 1
+        self.state.flags["tresendar_nothic_wave_echo_lore"] = True
+        self.add_clue(
+            "The Cistern Eye says the Ashen Brand is a curtain over older Phandelver routes, keeping Wave Echo unreachable until someone else can claim the first clean map."
+        )
+        self.add_clue("The Cistern Eye whispers that the Forge of Spells can listen as well as make, and something below the mine has started answering.")
+        self.add_journal("The Cistern Eye forced a Wave Echo warning into the open: the Forge can listen, and something below it may answer.")
+        self.say("For a heartbeat the cistern water becomes a mine-dark lake, and something under it seems to hear your breath.")
+
+    def _tresendar_adjust_active_companions_for_bargain(self, delta: int, reason: str) -> None:
+        assert self.state is not None
+        for companion in list(self.state.companions):
+            if companion.dead:
+                continue
+            self.adjust_companion_disposition(companion, delta, reason)
+
+    def _tresendar_nothic_trade_secret(self) -> int:
+        assert self.state is not None
+        options: list[tuple[str, str]] = [
+            ("memory", self.action_option("Give it a memory from your own past.")),
+            ("self_truth", self.quoted_option("TRUTH", "The truth I keep walking around is mine to speak.")),
+        ]
+        bryn = self._active_tresendar_secret_companion("Bryn Underbough")
+        if bryn is not None:
+            options.append(
+                (
+                    "betray_bryn",
+                    self.quoted_option("BETRAY BRYN", "Bryn knows the old smuggler marks because she used to run them."),
+                )
+            )
+        rhogar = self._active_tresendar_secret_companion("Rhogar Valeguard")
+        if rhogar is not None:
+            options.append(
+                (
+                    "betray_rhogar",
+                    self.quoted_option("BETRAY RHOGAR", "Rhogar's oath has a crack in it. He knows the sound."),
+                )
+            )
+
+        choice = self.scenario_choice(
+            "What price do you let the Cistern Eye taste?",
+            [label for _, label in options],
+            allow_meta=False,
+        )
+        trade_key = options[choice - 1][0]
+        self.state.flags["tresendar_nothic_trade"] = trade_key
+        self.state.flags["tresendar_nothic_trade_paid"] = True
+
+        if trade_key == "memory":
+            self.player_action("Give it a memory from your own past.")
+            self.state.flags["tresendar_nothic_memory_paid"] = True
+            self.apply_status(self.state.player, "reeling", 1, source="a hollowed memory")
+            self.speaker("Cistern Eye", "Yes. A warm morning. A voice. A door you thought would stay open.")
+            self.add_journal("The Cistern Eye took a personal memory in trade for Emberhall truth.")
+            self._record_tresendar_nothic_trade_info()
+            return 0
+
+        if trade_key == "self_truth":
+            self.player_speaker("The truth I keep walking around is mine to speak.")
+            self.state.flags["tresendar_nothic_self_truth_spoken"] = True
+            self.speaker("Cistern Eye", "Owned hurt. Bitter. Clean. It cuts you and still belongs to you.")
+            self.apply_story_skill_modifier(
+                self.state.player,
+                "clear_eyed_wound",
+                {"Arcana": 1, "Insight": 1, "Persuasion": 1},
+                source="Clear-Eyed Wound",
+                duration="through the Act 1 finale",
+            )
+            self.add_journal("Clear-Eyed Wound grants +1 Arcana, +1 Insight, and +1 Persuasion through the Act 1 finale.")
+            self._record_tresendar_nothic_trade_info()
+            self.say("Speaking the truth yourself turns the wound into a lens instead of a handle.")
+            return 1
+
+        if trade_key == "betray_bryn":
+            assert bryn is not None
+            self.player_speaker("Bryn knows the old smuggler marks because she used to run them.")
+            self.state.flags["bryn_secret_exposed"] = True
+            self.speaker("Cistern Eye", "Run them? No. Carry them. Little feet. Clean face. Dirty instructions.")
+            self.speaker("Bryn Underbough", "You do not get to make that sound simple.")
+            penalty = -3 if self.has_quest("bryn_loose_ends") and not self.state.flags.get("bryn_loose_ends_resolved") else -2
+            self.adjust_companion_disposition(bryn, penalty, "you fed Bryn's past to the Cistern Eye")
+            self.add_journal("Bryn's smuggling past was exposed to the Cistern Eye.")
+            self._record_tresendar_nothic_trade_info()
+            return 0
+
+        assert rhogar is not None
+        self.player_speaker("Rhogar's oath has a crack in it. He knows the sound.")
+        self.state.flags["rhogar_secret_exposed"] = True
+        self.state.flags["rhogar_cistern_conflict_pending"] = True
+        self.speaker("Cistern Eye", "Threshold-keeper. Road-sworn. You held the line once while someone beyond it begged.")
+        self.speaker("Rhogar Valeguard", "Stop.")
+        self.adjust_companion_disposition(rhogar, -2, "you fed Rhogar's oath-wound to the Cistern Eye")
+        self.add_journal("Rhogar's oath-wound was exposed to the Cistern Eye, and a reckoning remains pending.")
+        self._record_tresendar_nothic_trade_info()
+        return 0
+
+    def _tresendar_nothic_deep_bargain(self) -> tuple[int, int]:
+        assert self.state is not None
+        enemy_bonus = 0
+        self.state.flags["tresendar_nothic_bargain_tier"] = 1
+        self.state.flags["tresendar_nothic_sanity_cost"] = 1
+        self._record_tresendar_nothic_trade_info()
+        self.apply_status(self.state.player, "reeling", 1, source="the Cistern Eye's first bargain")
+        self.speaker("Cistern Eye", "Throat first. Manor throat. Emberhall belly. Varyn hiding where the ash still thinks.")
+        choice = self.scenario_choice(
+            "The Eye's first truth leaves another shape under the water.",
+            [
+                self.action_option("Take the Emberhall truth and end the bargain."),
+                self.quoted_option("BARGAIN AGAIN", "What did Cinderfall really feed?"),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Take the Emberhall truth and end the bargain.")
+            return 0, enemy_bonus
+
+        self.player_speaker("What did Cinderfall really feed?")
+        self.state.flags["tresendar_nothic_bargain_tier"] = 2
+        self.state.flags["tresendar_nothic_sanity_cost"] = 2
+        self._record_tresendar_nothic_cinderfall_lore()
+        self.apply_status(self.state.player, "frightened", 1, source="the Cistern Eye naming Cinderfall")
+        enemy_bonus += 1
+        self._tresendar_adjust_active_companions_for_bargain(-1, "you kept feeding the Cistern Eye for more secrets")
+        choice = self.scenario_choice(
+            "The second truth tastes like ash, but the Eye is still grinning.",
+            [
+                self.action_option("Stop before the bargain takes anything else."),
+                self.quoted_option("BARGAIN AGAIN", "What waits past the Ashen Brand?"),
+            ],
+            allow_meta=False,
+        )
+        if choice == 1:
+            self.player_action("Stop before the bargain takes anything else.")
+            return 0, enemy_bonus
+
+        self.player_speaker("What waits past the Ashen Brand?")
+        self.state.flags["tresendar_nothic_bargain_tier"] = 3
+        self.state.flags["tresendar_nothic_sanity_cost"] = 3
+        self.state.flags["tresendar_nothic_bargain_whispered_through"] = True
+        self._record_tresendar_nothic_wave_echo_lore()
+        self.apply_status(self.state.player, "reeling", 2, source="the Cistern Eye's deepest bargain")
+        self.apply_status(self.state.player, "frightened", 2, source="the Cistern Eye's deepest bargain")
+        self.apply_story_skill_modifier(
+            self.state.player,
+            "whispered_through",
+            {"Insight": -1, "Persuasion": -1},
+            source="Whispered Through",
+            duration="through the Act 1 finale",
+        )
+        self.add_journal("Whispered Through imposes -1 Insight and -1 Persuasion through the Act 1 finale.")
+        self._tresendar_adjust_active_companions_for_bargain(-1, "you let the Cistern Eye press past useful truth into wrongness")
+        enemy_bonus += 2
+        return 0, enemy_bonus
+
+    def _tresendar_nothic_route_shell(self, nothic) -> tuple[int, int]:
+        assert self.state is not None
+        self.say(
+            "The water below the cracked cistern walk goes still. Then an eye opens in it: yellow, lidless, and fixed on the parts of you that would rather stay unnamed."
+        )
+        self.speaker("Cistern Eye", "Little bright things. Little walking locks. You came down carrying keys and called them hearts.")
+        self._tresendar_nothic_background_read()
+        choice = self.scenario_choice(
+            "The Cistern Eye waits to learn what kind of answer you are.",
+            [
+                self.action_option("Kill it before it pries any deeper."),
+                self.quoted_option("TRADE", "A memory, a truth, or betrayal. Name the price and speak what you know."),
+                self.action_option("Bargain for every secret it is willing to spit up."),
+                self.quoted_option("DECEPTION", "All right. I will give you a secret. A good one."),
+            ],
+            allow_meta=False,
+        )
+        hero_bonus = 0
+        enemy_bonus = 0
+        if choice == 1:
+            self.state.flags["tresendar_nothic_route"] = "kill"
+            self.player_action("Kill it before it pries any deeper.")
+            tolan = self.find_companion("Tolan Ironshield")
+            if tolan in self.state.companions and not self.state.flags.get("tresendar_nothic_tolan_kill_approved"):
+                self.state.flags["tresendar_nothic_tolan_kill_approved"] = True
+                self.adjust_companion_disposition(tolan, 1, "refusing the Cistern Eye's bargain")
+            self.say("Steel and spell answer before the thing can turn confession into leverage.")
+        elif choice == 2:
+            self.state.flags["tresendar_nothic_route"] = "trade"
+            self.player_speaker("A memory, a truth, or betrayal. Name the price and speak what you know.")
+            self.speaker("Cistern Eye", "Warm price. Sweet price. A thing remembered, a thing admitted, or a friend opened from the inside.")
+            hero_bonus += self._tresendar_nothic_trade_secret()
+            self.say("The price is paid. The Eye gives you truth, then scrapes up the stone lip with claws first.")
+        elif choice == 3:
+            self.state.flags["tresendar_nothic_route"] = "bargain"
+            self.player_action("Bargain for every secret it is willing to spit up.")
+            self.speaker("Cistern Eye", "Greedy lock. Greedy key. Yes. Open wider.")
+            bargain_hero_bonus, bargain_enemy_bonus = self._tresendar_nothic_deep_bargain()
+            hero_bonus += bargain_hero_bonus
+            enemy_bonus += bargain_enemy_bonus
+            self.say("For one breath the cistern seems full of whispered names. Then the thing smiles too broadly and comes for more than words.")
+        else:
+            self.state.flags["tresendar_nothic_route"] = "deceive"
+            self.player_speaker("All right. I will give you a secret. A good one.")
+            success = self.skill_check(self.state.player, "Deception", 15, context="to bait the Cistern Eye with a false secret")
+            if success:
+                self.state.flags["tresendar_nothic_deceived"] = True
+                self._record_tresendar_nothic_trade_info()
+                self._record_tresendar_nothic_cinderfall_lore()
+                self._record_tresendar_nothic_wave_echo_lore()
+                self.apply_status(nothic, "reeling", 1, source="your false secret")
+                hero_bonus += 2
+                self.say("The lie has enough blood on it to smell alive. The Cistern Eye drinks, shudders, and loses the first clean beat of the fight.")
+            else:
+                self.state.flags["tresendar_nothic_deception_failed"] = True
+                self.apply_status(self.state.player, "surprised", 1, source="the Cistern Eye catching the lie")
+                self.apply_status(self.state.player, "reeling", 1, source="the Cistern Eye catching the lie")
+                enemy_bonus += 2
+                self.speaker("Cistern Eye", "Painted meat. False bone. Bad little lock.")
+        return hero_bonus, enemy_bonus
+
     def _tresendar_nothic_lair(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
         assert self.state is not None
         party_size = self.act1_party_size()
@@ -5883,6 +6160,8 @@ class MapSystemMixin:
         if party_size >= 4:
             second_enemies.append(self.act1_pick_enemy(("stonegaze_skulker", "whispermaw_blob", "graveblade_wight")))
         boss_bonus = int(self.state.flags.get("tresendar_eye_read", False)) + (2 if self.state.flags.get("tresendar_eye_ambushed", False) else 0)
+        route_bonus, enemy_bonus = self._tresendar_nothic_route_shell(second_enemies[0])
+        boss_bonus += route_bonus
         outcome = self.run_encounter(
             Encounter(
                 title="The Cistern Eye",
@@ -5891,6 +6170,7 @@ class MapSystemMixin:
                 allow_flee=True,
                 allow_parley=False,
                 hero_initiative_bonus=boss_bonus,
+                enemy_initiative_bonus=enemy_bonus,
                 allow_post_combat_random_encounter=False,
             )
         )
@@ -6182,17 +6462,27 @@ class MapSystemMixin:
             return
 
         self.complete_map_room(dungeon, room.room_id)
+        self.state.flags["varyn_body_defeated_act1"] = True
+        self.state.flags["varyn_route_displaced"] = True
+        self.state.flags["act1_ashen_brand_broken"] = True
+        if self.state.flags.get("emberhall_ledger_read") or self.state.flags.get("emberhall_archive_tip"):
+            self.state.flags["emberhall_impossible_exit_seen"] = True
         self.say(
-            "Varyn falls, the remaining brigands scatter, and the pressure that has bent every road into Phandalin finally breaks. Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, "
-            "with whispers pointing toward deeper ruins, buried wealth, and unfinished business near Wave Echo Cave."
+            "Varyn falls, but not cleanly. Body, cloak, and blade hit the cellar stones while the route behind him folds the wrong way. "
+            "The remaining brigands scatter, the Ashen Brand breaks around that absence, and the pressure that has bent every road into Phandalin finally snaps. "
+            "Among the captain's ledgers are references to older powers stirring beneath the Sword Mountains, with whispers pointing toward deeper ruins, buried wealth, and unfinished business near Wave Echo Cave."
         )
+        if self.state.flags.get("emberhall_impossible_exit_seen"):
+            self.say(
+                "The exits you decoded before the fight all account for themselves except one: a route that appears in the ledger only after Varyn is gone."
+            )
         victory_tier = self.act1_record_epilogue_flags()
         if victory_tier == "clean_victory":
             self.say("Phandalin takes the news like a town finally allowed to breathe. The roads are scarred, but not broken, and the company leaves Act I with loyalty mostly intact.")
         elif victory_tier == "costly_victory":
             self.say("The win holds, but it costs blood, trust, and more sleepless eyes than anyone in town will admit out loud. Phandalin survives this act tired rather than whole.")
         else:
-            self.say("Varyn is dead, but too many threads were left burning behind him. The Ashen Brand is beaten without being cleanly erased, and the next descent will begin under pressure.")
+            self.say("Varyn's local command is broken, but too many threads were left burning behind him. The Ashen Brand is beaten without being cleanly erased, and the next descent will begin under pressure.")
         self.add_journal("You broke the Ashen Brand and secured Phandalin through the end of Act 1.")
         self.reward_party(xp=250, gold=80, reason="securing Phandalin at the end of Act I")
         if 1 not in self.state.completed_acts:

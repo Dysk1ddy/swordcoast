@@ -32,6 +32,7 @@ SCENE_MUSIC_CONTEXTS: dict[str, str] = {
     "road_decision_post_blackwake": "wilderness",
     "road_ambush": "wilderness",
     "high_road_liars_circle": "wilderness",
+    "high_road_false_checkpoint": "wilderness",
     "high_road_false_tollstones": "wilderness",
     "phandalin_hub": "city",
     "old_owl_well": "dungeon",
@@ -55,16 +56,16 @@ SCENE_MUSIC_CONTEXTS: dict[str, str] = {
     "act2_scaffold_complete": "city",
 }
 
-MUSIC_TRANSITION_CURVE = "equal_power"
+MUSIC_TRANSITION_CURVE = "linear"
 MUSIC_CONTEXT_SWITCH_COOLDOWN_SECONDS = 0.45
-MUSIC_INITIAL_FADE_SECONDS = 1.25
-MUSIC_COMBAT_TRANSITION_SECONDS = 1.0
-MUSIC_BOSS_TRANSITION_SECONDS = 0.75
-MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS = 1.2
-MUSIC_COMBAT_EXIT_TRANSITION_SECONDS = 2.75
-MUSIC_LOCAL_TRANSITION_SECONDS = 2.25
-MUSIC_AREA_TRANSITION_SECONDS = 3.5
-MUSIC_MUTE_FADE_SECONDS = 0.8
+MUSIC_INITIAL_FADE_SECONDS = 3.0
+MUSIC_COMBAT_TRANSITION_SECONDS = 2.5
+MUSIC_BOSS_TRANSITION_SECONDS = 2.25
+MUSIC_RANDOM_ENCOUNTER_TRANSITION_SECONDS = 2.6
+MUSIC_COMBAT_EXIT_TRANSITION_SECONDS = 4.0
+MUSIC_LOCAL_TRANSITION_SECONDS = 4.0
+MUSIC_AREA_TRANSITION_SECONDS = 5.0
+MUSIC_MUTE_FADE_SECONDS = 2.0
 COMBAT_MUSIC_CONTEXTS = frozenset({"combat", "miniboss_combat", "boss_combat"})
 LOCAL_MUSIC_CONTEXTS = frozenset({"camp", "inn", "town", "city"})
 
@@ -113,6 +114,8 @@ class MusicMixin:
         self._music_context: str | None = None
         self._music_track_name: str | None = None
         self._last_music_track_by_context: dict[str, str] = {}
+        self._played_music_track_ids_by_folder: dict[tuple[str, ...], set[str]] = {}
+        self._last_music_track_id_by_folder: dict[tuple[str, ...], str] = {}
         self._last_music_transition_at = 0.0
         self._music_asset_dir = MUSIC_ASSET_DIR
         self._music_supported = audio_backend.music_is_available()
@@ -131,17 +134,44 @@ class MusicMixin:
             if audio_backend.music_file_is_supported(path)
         ]
 
+    def _music_folder_key_for_context(self, context: str) -> tuple[str, ...]:
+        folder_names = MUSIC_CONTEXT_FOLDERS.get(context, (context,))
+        return (str(self._music_asset_dir.resolve()), *folder_names)
+
+    def _music_track_id(self, path: Path) -> str:
+        return str(path.resolve())
+
     def choose_music_file(self, context: str) -> Path | None:
         candidates = self.music_files_for_context(context)
         if not candidates:
             return None
-        last_track = self._last_music_track_by_context.get(context)
-        if len(candidates) > 1 and last_track is not None:
-            filtered = [candidate for candidate in candidates if candidate.name != last_track]
-            if filtered:
-                candidates = filtered
+        folder_key = self._music_folder_key_for_context(context)
+        played_track_ids = self._played_music_track_ids_by_folder.setdefault(folder_key, set())
+        current_track_ids = {self._music_track_id(candidate) for candidate in candidates}
+        played_track_ids.intersection_update(current_track_ids)
+        candidates_by_play_status = [
+            candidate
+            for candidate in candidates
+            if self._music_track_id(candidate) not in played_track_ids
+        ]
+        if not candidates_by_play_status:
+            last_track_id = self._last_music_track_id_by_folder.get(folder_key)
+            played_track_ids.clear()
+            if len(candidates) > 1 and last_track_id in current_track_ids:
+                played_track_ids.add(last_track_id)
+                candidates_by_play_status = [
+                    candidate
+                    for candidate in candidates
+                    if self._music_track_id(candidate) != last_track_id
+                ]
+            else:
+                candidates_by_play_status = candidates
         chooser = getattr(self.rng, "choice", random.choice)
-        return chooser(candidates)
+        selected = chooser(candidates_by_play_status)
+        selected_track_id = self._music_track_id(selected)
+        played_track_ids.add(selected_track_id)
+        self._last_music_track_id_by_folder[folder_key] = selected_track_id
+        return selected
 
     def play_music_for_context(self, context: str, *, restart: bool = False, transition_seconds: float | None = None) -> None:
         if not self.music_enabled or not self._music_supported:

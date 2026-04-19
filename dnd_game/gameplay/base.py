@@ -91,6 +91,7 @@ class GameBase:
         "neverwinter_briefing": "Neverwinter",
         "road_ambush": "High Road",
         "high_road_liars_circle": "Liar's Circle",
+        "high_road_false_checkpoint": "False Checkpoint",
         "high_road_false_tollstones": "False Tollstones",
         "phandalin_hub": "Phandalin",
         "old_owl_well": "Old Owl Well",
@@ -111,6 +112,8 @@ class GameBase:
         "black_lake_causeway": "Black Lake Causeway",
         "forge_of_spells": "Forge of Spells",
         "act2_scaffold_complete": "Wave Echo Cave",
+        "act3_ninth_ledger_opens": "Ninth Ledger",
+        "act3_ninth_ledger_aftermath": "Ledger Aftermath",
     }
     SCENE_OBJECTIVES = {
         "background_prologue": "Finish your origin story and answer the road's first test.",
@@ -119,6 +122,7 @@ class GameBase:
         "road_decision_post_blackwake": "Choose whether to report back to Neverwinter or press south after Blackwake.",
         "road_ambush": "Survive the High Road attack and reach Phandalin.",
         "high_road_liars_circle": "Solve the four-statue liar's puzzle or leave the circle alone.",
+        "high_road_false_checkpoint": "Expose or outtalk the fake roadwardens demanding travel papers.",
         "high_road_false_tollstones": "Break or outtalk the false roadwarden toll at the broken milemarker.",
         "phandalin_hub": "Choose which pressure in Phandalin to answer next.",
         "old_owl_well": "Break the grave-salvage line at Old Owl Well.",
@@ -139,6 +143,8 @@ class GameBase:
         "black_lake_causeway": "Cross the Black Lake route and keep the line intact.",
         "forge_of_spells": "Break the Quiet Choir's hold on the Forge.",
         "act2_scaffold_complete": "Bring the truth back out of Wave Echo Cave.",
+        "act3_ninth_ledger_opens": "Expose the route that Varyn did not design.",
+        "act3_ninth_ledger_aftermath": "Track revealed Ledger pressure and unrecorded choices.",
     }
     HUD_QUEST_FOCUSED_SCENES = {
         "phandalin_hub",
@@ -307,6 +313,7 @@ class GameBase:
             "road_decision_post_blackwake": self.scene_road_decision_post_blackwake,
             "road_ambush": self.scene_road_ambush,
             "high_road_liars_circle": self.scene_high_road_liars_circle,
+            "high_road_false_checkpoint": self.scene_high_road_false_checkpoint,
             "high_road_false_tollstones": self.scene_high_road_false_tollstones,
             "phandalin_hub": self.scene_phandalin_hub,
             "old_owl_well": self.scene_old_owl_well,
@@ -327,6 +334,8 @@ class GameBase:
             "black_lake_causeway": self.scene_black_lake_causeway,
             "forge_of_spells": self.scene_forge_of_spells,
             "act2_scaffold_complete": self.scene_act2_scaffold_complete,
+            "act3_ninth_ledger_opens": self.scene_act3_ninth_ledger_opens,
+            "act3_ninth_ledger_aftermath": self.scene_act3_ninth_ledger_aftermath,
         }
 
     def load_persisted_settings(self) -> dict[str, object]:

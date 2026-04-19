@@ -317,7 +317,7 @@ This means the game's narrative identity is not only in scenes; part of it lives
 
 1. Background-specific prologue in or near Neverwinter.
 2. Mira Thann's private briefing.
-3. High Road ambush and Tolan pivot.
+3. High Road ambush, Tolan pivot, and optional post-ambush High Road side branches.
 4. Phandalin hub, side conversations, and possible early discovery of the hidden `Cinderfall` route.
 5. `Old Owl Well` and `Wyvern Tor` in either order.
 6. Optional `Cinderfall Ruins` relay strike before the main assault.
@@ -371,6 +371,18 @@ Resolution choices after victory:
 
 - Recruit `Tolan` immediately.
 - Send him to recover at `Stonehill Inn` and recruit him later.
+
+Post-ambush side branches:
+
+- `Liar's Circle`: logic puzzle; correct answer grants `Liar's Blessing`, wrong answer applies `Liar's Curse`.
+- `False Roadwarden Checkpoint`: non-combat social encounter with fake roadwardens demanding papers. Can resolve through `Deception`, `Insight`, `Persuasion`, `Intimidation`, or contract-house proof from Oren/Sabra/Garren.
+- `False Tollstones`: false toll operation at a broken milemarker; `Liar's Blessing` can bypass the normal checks.
+
+What the checkpoint adds:
+
+- makes Neverwinter contract-house intel matter before Blackwake,
+- sets Blackwake route leads when exposed,
+- gives the player a social answer to copied roadwarden authority instead of another fight.
 
 ### Phandalin arrival
 
@@ -460,12 +472,15 @@ Conversation options:
 - `Nature`: inspect ash blight and sabotage in the orchard.
 - Ask about `Wyvern Tor`.
 - `Athletics`: run a frontier warm-up drill with Daran.
+- `Stealth`: recover Daran's old adventurer's cache quietly; failure triggers an `Edermath Orchard Watchers` encounter.
 - Turn in the Wyvern Tor quest.
 
 What this hub adds:
 
 - Daran's old-soldier voice.
 - The main lead into `Wyvern Tor`.
+- A unique Act 1 reward, `edermath_cache_compass`, plus `act2_edermath_cache_routework` for later route-control pressure.
+- Different cache dialogue if `Wyvern Tor` has already been cleared before the cache is recovered.
 
 #### Miner's Exchange / Halia Thornton
 
@@ -699,12 +714,22 @@ Room story beats:
     - quietly open the coffer,
     - drag the whole coffer out
 - `Cistern Eye`
-  - Nothic fight, no real negotiation
+  - Nothic roleplay boss before the fight.
+  - The Cistern Eye reads the player's background, then offers four routes:
+    - kill it immediately for the safe path,
+    - trade a memory, self-truth, or active Bryn/Rhogar secret,
+    - bargain repeatedly for escalating lore,
+    - deceive it for full lore with no sanity cost on success.
+  - Repeated bargains reveal Emberhall first, then Cinderfall's relay role, then Wave Echo / Forge of Spells foreshadowing.
+  - Bargain costs escalate through combat debuffs, `Whispered Through`, and active companion distrust.
+  - Bryn betrayal exposes `bryn_secret_exposed`; Rhogar betrayal sets `rhogar_cistern_conflict_pending`.
 
 Story function:
 
 - Shows that the manor is the intake route, not the final command center.
 - Confirms Varyn has withdrawn deeper into Emberhall.
+- Can reveal Cinderfall and Wave Echo context early if the player accepts risk or wins the Deception route.
+- Turns the Manor into a late-Act companion-trust and player-background pressure scene instead of only a monster room.
 
 #### Emberhall Cellars
 
@@ -826,6 +851,7 @@ Act 1 carryover choices push these values:
 
 - saving townsfolk and handling civic scenes feeds `Town Stability`,
 - road and outpost wins feed `Route Control`,
+- recovering Daran's old cache adds a quieter orchard-to-highland route-control hook,
 - shrine and spiritual choices can lower `Whisper Pressure`,
 - which companions were recruited also unlocks side arcs that shift later pressure.
 

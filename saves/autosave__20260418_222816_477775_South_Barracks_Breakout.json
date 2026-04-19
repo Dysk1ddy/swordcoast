@@ -51,7 +51,7 @@
       "stealth_disadvantage": true
     },
     "hit_die": 10,
-    "current_hp": 1,
+    "current_hp": 12,
     "max_hp": 12,
     "shield": true,
     "spellcasting_ability": null,
@@ -99,8 +99,11 @@
     "companion_id": "",
     "disposition": 0,
     "lore": [],
-    "bond_flags": {},
+    "bond_flags": {
+      "story_skill_modifiers": {}
+    },
     "relationship_bonuses": {},
+    "story_skill_bonuses": {},
     "stable": false,
     "dead": false,
     "death_successes": 0,
@@ -134,16 +137,14 @@
   "journal": [
     "Your soldier's opening leaves you with a live look at how hard Neverwinter is leaning on thin patrol lines and tired veterans to protect the road south.",
     "Word reaches you that Mira Thann is quietly gathering capable hands in Neverwinter against a new bandit threat around Phandalin.",
-    "Reward from South Barracks Breakout: 50 XP, 8 gp.",
-    "Looted Roadworn Leather Armor x1 from South Barracks Breakout.",
-    "Looted Potion of Healing x1 from South Barracks Breakout."
+    "Reward from South Barracks Breakout: 50 XP, 8 gp."
   ],
   "quests": {},
   "completed_acts": [],
   "xp": 50,
   "gold": 28,
   "inventory": {
-    "potion_healing": 3,
+    "potion_healing": 2,
     "bread_round": 4,
     "travel_biscuits": 4,
     "dried_fish": 3,
@@ -153,8 +154,7 @@
     "antitoxin_vial": 1,
     "chain_mail_common": 1,
     "longsword_common": 1,
-    "shield_common": 1,
-    "leather_armor_common": 1
+    "shield_common": 1
   },
   "short_rests_remaining": 2
 }

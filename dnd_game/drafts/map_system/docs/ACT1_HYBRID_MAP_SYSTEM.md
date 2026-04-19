@@ -295,7 +295,7 @@ This is the clearest Act 1 use of a linear unlock inside a grid site.
 
 ### Goal
 
-Give the manor descent one mandatory combat lane and one clue lane.
+ Give the manor descent one mandatory combat lane, one clue lane, and a Nothic roleplay boss that can become a costly information bargain before combat.
 
 ### Structure
 
@@ -317,7 +317,11 @@ Give the manor descent one mandatory combat lane and one clue lane.
 - `cage_store`
   - optional follow-up clue room
 - `nothic_lair`
-  - boss room requiring the intake clear and at least one clue flag
+  - roleplay boss room requiring the intake clear and at least one clue flag
+  - the Cistern Eye reads the player's background before offering kill, trade, repeated bargain, or Deception routes
+  - repeated bargains escalate from Emberhall truth to Cinderfall relay lore to Wave Echo / Forge foreshadowing
+  - greed costs include sanity-style combat debuffs, `Whispered Through`, and active companion distrust
+  - Bryn and Rhogar can be betrayed for information, setting follow-up trust flags
 
 ## Emberhall Cellars
 

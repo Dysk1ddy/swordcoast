@@ -48,6 +48,7 @@ class StoryIntroMixin:
             or f"Your {background.lower()} prologue ends with the trail leading toward Mira Thann's private briefing in Neverwinter."
         )
         self.state.flags["background_prologue_completed"] = background
+        self.state.flags["system_profile_seeded"] = True
         self.state.flags.pop("background_prologue_pending", None)
         self.state.current_scene = "neverwinter_briefing"
 
@@ -567,7 +568,7 @@ class StoryIntroMixin:
             options.extend(self.scene_identity_options("neverwinter_briefing"))
             if not self.state.flags.get("neverwinter_preparation_done"):
                 options.append(("prep", self.action_option("Make one more stop in Neverwinter before riding out.")))
-            options.append(("inn", self.action_option("Stop by Oren Vale's contract house (rooms 10 gp per active party member).")))
+            options.append(("inn", self.action_option("Stop by Oren Vale's contract house.")))
             options.append(("leave", self.action_option("Take the writ and head for the High Road.")))
             choice = self.scenario_choice("Choose your response to Mira.", [text for _, text in options])
             selection_key, selection = options[choice - 1]
@@ -616,6 +617,8 @@ class StoryIntroMixin:
         if choice == 1:
             success = self.skill_check(self.state.player, "Investigation", 12, context="to piece together the caravan trail")
             if success:
+                self.state.flags["system_profile_seeded"] = True
+                self.state.flags["varyn_route_pattern_seen"] = True
                 self.say("The ledger gaps stop looking random and start forming a route pattern with one ugly choke point in common.")
                 self.add_clue("Caravan ledgers point to repeated disappearances near the old switchback east of Phandalin.")
                 self.reward_party(xp=15, gold=8, reason="reviewing caravan ledgers")
@@ -1147,7 +1150,7 @@ class StoryIntroMixin:
         helped_elira = False
         if choice == 1:
             self.player_action("Stabilize the poisoned drover with Elira.")
-            helped_elira = self.skill_check(self.state.player, "Medicine", 12, context="to slow the ash-bitter poison")
+            helped_elira = self.skill_check(self.state.player, "Medicine", 8, context="to slow the ash-bitter poison")
             if helped_elira:
                 self.state.flags["elira_helped"] = True
                 self.state.flags["neverwinter_elira_helped"] = True
@@ -1159,7 +1162,7 @@ class StoryIntroMixin:
                 self.say("The poison keeps moving, but your pressure and clean bandage buy Elira enough time to save the drover.")
         elif choice == 2:
             self.player_action("Lead Tymora's road-prayer for the waiting caravan.")
-            helped_elira = self.skill_check(self.state.player, "Religion", 12, context="to steady the shrine and caravan")
+            helped_elira = self.skill_check(self.state.player, "Religion", 8, context="to steady the shrine and caravan")
             self.add_inventory_item("blessed_salve", source="Elira's shrine satchel")
             if helped_elira:
                 self.state.flags["elira_helped"] = True
@@ -1170,7 +1173,7 @@ class StoryIntroMixin:
                 self.say("The words land unevenly, but the caravan still leaves with steadier hands and one less argument.")
         elif choice == 3:
             self.player_action("Study the ash toxin and the false road marks on the harness.")
-            helped_elira = self.skill_check(self.state.player, "Investigation", 12, context="to connect poison, harness marks, and forged authority")
+            helped_elira = self.skill_check(self.state.player, "Investigation", 8, context="to connect poison, harness marks, and forged authority")
             if helped_elira:
                 self.state.flags["elira_helped"] = True
                 self.state.flags["neverwinter_false_road_marks_found"] = True
@@ -1197,7 +1200,7 @@ class StoryIntroMixin:
             if self.state.flags.get("elira_helped") or self.skill_check(
                 self.state.player,
                 "Persuasion",
-                12,
+                8,
                 context="to convince Elira the field needs her now",
             ):
                 self.recruit_companion(create_elira_dawnmantle())
@@ -1482,6 +1485,24 @@ class StoryIntroMixin:
             self.state.flags.get("high_road_tollstones_resolved")
         )
 
+    def high_road_false_checkpoint_available(self) -> bool:
+        assert self.state is not None
+        return bool(self.state.flags.get("high_road_false_checkpoint_available")) and not bool(
+            self.state.flags.get("high_road_false_checkpoint_resolved")
+        )
+
+    def has_false_checkpoint_contract_proof(self) -> bool:
+        assert self.state is not None
+        if self.state.flags.get("neverwinter_private_room_intel") or self.state.flags.get(
+            "quest_reward_neverwinter_private_room_access"
+        ):
+            return True
+        return bool(
+            self.has_quest("false_manifest_circuit")
+            and self.state.flags.get("false_manifest_oren_detail")
+            and self.state.flags.get("false_manifest_garren_detail")
+        )
+
     def discover_high_road_tollstones_branch(self) -> None:
         assert self.state is not None
         if self.state.flags.get("high_road_tollstones_branch_discovered"):
@@ -1495,9 +1516,23 @@ class StoryIntroMixin:
         self.add_clue("A broken High Road milemarker still carries fresh false-roadwarden paint.")
         self.add_journal("A broken milemarker near the High Road ambush points to another false toll operation.")
 
+    def discover_high_road_false_checkpoint_branch(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("high_road_false_checkpoint_discovered"):
+            return
+        self.state.flags["high_road_false_checkpoint_discovered"] = True
+        self.state.flags["high_road_false_checkpoint_available"] = True
+        self.say(
+            "A little farther south, fresh bootlines and a canvas shade mark an improvised roadwarden checkpoint. "
+            "The men under it stand too straight around borrowed authority and too loose around real danger."
+        )
+        self.add_clue("Fake roadwardens have set a High Road checkpoint demanding papers from southbound travelers.")
+        self.add_journal("A false roadwarden checkpoint waits on the High Road south of the ambush site.")
+
     def discover_high_road_side_branches(self) -> None:
         self.discover_liars_circle_branch()
         self.discover_high_road_tollstones_branch()
+        self.discover_high_road_false_checkpoint_branch()
 
     def scene_high_road_liars_circle(self) -> None:
         assert self.state is not None
@@ -1589,6 +1624,123 @@ class StoryIntroMixin:
         self.speaker("King", "A confident answer is still an answer.")
         self.say("The ring snaps shut with a sound like a lock turning under your tongue.")
         self.apply_liars_curse()
+
+    def scene_high_road_false_checkpoint(self) -> None:
+        assert self.state is not None
+        self.banner("False Roadwarden Checkpoint")
+        self.state.flags["high_road_false_checkpoint_seen"] = True
+        self.say(
+            "A canvas shade hangs over the road where no lawful checkpoint should be. Three men in borrowed roadwarden colors demand papers, "
+            "one hand on a ledger and the other near a whistle meant for somebody hidden in the brush.",
+            typed=True,
+        )
+        if self.state.flags.get("high_road_false_checkpoint_resolved"):
+            self.say("The false checkpoint has already folded. Only wheel ruts, cut rope, and a discarded paper seal remain.")
+            self.travel_to_act1_node(
+                "phandalin_hub",
+                transition_text="You leave the false checkpoint behind and continue toward Phandalin.",
+            )
+            return
+
+        options: list[tuple[str, str]] = []
+        if self.has_false_checkpoint_contract_proof():
+            options.append(
+                (
+                    "proof",
+                    self.skill_tag(
+                        "CONTRACT HOUSE PROOF",
+                        self.action_option("Use Oren, Sabra, and Garren's evidence to break the checkpoint's authority."),
+                    ),
+                )
+            )
+        options.extend(
+            [
+                ("deception", self.skill_tag("DECEPTION", self.action_option("Present yourself as the inspector they were expecting."))),
+                ("insight", self.skill_tag("INSIGHT", self.action_option("Name the one phrase no real roadwarden would use."))),
+                ("persuasion", self.skill_tag("PERSUASION", self.action_option("Convince the checkpoint hands they are holding poison, not power."))),
+                ("intimidation", self.skill_tag("INTIMIDATION", self.action_option("Make the copied seals feel more dangerous to carry than to abandon."))),
+                ("comply", self.action_option("Show harmless papers, pay the nuisance fee, and keep moving.")),
+            ]
+        )
+        choice = self.scenario_choice("The fake roadwardens demand your papers. What do you do?", [text for _, text in options], allow_meta=False)
+        selection_key, selection_text = options[choice - 1]
+        self.player_choice_output(selection_text)
+        if selection_key == "proof":
+            self.say(
+                "Oren's room line, Sabra's corrected manifest, and Garren's forbidden cadence land like three nails through the same false seal. "
+                "The ledger man shuts the book before his own hands can betray him."
+            )
+            self.resolve_high_road_false_checkpoint(success=True, method="proof")
+        elif selection_key == "deception":
+            success = self.skill_check(self.state.player, "Deception", 13, context="to impersonate the inspector the fake checkpoint expected")
+            self.resolve_high_road_false_checkpoint(success=success, method="deception")
+        elif selection_key == "insight":
+            success = self.skill_check(self.state.player, "Insight", 12, context="to expose the false roadwarden cadence in their demand")
+            self.resolve_high_road_false_checkpoint(success=success, method="insight")
+        elif selection_key == "persuasion":
+            success = self.skill_check(self.state.player, "Persuasion", 13, context="to talk the checkpoint hands out of copied authority")
+            self.resolve_high_road_false_checkpoint(success=success, method="persuasion")
+        elif selection_key == "intimidation":
+            success = self.skill_check(self.state.player, "Intimidation", 13, context="to make the false checkpoint abandon its papers")
+            self.resolve_high_road_false_checkpoint(success=success, method="intimidation")
+        else:
+            self.resolve_high_road_false_checkpoint(success=False, method="compliance")
+
+        self.travel_to_act1_node(
+            "phandalin_hub",
+            transition_text="You leave the false checkpoint behind and follow the High Road south.",
+        )
+
+    def resolve_high_road_false_checkpoint(self, *, success: bool, method: str) -> None:
+        assert self.state is not None
+        self.state.flags["high_road_false_checkpoint_resolved"] = True
+        self.state.flags["high_road_false_checkpoint_available"] = False
+        self.state.flags["high_road_false_checkpoint_resolution"] = method if success else "paid_fee"
+        if not success:
+            fee = min(6, self.state.gold)
+            if fee:
+                self.state.gold -= fee
+            self.state.flags["high_road_false_checkpoint_fee_paid"] = True
+            self.apply_status(self.state.player, "reeling", 1, source="a humiliating false checkpoint delay")
+            self.say(
+                f"The checkpoint fails to find real leverage, but it wastes your time and extracts {fee} gp before waving you through with clerkly contempt."
+            )
+            self.add_journal("You passed the false roadwarden checkpoint by paying its nuisance fee instead of exposing it.")
+            return
+
+        self.state.flags["high_road_false_checkpoint_exposed"] = True
+        self.state.flags["blackwake_false_checkpoint_exposed"] = True
+        self.state.flags["blackwake_millers_ford_lead"] = True
+        self.state.flags["road_patrol_writ"] = True
+        self.state.flags["system_profile_seeded"] = True
+        self.state.flags["varyn_route_pattern_seen"] = True
+        self.add_clue("A High Road false checkpoint uses the same roadwarden cadence tied to Miller's Ford and copied Neverwinter authority.")
+        if method == "proof":
+            self.state.flags["high_road_false_checkpoint_contract_proof_used"] = True
+            self.state.flags["neverwinter_contract_house_checkpoint_pressure"] = True
+            self.state.flags["blackwake_gallows_copse_lead"] = True
+            self.say(
+                "One fake warden bolts; another leaves the ledger behind. The names in it point toward Miller's Ford, Gallows Copse, and the same correction line Sabra feared."
+            )
+            self.reward_party(xp=30, gold=14, reason="using contract-house proof to collapse a false High Road checkpoint")
+            self.add_journal("Oren, Sabra, and Garren's evidence broke a false High Road checkpoint before Blackwake could frame the proof as rumor.")
+        elif method == "deception":
+            self.say("Your false authority outranks theirs just long enough to make the ledger open and the checkpoint fold around its own panic.")
+            self.reward_party(xp=20, gold=10, reason="deceiving the false High Road checkpoint")
+            self.add_journal("You bluffed the false roadwarden checkpoint into exposing its Miller's Ford lead.")
+        elif method == "insight":
+            self.say("You repeat their own wrong phrase back at them and name why no real roadwarden would say it. The borrowed uniforms suddenly look much too large.")
+            self.reward_party(xp=20, gold=8, reason="reading the false High Road checkpoint's bad cadence")
+            self.add_journal("You exposed the false roadwarden checkpoint by reading its wrong patrol cadence.")
+        elif method == "persuasion":
+            self.state.flags["high_road_false_checkpoint_hands_spared"] = True
+            self.say("The checkpoint hands choose distance over loyalty. One leaves the ledger on the road and tells you which ford the papers came from.")
+            self.reward_party(xp=20, gold=6, reason="talking down the false High Road checkpoint")
+            self.add_journal("You persuaded the false checkpoint hands to abandon their forged road authority.")
+        else:
+            self.say("The copied seals hit the dirt before your threat finishes. Nobody there wants to be the last fool holding treason in daylight.")
+            self.reward_party(xp=20, gold=8, reason="intimidating the false High Road checkpoint into retreat")
+            self.add_journal("You intimidated the false roadwarden checkpoint into dropping its copied seals.")
 
     def scene_high_road_false_tollstones(self) -> None:
         assert self.state is not None
@@ -1684,6 +1836,8 @@ class StoryIntroMixin:
             return
 
         self.state.flags["high_road_tollstones_ledger_taken"] = True
+        self.state.flags["system_profile_seeded"] = True
+        self.state.flags["varyn_route_pattern_seen"] = True
         self.add_inventory_item("antitoxin_vial", 1, source="the false toll lockbox")
         if method == "blessing":
             self.state.flags["high_road_tollstones_blessing_used"] = True
@@ -1738,6 +1892,13 @@ class StoryIntroMixin:
                         self.skill_tag("PARLEY", self.action_option("Investigate the broken roadwarden milemarker.")),
                     )
                 )
+            if self.high_road_false_checkpoint_available():
+                options.append(
+                    (
+                        "checkpoint",
+                        self.skill_tag("SOCIAL", self.action_option("Challenge the false roadwarden checkpoint.")),
+                    )
+                )
             choice = self.scenario_choice("Where do you go from the High Road?", [text for _, text in options], allow_meta=False)
             selection_key, _ = options[choice - 1]
             if selection_key == "backtrack":
@@ -1757,6 +1918,13 @@ class StoryIntroMixin:
                 self.travel_to_act1_node(
                     "false_tollstones",
                     transition_text="You follow the paint-scarred markers to a broken roadwarden stone and a waiting false toll.",
+                )
+                return
+            if selection_key == "checkpoint":
+                self.player_action("Challenge the false roadwarden checkpoint.")
+                self.travel_to_act1_node(
+                    "false_checkpoint",
+                    transition_text="You follow fresh bootlines to a canvas shade and men wearing borrowed roadwarden authority.",
                 )
                 return
             self.travel_to_act1_node(

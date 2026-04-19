@@ -492,6 +492,9 @@
       "Varyn Sable"
     ],
     "act1_complete": true,
+    "varyn_body_defeated_act1": true,
+    "varyn_route_displaced": true,
+    "act1_ashen_brand_broken": true,
     "act1_town_fear": 2,
     "act1_ashen_strength": 3,
     "act1_survivors_saved": 0,

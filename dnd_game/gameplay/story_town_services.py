@@ -65,7 +65,7 @@ class StoryTownServicesMixin:
             if selection_key == "medicine":
                 self.state.flags["shrine_medicine_attempted"] = True
                 self.player_speaker("Let me examine the poisoned miner.")
-                success = self.skill_check(self.state.player, "Medicine", 12, context="to stabilize the miner")
+                success = self.skill_check(self.state.player, "Medicine", 8, context="to stabilize the miner")
                 if success:
                     self.state.flags["elira_helped"] = True
                     self.speaker("Elira Dawnmantle", "Good hands. You just bought this miner another sunrise.")
@@ -75,7 +75,7 @@ class StoryTownServicesMixin:
             elif selection_key == "prayer":
                 self.state.flags["shrine_prayer_attempted"] = True
                 self.player_speaker("I'll offer a prayer with you.")
-                success = self.skill_check(self.state.player, "Religion", 12, context="to guide a steady prayer")
+                success = self.skill_check(self.state.player, "Religion", 8, context="to guide a steady prayer")
                 if success:
                     self.state.flags["elira_helped"] = True
                     self.speaker("Elira Dawnmantle", "Luck still walks beside you. I can feel it.")
@@ -98,7 +98,7 @@ class StoryTownServicesMixin:
                     self.recruit_companion(create_elira_dawnmantle())
                     self.speaker("Elira Dawnmantle", "Then I will walk with you. The road needs more than prayers.")
                 else:
-                    success = self.skill_check(self.state.player, "Persuasion", 12, context="to ask Elira into danger")
+                    success = self.skill_check(self.state.player, "Persuasion", 8, context="to ask Elira into danger")
                     if success:
                         self.recruit_companion(create_elira_dawnmantle())
                         self.speaker("Elira Dawnmantle", "Very well. Faith that never leaves the shrine is only half alive.")

@@ -22,6 +22,7 @@ from .gameplay.sound_effects import SoundEffectsMixin
 from .gameplay.status_effects import StatusEffectMixin
 from .gameplay.story_act1_expanded import StoryAct1ExpandedMixin
 from .gameplay.story_act2_scaffold import StoryAct2ScaffoldMixin
+from .gameplay.story_act3_scaffold import StoryAct3ScaffoldMixin
 from .gameplay.story_endgame import StoryEndgameMixin
 from .gameplay.story_intro import StoryIntroMixin
 from .gameplay.story_town_hub import StoryTownHubMixin
@@ -35,6 +36,7 @@ class TextDnDGame(
     MapSystemMixin,
     StoryAct1ExpandedMixin,
     StoryAct2ScaffoldMixin,
+    StoryAct3ScaffoldMixin,
     StoryEndgameMixin,
     StoryTownServicesMixin,
     StoryTownHubMixin,

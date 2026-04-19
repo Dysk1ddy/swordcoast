@@ -13,15 +13,16 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 - Named minibosses: `Vaelith Marr`, `Brughor Skullcleaver`, and `Rukhar Cinderfang`
 - Final boss: `Varyn Sable`
 - Total potential Act 1 combats now comfortably exceeds 10 before counting random encounters
-- New non-combat support hubs: Neverwinter's contract house, `Edermath Orchard`, `Miner's Exchange`, Stonehill war-room, and the post-Ashfall lantern vigil
+- New support hubs: Neverwinter's contract house, `Edermath Orchard`, `Miner's Exchange`, Stonehill war-room, and the post-Ashfall lantern vigil. Edermath Orchard now includes an optional old-cache stealth scene that becomes combat if the approach fails.
 - Quest set currently defined in data: 13 Act 1 quests, including 5 inn quests across Neverwinter and Stonehill, 6 wider town or road quests, and 2 companion personal quests
 - Reactivity layer now tracks `Town Fear`, `Ashen Strength`, and `Survivors Saved`, then resolves Act 1 as `clean_victory`, `costly_victory`, or `fractured_victory`
 
 ## Expanded Act 1 Route
 
 1. Neverwinter setup, briefing, contract-house social hub, and one background-specific opening encounter or shortcut
-2. High Road ambush and Tolan recruitment point
+2. High Road ambush and Tolan recruitment point, with optional post-ambush side branches into `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones`
 3. Phandalin arrival, inn / shrine / shop / steward loops, orchard / exchange hubs, and a possible early `Cinderfall` reveal on a strong `Insight` read
+   - Edermath Orchard can also reveal Daran's old adventurer's cache: a `Stealth` DC 12 route to recover `edermath_cache_compass`, or a watcher encounter on failure.
 4. Old Owl Well route:
    dig-ring fight -> salt cart or supply trench branch -> Vaelith Marr miniboss
 5. Wyvern Tor route:
@@ -33,7 +34,10 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
    gate fight -> prisoner yard / signal event -> lower barracks fight -> Rukhar miniboss
 9. Lantern vigil fixed event back in Phandalin
 10. Tresendar Manor route:
-   cellar intake fight -> cistern event -> Cistern Eye fight
+   cellar intake fight -> cistern event -> Cistern Eye roleplay boss / fight
+   - Cistern Eye routes: kill it, trade a memory/truth/companion secret, bargain repeatedly, or deceive it.
+   - Bargain and Deception routes can reveal Cinderfall relay context and Wave Echo / Forge foreshadowing before Emberhall.
+   - The risky routes apply sanity-style combat pressure, `Whispered Through`, and companion trust costs.
 11. Emberhall finale:
    antechamber fight -> chained clerk / ledger event -> Varyn boss fight
 
@@ -246,6 +250,7 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - Garren Flint exposes how copied roadwarden cadence keeps getting obeyed
 - `False Manifest Circuit` is a Neverwinter inn quest built from Oren, Vessa, and Garren's separate details, then turned back in to Sabra
 - Completing Sabra's quest unlocks an upstairs private-room scene that turns contract-house politics into Blackwake and High Road intelligence
+- Oren/Sabra/Garren proof can also collapse the `False Roadwarden Checkpoint` before Blackwake, making the contract-house thread pay off on the road itself
 - That private-room intel can be spent at Blackwake to corner Sereth Vane directly, then echoed through Mira's Neverwinter report if Oren, Sabra, Vessa, and Garren become public witnesses
 - `Ash In The Ale` can break out in the room if the player mishandles Vessa's table or pushes Garren too hard
 
@@ -263,6 +268,10 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - clue: the raiders answer to a hobgoblin sergeant tied to Ashfall Watch
   - extra reward: `25 XP`, `15 gp`
   - Tolan can be recruited immediately or left waiting at the inn
+- Post-ambush side branches:
+  - `Liar's Circle`: a four-statue logic puzzle that grants `Liar's Blessing` or applies `Liar's Curse`
+  - `False Roadwarden Checkpoint`: a non-combat social stop with Deception, Insight, Persuasion, Intimidation, or Oren/Sabra/Garren proof
+  - `False Tollstones`: a broken milemarker operation that changes if the player has `Liar's Blessing`
 
 ### Stonehill Inn
 
@@ -317,6 +326,10 @@ These flags show up repeatedly in Act 1 flow and are useful when debugging saves
 - `hidden_route_unlocked`
 - `cinderfall_relay_destroyed`
 - `bryn_cache_found`
+- `edermath_old_cache_recovered`
+- `act2_edermath_cache_routework`
+- `high_road_false_checkpoint_exposed`
+- `neverwinter_contract_house_checkpoint_pressure`
 - `bryn_ledger_burned`
 - `bryn_ledger_sold`
 - `elira_mercy_blessing`
