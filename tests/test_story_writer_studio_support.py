@@ -13,8 +13,11 @@ from dnd_game.ai.story_writer_studio_support import (
     ENV_REASONING_EFFORT,
     StoryWriterLaunchOptions,
     build_story_writer_command,
+    generated_story_output_dir,
     load_dotenv_values,
+    slugify_story_filename,
     split_multivalue_text,
+    suggested_story_output_path,
     update_dotenv_file,
 )
 
@@ -97,6 +100,32 @@ class StoryWriterStudioSupportTests(unittest.TestCase):
         self.assertIn("conyberry_agatha", command)
         self.assertIn("--no-default-context", command)
         self.assertIn("information\\Story\\generated\\agatha.md", " ".join(command))
+
+    def test_generated_story_output_dir_points_to_story_generated_folder(self) -> None:
+        expected = (Path.cwd() / "information" / "Story" / "generated").resolve()
+        self.assertEqual(generated_story_output_dir(Path.cwd()), expected)
+
+    def test_slugify_story_filename_normalizes_freeform_title(self) -> None:
+        self.assertEqual(slugify_story_filename("Agatha First Meeting Rewrite"), "agatha_first_meeting_rewrite")
+        self.assertEqual(slugify_story_filename(""), "story_writer_draft")
+
+    def test_suggested_story_output_path_prefers_title_then_scene_key(self) -> None:
+        root = Path.cwd()
+        path_from_title = suggested_story_output_path(
+            root,
+            title="Agatha First Meeting Rewrite",
+            scene_key="conyberry_agatha",
+            mode="revision",
+        )
+        path_from_scene = suggested_story_output_path(
+            root,
+            title="",
+            scene_key="conyberry_agatha",
+            mode="revision",
+        )
+
+        self.assertEqual(path_from_title.name, "agatha_first_meeting_rewrite.md")
+        self.assertEqual(path_from_scene.name, "conyberry_agatha.md")
 
 
 if __name__ == "__main__":

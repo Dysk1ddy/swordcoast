@@ -26,9 +26,11 @@ from dnd_game.ai.story_writer_studio_support import (
     StoryWriterLaunchOptions,
     build_story_writer_command,
     display_command,
+    generated_story_output_dir,
     load_dotenv_values,
     relative_or_absolute_path,
     split_multivalue_text,
+    suggested_story_output_path,
     update_dotenv_file,
 )
 
@@ -52,6 +54,8 @@ class StoryWriterStudioApp:
         self.output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         self.current_process: subprocess.Popen[str] | None = None
         self.current_worker: threading.Thread | None = None
+        self.current_command_captures_draft = False
+        self.current_command_output_lines: list[str] = []
 
         self.api_key_var = tk.StringVar()
         self.show_api_key_var = tk.BooleanVar(value=False)
@@ -248,6 +252,7 @@ class StoryWriterStudioApp:
         ttk.Label(output_frame, text="Saved output path").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 8))
         output_frame.columnconfigure(0, weight=1)
         output_frame.rowconfigure(2, weight=1)
+        output_frame.rowconfigure(3, weight=1)
         save_row = ttk.Frame(output_frame)
         save_row.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         save_row.columnconfigure(0, weight=1)
@@ -278,13 +283,26 @@ class StoryWriterStudioApp:
         self.stop_button.pack(fill="x", pady=6)
         ttk.Button(
             console_actions,
+            text="Save Draft",
+            command=self.save_generated_draft,
+            style="Studio.TButton",
+        ).pack(fill="x", pady=6)
+        ttk.Button(
+            console_actions,
             text="Clear Console",
             command=self.clear_console,
             style="Studio.TButton",
         ).pack(fill="x", pady=6)
 
-        self.console = ScrolledText(output_frame, height=20, wrap="word", state="disabled", font=("Consolas", 10))
-        self.console.grid(row=2, column=0, columnspan=2, sticky="nsew")
+        draft_frame = ttk.LabelFrame(output_frame, text="Rewritten Draft", style="Studio.TLabelframe")
+        draft_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(0, 8))
+        draft_frame.columnconfigure(0, weight=1)
+        draft_frame.rowconfigure(0, weight=1)
+        self.generated_draft_text = ScrolledText(draft_frame, height=14, wrap="word")
+        self.generated_draft_text.grid(row=0, column=0, sticky="nsew")
+
+        self.console = ScrolledText(output_frame, height=10, wrap="word", state="disabled", font=("Consolas", 10))
+        self.console.grid(row=3, column=0, columnspan=2, sticky="nsew")
 
         status_bar = ttk.Label(container, textvariable=self.status_var, style="Status.TLabel", anchor="w")
         status_bar.grid(row=3, column=0, sticky="ew", padx=4, pady=(0, 4))
@@ -310,6 +328,14 @@ class StoryWriterStudioApp:
         self.console.configure(state="normal")
         self.console.delete("1.0", "end")
         self.console.configure(state="disabled")
+
+    def generated_draft(self) -> str:
+        return self.generated_draft_text.get("1.0", "end").strip()
+
+    def set_generated_draft(self, text: str) -> None:
+        self.generated_draft_text.delete("1.0", "end")
+        if text:
+            self.generated_draft_text.insert("1.0", text)
 
     def add_context_path(self, path: Path) -> None:
         resolved = path.resolve()
@@ -346,10 +372,26 @@ class StoryWriterStudioApp:
         self.context_list.delete(0, "end")
 
     def choose_save_path(self) -> None:
+        current_value = self.save_path_var.get().strip()
+        current_path = None
+        if current_value:
+            current_path = Path(current_value)
+            if not current_path.is_absolute():
+                current_path = (self.project_root / current_path).resolve()
+        elif self.title_var.get().strip() or self.scene_key_var.get().strip():
+            current_path = suggested_story_output_path(
+                self.project_root,
+                title=self.title_var.get().strip(),
+                scene_key=self.scene_key_var.get().strip(),
+                mode=self.mode_var.get().strip() or "revision",
+            )
+        initial_dir = current_path.parent if current_path is not None else generated_story_output_dir(self.project_root)
+        initial_dir.mkdir(parents=True, exist_ok=True)
         selected = filedialog.asksaveasfilename(
             parent=self.root,
             title="Choose where to save the generated draft",
-            initialdir=str(self.project_root / "information" / "Story"),
+            initialdir=str(initial_dir),
+            initialfile=current_path.name if current_path is not None else "",
             defaultextension=".md",
             filetypes=[("Markdown files", "*.md"), ("Text files", "*.txt"), ("All files", "*.*")],
         )
@@ -403,7 +445,7 @@ class StoryWriterStudioApp:
 
     def install_openai_sdk(self) -> None:
         command = [sys.executable, "-m", "pip", "install", "openai"]
-        self.launch_command(command, description="Installing or upgrading the OpenAI SDK")
+        self.launch_command(command, description="Installing or upgrading the OpenAI SDK", capture_generated_output=False)
 
     def run_rewrite(self) -> None:
         options = self.collect_launch_options()
@@ -415,13 +457,15 @@ class StoryWriterStudioApp:
             project_root=self.project_root,
             options=options,
         )
-        self.launch_command(command, description="Running story_writer.py")
+        self.launch_command(command, description="Running story_writer.py", capture_generated_output=True)
 
-    def launch_command(self, command: list[str], *, description: str) -> None:
+    def launch_command(self, command: list[str], *, description: str, capture_generated_output: bool) -> None:
         if self.current_process is not None:
             messagebox.showinfo("Busy", "A command is already running in the studio console.")
             return
 
+        self.current_command_captures_draft = capture_generated_output
+        self.current_command_output_lines = []
         self.set_process_state(running=True)
         self.status_var.set(description + "...")
         self.append_console(f"\n[studio] {description}\n")
@@ -467,19 +511,76 @@ class StoryWriterStudioApp:
             except queue.Empty:
                 break
             if kind == "line":
+                if self.current_command_captures_draft:
+                    self.current_command_output_lines.append(payload)
                 self.append_console(payload)
             elif kind == "done":
                 return_code = int(payload)
                 if return_code == 0:
+                    if self.current_command_captures_draft:
+                        rewritten_text = "".join(self.current_command_output_lines).strip()
+                        self.set_generated_draft(rewritten_text)
+                        if rewritten_text:
+                            if not self.save_path_var.get().strip():
+                                suggested_path = suggested_story_output_path(
+                                    self.project_root,
+                                    title=self.title_var.get().strip(),
+                                    scene_key=self.scene_key_var.get().strip(),
+                                    mode=self.mode_var.get().strip() or "revision",
+                                )
+                                self.save_path_var.set(relative_or_absolute_path(suggested_path, self.project_root))
+                            self.append_console("[studio] Rewritten draft loaded into the editor pane.\n")
                     self.status_var.set("Command finished successfully.")
                     self.append_console("\n[studio] Command finished successfully.\n")
                 else:
                     self.status_var.set(f"Command exited with code {return_code}.")
                     self.append_console(f"\n[studio] Command exited with code {return_code}.\n")
+                self.current_command_captures_draft = False
+                self.current_command_output_lines = []
                 self.current_process = None
                 self.current_worker = None
                 self.set_process_state(running=False)
         self.root.after(100, self.process_output_queue)
+
+    def save_generated_draft(self) -> None:
+        draft = self.generated_draft()
+        if not draft:
+            messagebox.showerror("No rewritten text", "Run a rewrite first, or paste draft text into the rewritten draft pane.")
+            return
+        current_value = self.save_path_var.get().strip()
+        destination: Path | None = None
+        if current_value:
+            destination = Path(current_value)
+            if not destination.is_absolute():
+                destination = (self.project_root / destination).resolve()
+        else:
+            suggested = suggested_story_output_path(
+                self.project_root,
+                title=self.title_var.get().strip(),
+                scene_key=self.scene_key_var.get().strip(),
+                mode=self.mode_var.get().strip() or "revision",
+            )
+            generated_story_output_dir(self.project_root).mkdir(parents=True, exist_ok=True)
+            selected = filedialog.asksaveasfilename(
+                parent=self.root,
+                title="Save rewritten markdown",
+                initialdir=str(suggested.parent),
+                initialfile=suggested.name,
+                defaultextension=".md",
+                filetypes=[("Markdown files", "*.md"), ("Text files", "*.txt"), ("All files", "*.*")],
+            )
+            if not selected:
+                return
+            destination = Path(selected)
+        if destination.suffix.strip() == "":
+            destination = destination.with_suffix(".md")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(draft + "\n", encoding="utf-8")
+        self.save_path_var.set(relative_or_absolute_path(destination, self.project_root))
+        self.status_var.set(f"Saved rewritten draft to {relative_or_absolute_path(destination, self.project_root)}.")
+        self.append_console(
+            f"[studio] Saved rewritten draft to {relative_or_absolute_path(destination, self.project_root)}\n"
+        )
 
     def stop_process(self) -> None:
         if self.current_process is None:

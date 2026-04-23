@@ -94,6 +94,7 @@ python story_writer_studio.py
 ```
 
 or double-click `Launch Story Writer Studio.bat` on Windows. The studio lets you save your OpenAI API settings into the local `.env`, attach context files, write the rewrite brief, and watch the live `story_writer.py` output in an embedded console.
+After a successful rewrite, the generated markdown is also loaded into a dedicated draft pane with a `Save Draft` button that targets `information/Story/generated` by default.
 
 ## Act 1 map flow
 

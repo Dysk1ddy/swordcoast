@@ -58,6 +58,8 @@ The studio lets you:
 - attach story reference files and scene source files
 - write the brief you want to send to `story_writer.py`
 - watch the live command output in an embedded console
+- review the rewritten text in a dedicated draft pane
+- save the rewritten markdown into `information/Story/generated` with the `Save Draft` button
 - optionally install or upgrade `openai` from the same window
 
 ## Recommended workflow

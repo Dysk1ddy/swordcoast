@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import subprocess
 from typing import Iterable
 
@@ -103,6 +104,27 @@ def relative_or_absolute_path(path: Path, root: Path) -> str:
         return str(resolved.relative_to(root.resolve()))
     except ValueError:
         return str(resolved)
+
+
+def generated_story_output_dir(project_root: Path) -> Path:
+    return (project_root / "information" / "Story" / "generated").resolve()
+
+
+def slugify_story_filename(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", value.strip().lower()).strip("_")
+    return normalized or "story_writer_draft"
+
+
+def suggested_story_output_path(
+    project_root: Path,
+    *,
+    title: str = "",
+    scene_key: str = "",
+    mode: str = "revision",
+) -> Path:
+    base_name = title.strip() or scene_key.strip() or mode.strip() or "story_writer_draft"
+    directory = generated_story_output_dir(project_root)
+    return (directory / f"{slugify_story_filename(base_name)}.md").resolve()
 
 
 def build_story_writer_command(
