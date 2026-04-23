@@ -7658,6 +7658,8 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(game.state.player.race, "Orc")
         rendered = self.plain_output(log)
         self.assertIn("3. Fighter", rendered)
+        self.assertIn("Lark Voss, Astral Elf Bard", rendered)
+        self.assertNotIn("Elven Variant Bard", rendered)
         self.assertIn("Riven Ashguard, Orc Fighter", rendered)
         self.assertNotIn("Half-Orc Fighter", rendered)
         self.assertNotIn(f"3. Fighter: {PRESET_CHARACTERS['Fighter']['description']}", rendered)

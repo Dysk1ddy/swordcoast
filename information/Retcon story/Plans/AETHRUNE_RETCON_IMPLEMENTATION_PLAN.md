@@ -516,7 +516,7 @@ Focused string scan result:
 Phase 6 correction:
 
 - class display names were restored to the current class names pending a full class redesign
-- race display names were restored to bracketed retcon names while preserving internal mechanics keys, e.g. `Forged (Dragonborn)`, `Unrecorded (Gnome)`, `Elven Variant (Half-Elf)`, `Fire-Blooded (Tiefling)`, and `Riverfolk (Goliath)`
+- race display names were restored to bracketed retcon names while preserving internal mechanics keys, e.g. `Forged (Dragonborn)`, `Unrecorded (Gnome)`, `Astral Elf (Half-Elf)`, `Fire-Blooded (Tiefling)`, and `Riverfolk (Goliath)`
 - preset race assignments were cleaned up so the quick-start roster no longer exposes `Half-Orc`; the Fighter preset now uses the `Orc` mechanics key and displays as `Orc Fighter`
 - ability labels were restored to Strength, Intelligence, Wisdom, and Charisma while keeping Agility and Endurance
 

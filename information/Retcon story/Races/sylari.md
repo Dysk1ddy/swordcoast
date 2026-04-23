@@ -1,4 +1,4 @@
-# SYLARI (The Veil-Touched)
+# SYLARI (Astral Elves)
 
 ## Overview
 The Sylari are a rare and distinct offshoot of the Eldren, shaped by prolonged exposure to unstable Meridian Accord signal systems.

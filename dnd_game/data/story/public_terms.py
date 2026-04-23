@@ -14,7 +14,7 @@ RACE_PUBLIC_LABELS = {
     "Halfling": "Halfling",
     "Dragonborn": "Forged",
     "Gnome": "Unrecorded",
-    "Half-Elf": "Elven Variant",
+    "Half-Elf": "Astral Elf",
     "Half-Orc": "Orc-Blooded",
     "Tiefling": "Fire-Blooded",
     "Goliath": "Riverfolk",

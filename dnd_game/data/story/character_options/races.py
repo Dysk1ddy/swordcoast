@@ -41,7 +41,7 @@ RACES = {
         "skills": ["Investigation"],
     },
     "Half-Elf": {
-        "description": "Elven Variants bridge perception and memory with adaptable talent, charm, and sharp instincts.",
+        "description": "Astral Elves bridge perception and memory with adaptable talent, charm, and sharp instincts.",
         "bonuses": {"CHA": 2, "DEX": 1, "WIS": 1},
         "features": ["fey_ancestry"],
         "skills": ["Insight", "Persuasion"],

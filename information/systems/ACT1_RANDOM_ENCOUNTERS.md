@@ -30,7 +30,7 @@ This file documents the current Act 1 post-combat random encounter table. The us
 | 7 | `lone_wolf` | Lone Wolf at the Kill | beast standoff / optional loot |
 | 8 | `smuggler_cookfire` | Smuggler Cookfire | stealth or deception / Bryn hook / revenge setup |
 | 9 | `smuggler_revenge_squad` | Smuggler Revenge Squad | conditional reprisal fight |
-| 10 | `shrine_of_tymora` | Shrine of Tymora | shrine choice / blessing-flavored salvage |
+| 10 | `shrine_of_tymora` | Roadside Lantern Shrine | shrine choice / blessing-flavored salvage |
 | 11 | `half_sunk_satchel` | Half-Sunk Satchel | roadside salvage / hazard |
 | 12 | `ruined_wayhouse` | Ruined Wayhouse | ruin search / negotiation / possible fight |
 | 13 | `scavenger_cart` | Scavenger Cart | salvage / hidden compartment / possible fight |
@@ -128,7 +128,7 @@ Choices:
   - Failure: `5 gp`.
 - Take the reward and tell the messenger to keep breathing.
   - Reward: `7 gp`, `bread_round x1`.
-- Refuse the coin and tell them to spend it in Phandalin.
+- Refuse the coin and tell them to spend it in Iron Hollow.
   - No gold reward.
   - If `act1_adjust_metric` is available, reduces `act1_town_fear` by `1`.
 
@@ -179,7 +179,7 @@ Choices:
 - `Stealth DC 12`: circle wide and lift supplies before the campers notice.
   - Success: `4 gp`, `potion_healing x1`, camp disrupted, cache recovered.
   - Failure: starts `Smuggler Camp`, using a bandit pair. Victory counts as cache recovered.
-- `Deception DC 12`: warn that riders are coming from Neverwinter.
+- `Deception DC 12`: warn that riders are coming from Greywake.
   - Success: `7 gp`, `bread_round x1`, camp disrupted, cache recovered.
   - Failure: starts `Smuggler Panic`, using a bandit pair. Victory counts as cache recovered.
 - Leave the camp alone.
@@ -221,9 +221,9 @@ Choices:
 
 Follow-up flags: `smuggler_revenge_resolved=True`.
 
-## 10. Shrine of Tymora
+## 10. Roadside Lantern Shrine
 
-Premise: A weathered roadside shrine to Tymora leans beneath an oak with a dry offering bowl.
+Premise: A weathered roadside Lantern shrine leans beneath an oak with a dry offering bowl.
 
 Choices:
 

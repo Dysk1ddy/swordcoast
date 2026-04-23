@@ -31,6 +31,13 @@ Key canon:
 - The Ashen Brand controls routes through force, false authority, and supply pressure.
 - The Quiet Choir controls truth through records, signals, and listening systems.
 
+Current public terminology:
+
+- Classes currently display with their existing class names until the full class redesign pass.
+- Ability labels are `Strength`, `Agility`, `Endurance`, `Intelligence`, `Wisdom`, and `Charisma`.
+- Race labels preserve internal mechanics keys while displaying retcon names such as `Forged (Dragonborn)`, `Unrecorded (Gnome)`, `Astral Elf (Half-Elf)`, `Fire-Blooded (Tiefling)`, and `Riverfolk (Goliath)`.
+- Preset quick-start characters now display as Aethrune-facing pairings such as `Riverfolk Barbarian`, `Astral Elf Bard`, `Orc Fighter`, `Dwarf Cleric`, `Unrecorded Wizard`, `Forged Paladin`, and `Fire-Blooded Sorcerer`.
+
 Planning lives under:
 
 - `information/Retcon story/Plans/`

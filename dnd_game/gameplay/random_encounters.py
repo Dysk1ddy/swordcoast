@@ -16,7 +16,7 @@ ACT_1_POST_COMBAT_RANDOM_ENCOUNTERS: tuple[tuple[str, str, str], ...] = (
     ("lone_wolf", "Lone Wolf at the Kill", "random_encounter_lone_wolf"),
     ("smuggler_cookfire", "Smuggler Cookfire", "random_encounter_smuggler_cookfire"),
     ("smuggler_revenge_squad", "Smuggler Revenge Squad", "random_encounter_smuggler_revenge_squad"),
-    ("shrine_of_tymora", "Shrine of Tymora", "random_encounter_shrine_of_tymora"),
+    ("shrine_of_tymora", "Roadside Lantern Shrine", "random_encounter_shrine_of_tymora"),
     ("half_sunk_satchel", "Half-Sunk Satchel", "random_encounter_half_sunk_satchel"),
     ("ruined_wayhouse", "Ruined Wayhouse", "random_encounter_ruined_wayhouse"),
     ("scavenger_cart", "Scavenger Cart", "random_encounter_scavenger_cart"),
@@ -342,7 +342,7 @@ class RandomEncounterMixin:
                 "prompt": "How do you handle the cache?",
                 "skill": "Investigation",
                 "dc": 13,
-                "context": "to tell a real cache from a planted lure in Wave Echo's broken wall",
+                "context": "to tell a real cache from a planted lure in the Resonant Vaults' broken wall",
                 "success": "You find the true seam, pull the cache loose cleanly, and leave the false panel where it can mislead the next scavenger instead of you.",
                 "reason": "the echoing cache",
                 "gold": 7,
@@ -641,7 +641,7 @@ class RandomEncounterMixin:
                 if special_survivor:
                     self.state.flags["abandoned_cottage_survivor_met"] = True
                     self.say("A soot-streaked cellar holdout only crawls out after the yard settles. They whisper one useful thing before fleeing: Varyn's people call the deeper route under town Emberhall.")
-                    self.add_clue("A terrified holdout in the cottage names Emberhall as the Ashen Brand's deeper cellar route under Phandalin.")
+                    self.add_clue("A terrified holdout in the cottage names Emberhall as the Ashen Brand's deeper cellar route under Iron Hollow.")
             else:
                 self.say("A loose shutter bangs open, and the squatters inside answer with drawn steel.")
                 self.resolve_random_encounter_fight(
@@ -721,7 +721,7 @@ class RandomEncounterMixin:
         if choice == 1:
             if self.skill_check(self.state.player, "Medicine", 11, context="to stop the bleeding in time"):
                 self.grant_random_encounter_rewards(reason="the grateful messenger", gold=9, items={"bread_round": 1})
-                self.add_clue("A roadside messenger mentioned more Ashen Brand scouts probing side trails around Phandalin.")
+                self.add_clue("A roadside messenger mentioned more Ashen Brand scouts probing side trails around Iron Hollow.")
                 self.state.flags["saved_wounded_messenger"] = True
             else:
                 self.say("You slow the bleeding, but the messenger can only rasp thanks before passing out.")
@@ -741,7 +741,7 @@ class RandomEncounterMixin:
         options = [
             self.quoted_option("PERSUASION", "What did you learn once you made it back alive?"),
             self.action_option("Take the reward and tell the messenger to keep breathing."),
-            self.action_option("Refuse the coin and tell them to spend it in Phandalin instead."),
+            self.action_option("Refuse the coin and tell them to spend it in Iron Hollow instead."),
         ]
         choice = self.scenario_choice("How do you answer the messenger's return?", options, allow_meta=False)
         self.player_choice_output(options[choice - 1])
@@ -755,7 +755,7 @@ class RandomEncounterMixin:
         elif choice == 2:
             self.grant_random_encounter_rewards(reason="the messenger's return", gold=7, items={"bread_round": 1})
         else:
-            self.say("The messenger keeps the coin and promises it will land where Phandalin actually bleeds.")
+            self.say("The messenger keeps the coin and promises it will land where Iron Hollow actually bleeds.")
             adjust_metric = getattr(self, "act1_adjust_metric", None)
             if callable(adjust_metric):
                 adjust_metric("act1_town_fear", -1)
@@ -842,7 +842,7 @@ class RandomEncounterMixin:
             self.say("Bryn goes very still for half a second. The tarp knots and ash marks are old smuggler shorthand she recognizes immediately.")
         options = [
             self.skill_tag("STEALTH", self.action_option("Circle wide and lift what you can before the campers notice.")),
-            self.quoted_option("DECEPTION", "Riders are coming from Neverwinter. Run while you still can."),
+            self.quoted_option("DECEPTION", "Riders are coming from Greywake. Run while you still can."),
             self.action_option("Leave the hidden camp alone."),
         ]
         choice = self.scenario_choice("How do you approach the hidden fire?", options, allow_meta=False)
@@ -928,7 +928,7 @@ class RandomEncounterMixin:
     def random_encounter_shrine_of_tymora(self) -> None:
         assert self.state is not None
         self.random_encounter_intro(
-            "A weathered roadside shrine to Tymora leans beneath a white-streaked oak, its tiny offering bowl still dry despite the last night's rain."
+            "A weathered roadside Lantern shrine leans beneath a white-streaked oak, its tiny offering bowl still dry despite the last night's rain."
         )
         options = [
             self.skill_tag("RELIGION", self.action_option("Set the shrine right and offer a quick frontier prayer.")),

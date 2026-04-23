@@ -3,7 +3,7 @@ from __future__ import annotations
 
 RACES = {
     "Human": {
-        "description": "Humans are ambitious generalists found across the Sword Coast and beyond.",
+        "description": "Humans are adaptable survivors found across Aethrune's roads, ports, farms, and rebuilt towns.",
         "bonuses": {"STR": 1, "DEX": 1, "CON": 1, "INT": 1, "WIS": 1, "CHA": 1},
         "features": [],
         "skills": [],

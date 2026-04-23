@@ -1,4 +1,4 @@
-# Sword Coast Systems Reference
+# Roads That Remember Systems Reference
 
 This file is a source-oriented reference for reading and debugging the current game implementation.
 
@@ -8,7 +8,7 @@ This file is a source-oriented reference for reading and debugging the current g
 - Current partially playable scaffold: Act 2 route framework and local-map expedition slices
 - Current level cap: 4
 - Party progression is shared across the whole company
-- The game uses a D&D-inspired rules layer, but many features are adapted or compressed for text-adventure play
+- The game uses a compact SRD-derived d20 rules layer internally while public terminology is being moved toward Aethrune.
 
 ## Source Map
 
@@ -34,17 +34,17 @@ This file is a source-oriented reference for reading and debugging the current g
 
 ### Act 1 route structure
 
-- Overworld travel is node-based around `Phandalin`
+- Overworld travel is node-based around the save-safe `phandalin_hub` id, now presented as Iron Hollow.
 - Hostile sites use room-based dungeon progression from `dnd_game/drafts/map_system/data/act1_hybrid_map.py`
-- The live mid-Act route can now include `Old Owl Well`, `Wyvern Tor`, and an optional hidden `Cinderfall Ruins` strike before `Ashfall Watch`
-- The High Road now has a post-ambush travel choice before Phandalin. Once both ambush waves are cleared, the scene reopens with the south road, a `BACKTRACK` option when history allows it, and any unlocked side branches: `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones`.
-- Returning from those High Road side branches travels to `phandalin_hub` without recording the side branch as the new backtrack target. From Phandalin, backtracking skips resolved High Road side detours and points back to the meaningful High Road route node.
+- The live mid-Act route can now include Blackglass Well, Red Mesa Hold, and an optional hidden Cinderfall Ruins strike before Ashfall Watch.
+- The Emberway now has a post-ambush travel choice before Iron Hollow. Once both ambush waves are cleared, the scene reopens with the south road, a `BACKTRACK` option when history allows it, and any unlocked side branches: `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones`.
+- Returning from those Emberway side branches travels to `phandalin_hub` without recording the side branch as the new backtrack target. From Iron Hollow, backtracking skips resolved Emberway side detours and points back to the meaningful route node.
 
 ### Act 1 metrics and carryover
 
 - `act1_town_fear`
   - default `2`
-  - tracks how badly Phandalin is rattled
+  - tracks how badly Iron Hollow is rattled
 - `act1_ashen_strength`
   - default `3`
   - tracks how much outer-site pressure the Ashen Brand still retains
@@ -224,18 +224,18 @@ Combat spellcasting now uses Magic Points (`MP`) as the player-facing resource. 
 
 ## Races
 
-| Race | Ability bonuses | Skill grants | Feature tags |
+| Public race (mechanics key) | Ability bonuses | Skill grants | Feature tags |
 | --- | --- | --- | --- |
 | Human | STR+1, DEX+1, CON+1, INT+1, WIS+1, CHA+1 | none | none |
 | Dwarf | CON+2 | none | darkvision, dwarven_resilience |
 | Elf | DEX+2 | Perception | darkvision, keen_senses, fey_ancestry |
 | Halfling | DEX+2 | none | lucky, brave |
-| Dragonborn | STR+2, CHA+1 | none | draconic_presence |
-| Gnome | INT+2 | Investigation | gnome_cunning |
-| Half-Elf | CHA+2, DEX+1, WIS+1 | Insight, Persuasion | fey_ancestry |
-| Half-Orc | STR+2, CON+1 | Intimidation | relentless_endurance, menacing |
-| Tiefling | INT+1, CHA+2 | none | darkvision, hellish_resistance |
-| Goliath | STR+2, CON+1 | Athletics | stone_endurance |
+| Forged (`Dragonborn`) | STR+2, CHA+1 | none | draconic_presence |
+| Unrecorded (`Gnome`) | INT+2 | Investigation | gnome_cunning |
+| Astral Elf (`Half-Elf`) | CHA+2, DEX+1, WIS+1 | Insight, Persuasion | fey_ancestry |
+| Orc-Blooded (`Half-Orc`) | STR+2, CON+1 | Intimidation | relentless_endurance, menacing |
+| Fire-Blooded (`Tiefling`) | INT+1, CHA+2 | none | darkvision, hellish_resistance |
+| Riverfolk (`Goliath`) | STR+2, CON+1 | Athletics | stone_endurance |
 | Orc | STR+2, CON+1 | Intimidation | darkvision, adrenaline_rush |
 
 ### Racial feature hooks
@@ -394,7 +394,7 @@ Present as tags and lore, but not given dedicated runtime logic yet:
 - Resistances halve incoming matching damage
 - Temporary HP absorbs damage before current HP
 - Effective armor class now accounts for both AC penalties and AC bonuses such as `Guarded`
-- Fire resistance can come from Tiefling ancestry or item/status resistance
+- Fire resistance can come from Fire-Blooded ancestry or item/status resistance
 - Poison resistance can come from Dwarf ancestry or item/status resistance
 - Dropping a hero to 0 HP starts death-save state
 - Hitting a hero already at 0 HP causes a death-save failure instead of normal HP loss

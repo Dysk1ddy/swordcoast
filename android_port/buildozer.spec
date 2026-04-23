@@ -1,6 +1,6 @@
 [app]
-title = Sword Coast
-package.name = swordcoast
+title = Roads That Remember
+package.name = roadsthatremember
 package.domain = org.textdnd
 source.dir = .
 source.include_exts = py,md,json

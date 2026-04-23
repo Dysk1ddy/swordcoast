@@ -121,7 +121,7 @@ When it collapsed, they were among the least affected—and the most prepared.
 
 ---
 
-# 6. SYLARI (Elven Variant)
+# 6. SYLARI (Astral Elves)
 
 ## Overview
 A rare offshoot of the Eldren, partially out of sync with reality.

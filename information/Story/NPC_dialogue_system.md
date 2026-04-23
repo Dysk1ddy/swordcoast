@@ -155,7 +155,7 @@
 
 # ACT 2 COMPANIONS
 
-## Nim Ardentglass (Gnome Wizard)
+## Nim Ardentglass (Unrecorded Wizard)
 
 ### Personality
 - Curious, fast-talking, slightly anxious
@@ -189,7 +189,7 @@ Exceptional:
 
 ---
 
-## Irielle Ashwake (Tiefling Warlock)
+## Irielle Ashwake (Fire-Blooded Warlock)
 
 ### Personality
 - Controlled, distant, intense
@@ -233,4 +233,3 @@ Exceptional:
   - trigger once per scene
   - depend on companion presence
   - sometimes conflict with each other
-

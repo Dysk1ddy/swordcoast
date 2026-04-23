@@ -370,10 +370,10 @@ RACE_LORE: dict[str, LoreEntry] = {
         ),
     },
     "Half-Elf": {
-        "label": "Elven Variant",
+        "label": "Astral Elf",
         "menu": "Pattern-sensitive observers partly out of sync with ordinary perception.",
         "text": (
-            "Elven Variants emerged from elven lines exposed to unstable signal systems. They notice discontinuities, "
+            "Astral Elves emerged from elven lines exposed to unstable signal systems. They notice discontinuities, "
             "echoes, and false alignments others miss, but perception can become lonely when nobody else trusts the "
             "same evidence.\n\n"
             "They are excellent characters for reading the world's quiet wrongness before it becomes loud."

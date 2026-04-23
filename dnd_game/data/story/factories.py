@@ -78,7 +78,7 @@ def create_tolan_ironshield() -> Character:
         background="Soldier",
         base_ability_scores={"STR": 15, "DEX": 10, "CON": 14, "INT": 8, "WIS": 12, "CHA": 13},
         class_skill_choices=["Perception", "Survival"],
-        notes=["A caravan guard from Neverwinter with a shield wall mindset."],
+        notes=["A caravan guard from Greywake with a shield wall mindset."],
         inventory={"Healing Potion": 1},
         tags=["hero", "companion"],
     ), "tolan_ironshield")
@@ -93,7 +93,7 @@ def create_bryn_underbough() -> Character:
         base_ability_scores={"STR": 8, "DEX": 15, "CON": 12, "INT": 13, "WIS": 14, "CHA": 10},
         class_skill_choices=["Acrobatics", "Insight", "Perception", "Sleight of Hand"],
         expertise_choices=["Stealth", "Perception"],
-        notes=["A caravan scout who knows every shortcut between Phandalin and Neverwinter."],
+        notes=["A caravan scout who knows the side paths between Iron Hollow and Greywake."],
         inventory={"Healing Potion": 1},
         tags=["hero", "companion"],
     )
@@ -109,7 +109,7 @@ def create_elira_dawnmantle() -> Character:
         background="Acolyte",
         base_ability_scores={"STR": 10, "DEX": 12, "CON": 13, "INT": 10, "WIS": 15, "CHA": 14},
         class_skill_choices=["Medicine", "Persuasion"],
-        notes=["A priestess of Tymora tending the frontier faithful in Phandalin."],
+        notes=["A Lantern priestess tending the frontier faithful in Iron Hollow."],
         inventory={"Healing Potion": 1},
         tags=["hero", "companion"],
     ), "elira_dawnmantle")
@@ -123,7 +123,7 @@ def create_kaelis_starling() -> Character:
         background="Criminal",
         base_ability_scores={"STR": 10, "DEX": 15, "CON": 13, "INT": 11, "WIS": 14, "CHA": 12},
         class_skill_choices=["Perception", "Stealth", "Survival"],
-        notes=["A Neverwinter scout who knows how to read an ambush before it closes."],
+        notes=["A Greywake scout who knows how to read an ambush before it closes."],
         inventory={"Healing Potion": 1},
         tags=["hero", "companion"],
     ), "kaelis_starling")
@@ -137,7 +137,7 @@ def create_rhogar_valeguard() -> Character:
         background="Soldier",
         base_ability_scores={"STR": 15, "DEX": 10, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
         class_skill_choices=["Athletics", "Persuasion"],
-        notes=["A dragonborn sworn to protect caravans on the road south of Neverwinter."],
+        notes=["A Forged guardian sworn to protect caravans on the Emberway."],
         inventory={"Healing Potion": 1},
         tags=["hero", "companion"],
     ), "rhogar_valeguard")

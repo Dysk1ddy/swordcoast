@@ -11,8 +11,8 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
         "name": "Tolan Ironshield",
         "summary": "A dwarven shield veteran who measures people by whether they hold the line when it matters.",
         "lore": [
-            "Tolan served on caravan routes out of Neverwinter for two decades, long enough to see three trade leagues fail and two rise in their place.",
-            "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the Mere of Dead Men.",
+            "Tolan served on Emberway caravans out of Greywake for two decades, long enough to see three trade leagues fail and two rise in their place.",
+            "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the drowned flats west of Blackwake.",
             "He trusts steady action more than speeches, but remembers every promise anyone makes in his hearing.",
         ],
         "camp_topics": [
@@ -88,8 +88,8 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
             },
             {
                 "id": "blackwake_neverwinter_cares",
-                "prompt": "\"Do you think Neverwinter even cares?\"",
-                "response": "The city cares when caring has handles: names, seals, routes, someone to blame. Blackwake gave us handles. Now we see who grabs them.",
+                "prompt": "\"Do you think Greywake's offices even care?\"",
+                "response": "Greywake cares when caring has handles: names, seals, routes, someone to blame. Blackwake gave us handles. Now we see who grabs them.",
                 "delta": 1,
                 "requires_flags": ["blackwake_completed"],
             },
@@ -118,7 +118,7 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
     },
     "elira_dawnmantle": {
         "name": "Elira Dawnmantle",
-        "summary": "A priestess of Tymora whose compassion is sharpened, not softened, by the frontier's cruelty.",
+        "summary": "A priestess of the Lantern whose compassion is sharpened, not softened, by the frontier's cruelty.",
         "lore": [
             "Elira learned battlefield triage from roadside shrines that treated lumber crews, miners, and pilgrims with equal urgency.",
             "She believes luck is not random mercy but a chance people build for one another with courage and timing.",
@@ -133,8 +133,8 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
             },
             {
                 "id": "luck",
-                "prompt": "\"Why does Tymora still matter on the frontier?\"",
-                "response": "Because luck matters most where survival depends on one brave person acting at exactly the right second.",
+                "prompt": "\"Why does the Lantern still matter on the frontier?\"",
+                "response": "Because a kept light matters most where survival depends on one brave person acting at exactly the right second.",
                 "delta": 1,
             },
             {
@@ -172,14 +172,14 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
         "name": "Kaelis Starling",
         "summary": "A sharp-eyed ranger scout who learned to trust patterns before promises.",
         "lore": [
-            "Kaelis spent years guiding outriders and woodsmen through the northern edges of the Neverwinter Wood, where bad judgment kills faster than monsters do.",
+            "Kaelis spent years guiding outriders and woodsfolk through the northern edges of Greywake Wood, where bad judgment kills faster than steel does.",
             "He keeps private sketches of trails, ridges, and blind corners because memory alone has betrayed him once already.",
             "He rarely speaks first in a room, but once he commits to someone he watches over them with relentless attention.",
         ],
         "camp_topics": [
             {
                 "id": "forest",
-                "prompt": "\"What did the Neverwinter Wood teach you first?\"",
+                "prompt": "\"What did Greywake Wood teach you first?\"",
                 "response": "That every quiet place is full of messages if you slow down enough to read them.",
                 "delta": 1,
             },
@@ -227,7 +227,7 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
     },
     "rhogar_valeguard": {
         "name": "Rhogar Valeguard",
-        "summary": "A dragonborn oathsworn who treats duty like a living thing that must be fed by action.",
+        "summary": "A Forged oathsworn who treats duty like a living thing that must be fed by action.",
         "lore": [
             "Rhogar was raised among caravan wardens who believed a sworn road was as sacred as any temple threshold.",
             "He carries every oath like a visible weight and grows restless whenever words are left unfinished.",
@@ -279,9 +279,9 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
     },
     "nim_ardentglass": {
         "name": "Nim Ardentglass",
-        "summary": "A rock gnome ruin scholar who treats maps, mechanisms, and old promises like equally fragile machines.",
+        "summary": "An Unrecorded ruin scholar who treats maps, mechanisms, and old promises like equally fragile machines.",
         "lore": [
-            "Nim apprenticed under three different surveyors because no single mentor could answer every question the old Phandelver routes raised.",
+            "Nim apprenticed under three different surveyors because no single mentor could answer every question the old Meridian routes raised.",
             "He masks nerves with precision, talking fastest when he is frightened enough to think everyone else has already noticed.",
             "Part of him still believes lost knowledge should be shared; another part has seen too many smart people killed for opening the wrong door first.",
         ],
@@ -324,7 +324,7 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
     },
     "irielle_ashwake": {
         "name": "Irielle Ashwake",
-        "summary": "A tiefling escapee from the Quiet Choir who knows just enough about the whispers beneath the mine to fear them properly.",
+        "summary": "A Fire-Blooded escapee from the Quiet Choir who knows just enough about the whispers beneath the Vaults to fear them properly.",
         "lore": [
             "Irielle was drawn into the Quiet Choir by people who promised revelation and delivered obedience, secrecy, and the slow theft of self.",
             "She has learned to treat certainty with suspicion, especially when it arrives in a voice no one else can hear.",

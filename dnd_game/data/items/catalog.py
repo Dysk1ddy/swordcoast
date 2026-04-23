@@ -585,7 +585,7 @@ CONSUMABLE_ITEMS = [
         "value": 38,
         "heal_dice": "4d4",
         "heal_bonus": 4,
-        "notes": ["Official baseline: regains 4d4 + 4 hit points."],
+        "notes": ["Restores 4d4 + 4 hit points."],
     },
     {
         "item_id": "delvers_amber",
@@ -607,7 +607,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.3,
         "value": 30,
         "spell_slot_restore": 1,
-        "notes": ["Restores 4 channel reserve and helps shake off rattled footing in this adaptation."],
+        "notes": ["Restores 4 channel reserve and helps shake off rattled footing."],
     },
     {
         "item_id": "superior_healing_elixir",
@@ -642,7 +642,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.3,
         "value": 700,
         "revive_hp": 5,
-        "notes": ["Game adaptation: revives a downed ally at 5 HP."],
+        "notes": ["Revives a downed ally at 5 HP."],
     },
     {
         "item_id": "warding_tonic",
@@ -675,7 +675,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.4,
         "value": 95,
         "temp_hp": 8,
-        "notes": ["Grants 8 temporary hit points and a brief surge of courage in this adaptation."],
+        "notes": ["Grants 8 temporary hit points and a brief surge of courage."],
     },
     {
         "item_id": "thoughtward_draught",
@@ -699,7 +699,7 @@ CONSUMABLE_ITEMS = [
         "heal_dice": "1d8",
         "heal_bonus": 2,
         "cure_poison": True,
-        "notes": ["Heals 1d8 + 2 and cures poison in this adaptation."],
+        "notes": ["Heals 1d8 + 2 and cures poison."],
     },
     {
         "item_id": "antitoxin_vial",

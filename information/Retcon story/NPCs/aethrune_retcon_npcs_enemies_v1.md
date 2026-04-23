@@ -116,8 +116,8 @@ These are structurally fine but need world alignment:
 ## Strongly DnD-Specific Creatures
 - Nothic → MUST replace (becomes “Cistern Eye” entity fully original)
 - Grimlock → replace with tunnel-adapted humanoid variant
-- Tiefling-linked enemies → remove infernal framing
-- Dragonborn-linked enemies → remove dragon lineage implications
+- Fire-Blooded-linked enemies → remove infernal framing
+- Forged-linked enemies → remove dragon lineage implications
 
 ---
 

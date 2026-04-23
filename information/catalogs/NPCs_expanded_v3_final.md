@@ -18,7 +18,7 @@ This version expands each companion with:
 
 ---
 
-## Kaelis Starling (Half-Elf Ranger)
+## Kaelis Starling (Astral Elf Ranger)
 
 ### Early Life
 Kaelis grew up on the edge of cultivated land, where farms turned into wilderness without warning. His mother taught him survival; his father—absent but mythologized—left him with stories of precision, patience, and detachment. Kaelis internalized both, but never fully trusted either worldview.
@@ -48,7 +48,7 @@ The failed caravan wasn’t just a job—it was his first independent contract. 
 
 ---
 
-## Rhogar Valeguard (Dragonborn Paladin)
+## Rhogar Valeguard (Forged Paladin)
 
 ### Early Life
 Raised within a structured order tied to caravan protection, Rhogar was taught that order prevents chaos. His entire identity was built around discipline, hierarchy, and oathkeeping.
@@ -220,7 +220,7 @@ Design intent:
 
 ---
 
-## Nim Ardentglass (Rock Gnome Wizard) [ADDED TO V2]
+## Nim Ardentglass (Unrecorded Wizard) [ADDED TO V2]
 
 ### Early Life
 Nim was raised among Pact archivists who treated maps like sacred objects. From a young age, he learned that knowledge wasn’t just power—it was responsibility.
@@ -249,7 +249,7 @@ During a deep survey beneath the Sword Mountains, his entire team vanished witho
 
 ---
 
-## Irielle Ashwake (Tiefling Warlock) [ADDED TO V2]
+## Irielle Ashwake (Fire-Blooded Warlock) [ADDED TO V2]
 
 ### Early Life
 Irielle was raised within a Quiet Choir-adjacent community where certain individuals were trained to “listen” to something deeper beneath reality.
@@ -420,4 +420,3 @@ Each companion evolves:
 This structure builds directly on:
 - Act 1 systems fileciteturn0file0
 - NPC framework fileciteturn0file5
-

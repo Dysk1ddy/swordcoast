@@ -1,4 +1,4 @@
-# Sword Coast Act 1 Content Reference
+# Aethrune Act 1 Content Reference
 
 This file collects the current campaign-facing content that is most useful for debugging story flow, enemy setups, recruitment, and rewards.
 
@@ -8,39 +8,39 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 
 ## Act 1 Scope
 
-- Opening arc: background prologue -> Wayside Luck Shrine -> Greywake Triage Yard -> Greywake Road Breakout -> Neverwinter briefing -> High Road ambush -> cleared High Road branch menu -> Phandalin hub
-- Branching middle route: `Old Owl Well` and `Wyvern Tor` can be tackled in either order, with a hidden optional strike into `Cinderfall Ruins`
-- Convergence points: Stonehill war-room event, Ashfall Watch assault, Phandalin lantern vigil
-- Late route: `Tresendar Manor` -> `Emberhall Cellars`
+- Opening arc: background prologue -> Wayside Luck Shrine -> Greywake Triage Yard -> Greywake Road Breakout -> Greywake briefing -> Emberway ambush -> cleared Emberway branch menu -> Iron Hollow hub
+- Branching middle route: Blackglass Well and Red Mesa Hold can be tackled in either order, with a hidden optional strike into `Cinderfall Ruins`
+- Convergence points: Ashlamp war-room event, Ashfall Watch assault, Iron Hollow lantern vigil
+- Late route: Duskmere Manor -> `Emberhall Cellars`
 - Named minibosses: `Vaelith Marr`, `Brughor Skullcleaver`, and `Rukhar Cinderfang`
 - Final boss: `Varyn Sable`
 - Total potential Act 1 combats now comfortably exceeds 10 before counting random encounters
-- New support hubs: Neverwinter's contract house, `Edermath Orchard`, `Miner's Exchange`, Stonehill war-room, and the post-Ashfall lantern vigil. Edermath Orchard now includes an optional old-cache stealth scene that becomes combat if the approach fails.
-- Quest set currently defined in data: 13 Act 1 quests, including 5 inn quests across Neverwinter and Stonehill, 6 wider town or road quests, and 2 companion personal quests
+- New support hubs: Greywake's contract house, Daran's orchard, the Delvers' Exchange, Ashlamp war-room, and the post-Ashfall lantern vigil. Daran's orchard now includes an optional old-cache stealth scene that becomes combat if the approach fails.
+- Quest set currently defined in data: 13 Act 1 quests, including 5 inn quests across Greywake and Ashlamp, 6 wider town or road quests, and 2 companion personal quests
 - Reactivity layer now tracks `Town Fear`, `Ashen Strength`, and `Survivors Saved`, then resolves Act 1 as `clean_victory`, `costly_victory`, or `fractured_victory`
 
 ## Expanded Act 1 Route
 
-1. Background-specific opening encounter or shortcut, then shared pre-Neverwinter Elira/Greywake sequence:
+1. Background-specific opening encounter or shortcut, then shared Elira/Greywake sequence:
    Wayside Luck Shrine -> Greywake Triage Yard -> Greywake Road Breakout
-2. Neverwinter setup, briefing, contract-house social hub, and optional Mira-assigned road companion
-3. High Road ambush and Tolan recruitment point, then a cleared-road travel choice with optional side branches into `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones` before Phandalin
-4. Phandalin arrival, inn / shrine / shop / steward loops, orchard / exchange hubs, and a possible early `Cinderfall` reveal on a strong `Insight` read
+2. Greywake setup, briefing, contract-house social hub, and optional Mira-assigned road companion
+3. Emberway ambush and Tolan recruitment point, then a cleared-road travel choice with optional side branches into `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones` before Iron Hollow
+4. Iron Hollow arrival, inn / shrine / shop / steward loops, orchard / exchange hubs, and a possible early `Cinderfall` reveal on a strong `Insight` read
    - Edermath Orchard can also reveal Daran's old adventurer's cache: a `Stealth` DC 12 route to recover `edermath_cache_compass`, or a watcher encounter on failure.
-5. Old Owl Well route:
+5. Blackglass Well route:
    dig-ring fight -> salt cart or supply trench branch -> Vaelith Marr miniboss
-6. Wyvern Tor route:
+6. Red Mesa Hold route:
    outer shelf fight -> drover hollow or shrine ledge branch -> Brughor Skullcleaver miniboss
 7. Optional `Cinderfall Ruins` route if the hidden relay is uncovered:
    collapsed gate -> ash chapel or broken storehouse -> ember relay node
 8. Stonehill war-room fixed event once both major side routes are cleared
 9. Ashfall Watch route:
    gate fight -> prisoner yard / signal event -> lower barracks fight -> Rukhar miniboss
-10. Lantern vigil fixed event back in Phandalin
-11. Tresendar Manor route:
+10. Lantern vigil fixed event back in Iron Hollow
+11. Duskmere Manor route:
    cellar intake fight -> cistern event -> Cistern Eye roleplay boss / fight
    - Cistern Eye routes: kill it, trade a memory/truth/companion secret, bargain repeatedly, or deceive it.
-   - Bargain and Deception routes can reveal Cinderfall relay context and Wave Echo / Forge foreshadowing before Emberhall.
+   - Bargain and Deception routes can reveal Cinderfall relay context and Resonant Vault / Meridian Forge foreshadowing before Emberhall.
    - The risky routes apply sanity-style combat pressure, `Whispered Through`, and companion trust costs.
 12. Emberhall finale:
    antechamber fight -> chained clerk / ledger event -> Varyn boss fight
@@ -48,19 +48,19 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 ## Drafted Future Inserts
 
 - `information/Story/HIGH_ROAD_LIARS_CIRCLE_PUZZLE_DRAFT.md`: implemented post-ambush High Road wilderness branch built around four lying statues, with `Liar's Blessing` or `Liar's Curse` social-skill consequences.
-- `information/Story/ACT1_PRE_NEVERWINTER_ELIRA_DRAFT.md`: implemented shared pre-Neverwinter opening insert that introduces Elira as the first companion candidate, gives her two early recruitment chances before the second major combat, and preserves the Phandalin shrine fallback.
-- `information/Story/MIRA_NEVERWINTER_DIALOGUE_DRAFT.md`: implemented expanded Mira Thann question dialogue for the first Neverwinter briefing, conditional Greywake/Elira/Blackwake responses, and return-to-Neverwinter debriefs after Phandalin-side progress.
+- `information/Story/ACT1_PRE_NEVERWINTER_ELIRA_DRAFT.md`: legacy draft for the implemented Elira opening insert; keep only as historical implementation context.
+- `information/Story/MIRA_NEVERWINTER_DIALOGUE_DRAFT.md`: legacy draft for expanded Mira Thann briefing dialogue; keep only as historical implementation context.
 - `information/Story/COMPANION_CAMP_BANTER_DRAFT.md`: implemented companion-to-companion camp banter registry, Act 1 and Act 2 branching dialogue, gameplay and relationship consequences, and Act 3 secret-architect guardrails for keeping the second villain hidden until the planned midpoint reveal.
 
 ## Companion Reference
 
 | Companion | Race / Class | Summary | Recruitment point | Relationship bonuses |
 | --- | --- | --- | --- | --- |
-| Kaelis Starling | Half-Elf Ranger | scout and ambush reader | optional contract companion in Neverwinter before the road | Great: `+1 Perception`, `+1 initiative`; Exceptional: `+1 attack` |
-| Rhogar Valeguard | Dragonborn Paladin | oathsworn caravan guardian | optional contract companion in Neverwinter before the road | Great: `+1 damage`; Exceptional: `+1 AC` |
+| Kaelis Starling | Astral Elf Ranger | scout and ambush reader | optional contract companion in Greywake before the road | Great: `+1 Perception`, `+1 initiative`; Exceptional: `+1 attack` |
+| Rhogar Valeguard | Forged Paladin | oathsworn caravan guardian | optional contract companion in Greywake before the road | Great: `+1 damage`; Exceptional: `+1 AC` |
 | Tolan Ironshield | Dwarf Fighter | shield-wall caravan veteran | joins after Roadside Ambush or later from the inn | Great: `+1 AC`; Exceptional: `+1 CON saves` |
 | Bryn Underbough | Halfling Rogue | trail scout and rumor-reader | recruited at Stonehill Inn on Persuasion success | Great: `+1 Stealth`, `+1 initiative`; Exceptional: `+1 Perception` |
-| Elira Dawnmantle | Human Cleric | shrine healer and faith anchor | first met at Wayside Luck Shrine, recruitable there or at Greywake before the second shared combat; if missed, recruited at Phandalin's shrine | Great: `+1 healing`; Exceptional: `+1 WIS saves` |
+| Elira Dawnmantle | Human Cleric | shrine healer and faith anchor | first met at Wayside Luck Shrine, recruitable there or at Greywake before the second shared combat; if missed, recruited at Iron Hollow's shrine | Great: `+1 healing`; Exceptional: `+1 WIS saves` |
 
 ### Scene support hooks
 

@@ -385,17 +385,17 @@ Condition: player has the race and has not used the one-shot race identity actio
 
 | Race | Dialogue option | Result |
 | --- | --- | --- |
-| Dragonborn | `[INTIMIDATION] "Enough staring. Point me at who needs help first."` | DC 12. Success rewards 10 XP, 4 gp, and old manor-side lane clue. |
+| Forged | `[INTIMIDATION] "Enough staring. Point me at who needs help first."` | DC 12. Success rewards 10 XP, 4 gp, and old manor-side lane clue. |
 | Dwarf | `[INVESTIGATION] Run a hand along the old stonework and ask which buried foundations the raiders favor.` | DC 11. Success rewards 10 XP and cellar-route clue. |
 | Elf | `[INSIGHT] "This place still remembers the older town beneath it. Tell me which ruins people no longer trust."` | DC 11. Success rewards 10 XP and manor-ruins clue. |
-| Gnome | `[INVESTIGATION] Crouch by the nearest barricade and point out exactly where it would fail.` | DC 11. Success rewards 10 XP and barricade/manor-lane clue. |
-| Goliath | `[ATHLETICS] Shoulder a sagging beam back into place before asking any questions.` | DC 11. Success rewards 10 XP, 6 gp, and late-night manor movement clue. |
-| Half-Elf | `[PERSUASION] "I'm not here to be one more voice speaking over you. Start with what you need answered first."` | DC 10. Success rewards 10 XP, 4 gp, and old manor-side lane clue. |
-| Half-Orc | `[INTIMIDATION] Step into the lane, plant your feet, and demand the truth instead of whispers.` | DC 12. Success rewards 8 XP and watched-lanes clue. |
+| Unrecorded | `[INVESTIGATION] Crouch by the nearest barricade and point out exactly where it would fail.` | DC 11. Success rewards 10 XP and barricade/manor-lane clue. |
+| Riverfolk | `[ATHLETICS] Shoulder a sagging beam back into place before asking any questions.` | DC 11. Success rewards 10 XP, 6 gp, and late-night manor movement clue. |
+| Astral Elf | `[PERSUASION] "I'm not here to be one more voice speaking over you. Start with what you need answered first."` | DC 10. Success rewards 10 XP, 4 gp, and old manor-side lane clue. |
+| Orc-Blooded | `[INTIMIDATION] Step into the lane, plant your feet, and demand the truth instead of whispers.` | DC 12. Success rewards 8 XP and watched-lanes clue. |
 | Halfling | `[PERSUASION] "Easy now. You only get to panic after you tell me where the trouble actually starts."` | DC 11. Success rewards 10 XP, 6 gp, and manor-side trouble clue. |
 | Human | `[PERSUASION] "I'm road-worn, underpaid, and short on patience, so let's skip the theater and help each other."` | DC 11. Success rewards 10 XP, 4 gp, and practical-trust clue. |
 | Orc | `[INTIMIDATION] Bark at the nearest knot of onlookers to stop gawking and start naming where the road is bleeding.` | DC 12. Success rewards 8 XP and manor/foundation clue. |
-| Tiefling | `[DECEPTION] "If we're done deciding whether I look ominous enough to trust, tell me where your real trouble starts."` | DC 11. Success rewards 10 XP and watched-lane clue. |
+| Fire-Blooded | `[DECEPTION] "If we're done deciding whether I look ominous enough to trust, tell me where your real trouble starts."` | DC 11. Success rewards 10 XP and watched-lane clue. |
 
 ### Phandalin Travel Menu
 

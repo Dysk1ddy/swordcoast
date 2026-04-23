@@ -125,7 +125,7 @@ RARITY_SOURCE = {
     "uncommon": "Trusted traders, veteran scouts, shrine caches, and better-provisioned raider lieutenants.",
     "rare": "Hidden manor vaults, named enemy stashes, defended strongholds, and expensive specialist merchants.",
     "epic": "Deep relic chambers, late-act boss hoards, and secrets guarded by major story threats.",
-    "legendary": "Mythic relic sites, endgame bosses, and unique Forgotten Realms wonders almost never seen in trade.",
+    "legendary": "Mythic relic sites, endgame bosses, and unique Aethrune wonders almost never seen in trade.",
 }
 RARITY_VALUE_MULTIPLIERS = {
     "common": 0.6,
@@ -459,7 +459,7 @@ TRINKET_RARITY_COUNTS = {
 }
 
 SUPPLY_ITEMS = [
-    ("bread_round", "Bread Round", "A dense travel loaf baked to last several days.", 0.5, 2, 1, "Common pantry food sold in Neverwinter and Phandalin."),
+    ("bread_round", "Bread Round", "A dense travel loaf baked to last several days.", 0.5, 2, 1, "Common pantry food sold in Greywake and Iron Hollow."),
     ("dried_fish", "Dried Fish", "Salted river fish wrapped for road use.", 0.5, 3, 2, "Fishing stalls, caravan stores, and goblin satchels."),
     ("goat_cheese", "Goat Cheese", "Sharp frontier cheese that keeps well in cloth.", 0.5, 4, 2, "Farmsteads, inn kitchens, and pack saddles."),
     ("smoked_ham", "Smoked Ham Slice", "A rich cured cut that can sustain a full meal.", 1.0, 6, 3, "Inn stores, bandit camps, and merchant wagons."),
@@ -484,51 +484,51 @@ SUPPLY_ITEMS = [
 CONSUMABLE_ITEMS = [
     {
         "item_id": "potion_healing",
-        "name": "Potion of Healing",
+        "name": "Red Recovery Draught",
         "rarity": "common",
-        "description": "A red tonic matching the official Potion of Healing profile.",
+        "description": "A frontier-standard recovery blend carried by scouts, quartermasters, and anyone expecting blood on the road.",
         "source": "Starter kits, shrine aid packs, goblin satchels, and common loot drops.",
         "weight": 0.5,
         "value": 15,
         "heal_dice": "2d4",
         "heal_bonus": 2,
-        "notes": ["Official baseline: regains 2d4 + 2 hit points."],
+        "notes": ["Standard field mixture: regains 2d4 + 2 hit points."],
     },
     {
         "item_id": "greater_healing_draught",
         "name": "Greater Healing Draught",
         "rarity": "uncommon",
-        "description": "A frontier draught built on the official Greater Healing potion numbers.",
+        "description": "A heavier recovery draught used by veteran crews after the kind of fight that empties a whole watchline.",
         "source": "Ashfall Watch stores, shrine caches, and uncommon treasure rolls.",
         "weight": 0.5,
         "value": 38,
         "heal_dice": "4d4",
         "heal_bonus": 4,
-        "notes": ["Official baseline: regains 4d4 + 4 hit points."],
+        "notes": ["Restores 4d4 + 4 hit points."],
     },
     {
         "item_id": "superior_healing_elixir",
         "name": "Superior Healing Elixir",
         "rarity": "rare",
-        "description": "A luminous elixir modeled on the official Superior Healing potion.",
+        "description": "A luminous recovery elixir reserved for seasoned field crews and expensive salvage runs.",
         "source": "Hidden vaults, elite captains, and rare merchant caravans.",
         "weight": 0.5,
         "value": 350,
         "heal_dice": "8d4",
         "heal_bonus": 8,
-        "notes": ["Official baseline: regains 8d4 + 8 hit points."],
+        "notes": ["Restores 8d4 + 8 hit points."],
     },
     {
         "item_id": "supreme_healing_phial",
         "name": "Supreme Healing Phial",
         "rarity": "epic",
-        "description": "A jewel-red phial based on the official Supreme Healing potion.",
-        "source": "Late-act relic caches, dragon hoards, and near-mythic alchemical vaults.",
+        "description": "A jewel-red phial of near-mythic recovery compound, usually sealed for command crews or impossible emergencies.",
+        "source": "Late-act relic caches, tyrant hoards, and near-mythic alchemical vaults.",
         "weight": 0.5,
         "value": 900,
         "heal_dice": "10d4",
         "heal_bonus": 20,
-        "notes": ["Official baseline: regains 10d4 + 20 hit points."],
+        "notes": ["Restores 10d4 + 20 hit points."],
     },
     {
         "item_id": "phoenix_salts",
@@ -539,7 +539,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.3,
         "value": 700,
         "revive_hp": 5,
-        "notes": ["Game adaptation: revives a downed ally at 5 HP."],
+        "notes": ["Revives a downed ally at 5 HP."],
     },
     {
         "item_id": "warding_tonic",
@@ -554,33 +554,33 @@ CONSUMABLE_ITEMS = [
     },
     {
         "item_id": "potion_heroism",
-        "name": "Potion of Heroism",
+        "name": "Resolve Draught",
         "rarity": "rare",
-        "description": "An adaptation of the official Potion of Heroism for this faster combat system.",
-        "source": "Temple vaults, champion kits, and rare divine caches.",
+        "description": "A hard-burning stimulant that floods the body with reckless resolve before the worst part of the fight lands.",
+        "source": "Sanctum vaults, champion kits, and rare support caches.",
         "weight": 0.4,
         "value": 220,
         "temp_hp": 10,
-        "notes": ["Official inspiration: grants temporary hit points and a bless-like combat edge."],
+        "notes": ["Grants temporary hit points and a brief surge of battle edge."],
     },
     {
         "item_id": "blessed_salve",
-        "name": "Blessed Salve",
+        "name": "Restorative Salve",
         "rarity": "uncommon",
-        "description": "A holy salve inspired by restorative ointments such as Keoghtom's Ointment.",
-        "source": "Shrine donations, acolyte satchels, and priestly reward caches.",
+        "description": "A stabilized salve compounded for field medics, poison work, and ugly nights without a proper infirmary.",
+        "source": "Lantern donations, attendant satchels, and keeper reward caches.",
         "weight": 0.2,
         "value": 24,
         "heal_dice": "1d8",
         "heal_bonus": 2,
         "cure_poison": True,
-        "notes": ["Heals 1d8 + 2 and cures poison in this adaptation."],
+        "notes": ["Heals 1d8 + 2 and cures poison."],
     },
     {
         "item_id": "antitoxin_vial",
         "name": "Antitoxin Vial",
         "rarity": "common",
-        "description": "A bitter counteragent modeled after official antitoxin utility.",
+        "description": "A bitter counteragent brewed to neutralize venom fast, even if it leaves the tongue numb for an hour.",
         "source": "Apothecaries, shrine stores, and caravan medicine kits.",
         "weight": 0.2,
         "value": 14,
@@ -591,12 +591,12 @@ CONSUMABLE_ITEMS = [
         "item_id": "focus_ink",
         "name": "Focus Ink",
         "rarity": "uncommon",
-        "description": "Arcane ink and herbs steeped to restore a flicker of spellcasting stamina.",
+        "description": "Tuned ink and herbs steeped to restore a flicker of channeling stamina.",
         "source": "Wizard caches, rare scribes, and magical loot tables.",
         "weight": 0.2,
         "value": 26,
         "spell_slot_restore": 1,
-        "notes": ["Restores 1 spent spell slot."],
+        "notes": ["Restores 1 spent charge band."],
     },
     {
         "item_id": "moonmint_drops",
@@ -705,7 +705,7 @@ def weapon_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, ob
             "enchantment": "Warning",
             "initiative_bonus": 1,
             "notes": [
-                "Inspired by official weapons of warning, this weapon grants +1 initiative while equipped.",
+                "Roadwatch fittings grant +1 initiative while equipped.",
             ],
         }
     if rarity == "rare":
@@ -713,7 +713,7 @@ def weapon_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, ob
             "enchantment": "Vicious",
             "crit_extra_damage_dice": "2d6",
             "notes": [
-                "Inspired by vicious weapons, a critical hit deals an extra 2d6 damage.",
+                "A cruel edge makes critical hits deal an extra 2d6 damage.",
             ],
         }
     if rarity == "epic":
@@ -724,7 +724,7 @@ def weapon_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, ob
                 "extra_damage_type": "force",
                 "initiative_bonus": 1,
                 "notes": [
-                    "Inspired by high-tier magical bows such as Oathbow, each hit adds 1d8 force damage.",
+                    "A seeking string adds 1d8 force damage on each hit.",
                 ],
             }
         return {
@@ -732,7 +732,7 @@ def weapon_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, ob
             "extra_damage_dice": "2d6",
             "extra_damage_type": "fire",
             "notes": [
-                "Inspired by Flame Tongue, each hit adds 2d6 fire damage.",
+                "A cinder-tongued edge adds 2d6 fire damage on each hit.",
             ],
         }
     return {
@@ -742,7 +742,7 @@ def weapon_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, ob
         "crit_extra_damage_dice": "2d8",
         "initiative_bonus": 2,
         "notes": [
-            "Inspired by Holy Avenger, each hit adds 2d6 radiant damage and critical hits add another 2d8 radiant.",
+            "A mythic oathblade adds 2d6 radiant damage on each hit and another 2d8 radiant damage on critical hits.",
         ],
     }
 
@@ -756,13 +756,13 @@ def armor_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obj
                 "enchantment": "Mithral Weave",
                 "stealth_disadvantage": False,
                 "notes": [
-                    "Inspired by mithral armor, this suit ignores its normal Stealth disadvantage.",
+                    "Quiet metallic weave removes this suit's normal Stealth strain.",
                 ],
             }
         return {
             "enchantment": "Tempered Links",
             "notes": [
-                "The magical fittings echo the reliability of official +1 armor.",
+                "Tempered fittings improve the armor's reliability.",
             ],
         }
     if rarity == "rare":
@@ -770,7 +770,7 @@ def armor_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obj
             "enchantment": "Adamantine Ward",
             "crit_immunity": True,
             "notes": [
-                "Inspired by adamantine armor, critical hits against you become normal hits.",
+                "Impact-dulling plates turn critical hits against you into normal hits.",
             ],
         }
     resistance = ARMOR_RESISTANCE_TYPES.get(str(base["slug"]), "fire")
@@ -779,7 +779,7 @@ def armor_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obj
             "enchantment": f"{resistance.title()} Resistance",
             "damage_resistances": [resistance],
             "notes": [
-                f"Inspired by armor of resistance, you resist {resistance} damage while wearing it.",
+                f"Resonant plating grants resistance to {resistance} damage while worn.",
             ],
         }
     return {
@@ -802,7 +802,7 @@ def shield_enchantment_for(rarity: str) -> dict[str, object]:
             "initiative_bonus": 1,
             "skill_bonuses": {"Perception": 1},
             "notes": [
-                "Inspired by Sentinel Shield, the bearer gains +1 initiative and +1 Perception.",
+                "A watchmark face grants +1 initiative and +1 Perception.",
             ],
         }
     return {
@@ -810,7 +810,7 @@ def shield_enchantment_for(rarity: str) -> dict[str, object]:
         "initiative_bonus": 1,
         "save_bonuses": {"DEX_save": 1},
         "notes": [
-            "Inspired by Arrow-Catching Shield, the bearer gains +1 initiative and +1 Dexterity saves.",
+            "Angled warding grants +1 initiative and +1 Dexterity saves.",
         ],
     }
 
@@ -822,7 +822,7 @@ def gear_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obje
             "enchantment": "Elvenkind",
             "stealth_advantage": True,
             "notes": [
-                "Inspired by Boots of Elvenkind, these grant advantage on Stealth checks.",
+                "Soft-stepping soles grant edge on Stealth checks.",
             ],
         }
     if slug == "watcher_ring":
@@ -832,7 +832,7 @@ def gear_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obje
             "initiative_bonus": bonus,
             "save_bonuses": {"WIS_save": 1} if rarity in {"rare", "epic"} else None,
             "notes": [
-                "Inspired by rings of protection and warning, this ring sharpens reactions and watchfulness.",
+                "This ring sharpens reactions and watchfulness.",
             ],
         }
     if slug == "amber_amulet" and rarity == "rare":
@@ -840,7 +840,7 @@ def gear_enchantment_for(base: dict[str, object], rarity: str) -> dict[str, obje
             "enchantment": "Wound Closure",
             "healing_bonus": 2,
             "notes": [
-                "Inspired by Periapt of Wound Closure, healing effects on the wearer restore 2 extra HP in this adaptation.",
+                "Healing effects on the wearer restore 2 extra HP.",
             ],
         }
     return {}

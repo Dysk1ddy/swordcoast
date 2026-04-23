@@ -1,36 +1,36 @@
-# Sword Coast Act 2 Content Reference
+# Aethrune Act 2 Content Reference
 
 This file collects the approved design target for Act 2. Unlike `information/Story/ACT1_CONTENT_REFERENCE.md`, this is currently a planning and scaffolding document rather than a summary of already playable scenes, so it should be treated as the source of truth for future implementation work unless later story revisions replace it.
 
-The tone and structure stay anchored to official Phandalin / Wave Echo Cave material from the Forgotten Realms, while the cult thread, companion arcs, and several frontier locations are game-original adaptations built to set up a stranger Act 3.
+The tone and structure now target the original Aethrune frame: Iron Hollow politics, the Vein of Glass, the Resonant Vaults, and the Quiet Choir's attempt to control what the old systems remember.
 
 ## Act 2 Scope
 
-- Opening arc: Act 1 aftermath -> Stonehill claims council -> expedition sponsorship choice -> first lead
-- Early branching route: `Conyberry and Agatha's Circuit`, `Neverwinter Wood Survey Camp`, and `Stonehollow Dig`
+- Opening arc: Act 1 aftermath -> Ashlamp claims council -> expedition sponsorship choice -> first lead
+- Early branching route: dead-testimony circuit, Greywake Survey Camp, and `Stonehollow Dig`
 - Early side-delve candidate: `Glasswater Intake` can slot between the first and second cleared early leads as a medium optional dungeon about water control, courier traffic, claims fraud, and the first practical signs of whisper contamination
 - Early route rule: any two leads let the player trigger the midpoint, but delaying the third now causes a permanent consequence before that lead can be recovered later
 - First new recruitable companion: `Nim Ardentglass` enters through `Stonehollow Dig`, but recruiting him late changes his trust and the quality of the recovered survey truth
 - Midpoint convergence: sponsor tension -> sabotage night -> protect a priority and accept what slips through elsewhere
 - Late branching route: `Broken Prospect` and `South Adit` are both required before the deeper cave, but can be taken in either order and materially wound each other when delayed
 - Second new recruitable companion: `Irielle Ashwake` can be freed and recruited during `South Adit`, with stronger or weaker entry depending on how late the rescue comes
-- Finale: `Wave Echo Outer Galleries` -> `Black Lake Causeway` -> `Forge of Spells`
+- Finale: `Resonant Vault Outer Galleries` -> `Blackglass Causeway` -> `Meridian Forge`
 - Final boss: `Sister Caldra Voss`, a Quiet Choir cult agent using an obelisk shard to turn the Forge into a listening lens
 - Total potential Act 2 combats should comfortably exceed 12 before counting random encounters
 - Act 2 now tracks three structural pressures in the scaffold:
-  - `Town Stability`: how intact Phandalin stays as a political and human community
+  - `Town Stability`: how intact Iron Hollow stays as a political and human community
   - `Route Control`: how much of the expedition map your side genuinely owns
   - `Whisper Pressure`: how much of the mine's wrong resonance is escaping containment
 
 ## Story Spine
 
-- Varyn Sable's ledgers do more than point to Wave Echo Cave. They reveal that the Ashen Brand were functioning as a buffer force, keeping prospectors, merchants, town leaders, and rival diggers away from older Phandelver routes until somebody better prepared could claim them.
+- Varyn Sable's ledgers do more than point to the Resonant Vaults. They reveal that the Ashen Brand were functioning as a buffer force, keeping prospectors, merchants, town leaders, and rival diggers away from older Meridian routes until somebody better prepared could claim them.
 - The act's public conflict is a frontier claims war. Its private conflict is stranger: the Quiet Choir has found an obelisk shard below the mine and realized the Forge of Spells can be used not just to enchant, but to listen.
-- In this version of Act 2, Caldra Voss is not trying to merely seize Wave Echo as a treasure site. She is trying to tune the mine into a resonant instrument capable of hearing something farther down and farther away than any ordinary ruin should answer.
+- In this version of Act 2, Caldra Voss is not trying to merely seize a treasure site. She is trying to tune the Vaults into a resonant instrument capable of hearing something farther down and farther away than any ordinary ruin should answer.
 - The act should therefore feel layered:
-  - first as a political fight over who gets to name the future of Phandalin
+  - first as a political fight over who gets to name the future of Iron Hollow
   - then as an expedition race where incomplete information is more dangerous than monsters
-  - then as a ruin-crawl where the old Phandelver Pact and the Quiet Choir are competing to define what the cave means
+  - then as a ruin-crawl where old Meridian custody rules and the Quiet Choir are competing to define what the Vaults mean
   - and only near the end as obvious cosmic wrongness
 
 ## Act 1 Carryover
@@ -77,55 +77,55 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 
 ## Core Premise
 
-- Varyn Sable's ledgers confirm that the Ashen Brand were not acting alone; they were keeping treasure hunters, miners, and local authorities away from older Phandelver routes tied to Wave Echo Cave.
-- Several factions now want what lies beneath the Sword Mountains:
+- Varyn Sable's ledgers confirm that the Ashen Brand were not acting alone; they were keeping treasure hunters, miners, and local authorities away from older Meridian routes tied to the Resonant Vaults.
+- Several factions now want what lies beneath the Vein of Glass:
   - honest miners and traders who want the region reopened
   - practical opportunists who want rights, salvage, and leverage
-  - the Quiet Choir, a hidden cult cell studying a buried obelisk shard through the mine's lingering magic
+  - the Quiet Choir, a hidden cult cell studying a buried obelisk shard through the Vaults' lingering resonance
 - The act should feel like a frontier recovery story giving way to an expedition race, then to a magical ruin crawl, and only near the end to unmistakable cosmic wrongness.
 
 ## Expanded Act 2 Route
 
-1. Act 1 aftermath in Phandalin and a claims council at the Miner's Exchange
+1. Act 1 aftermath in Iron Hollow and a claims council at the Delvers' Exchange
 2. Sponsor choice: decide whether speed, discipline, or caution defines the expedition's first tone
 3. First lead selection and opening expedition prep
 4. Optional side-delve: `Glasswater Intake` can open after the first cleared early lead as a medium dungeon that reshapes metrics and later route reads without replacing a core lead
-5. Early lead A: `Conyberry and Agatha's Circuit`
-6. Early lead B: `Neverwinter Wood Survey Camp`
+5. Early lead A: dead-testimony circuit
+6. Early lead B: Greywake Survey Camp
 7. Early lead C: `Stonehollow Dig`
 8. Once any two early leads are cleared, the player can trigger `Sabotage Night`
 9. If the third lead is delayed, it remains playable later but its damage is already written into the campaign state
 10. Midpoint convergence:
-   the player chooses what to protect first in Phandalin and accepts a matching loss elsewhere
+   the player chooses what to protect first in Iron Hollow and accepts a matching loss elsewhere
 11. Late route A: `Broken Prospect`
 12. Late route B: `South Adit`
 13. The order of 11 and 12 materially changes captives, route posture, and companion texture
-14. `Wave Echo Outer Galleries`
-15. `Black Lake Causeway`, now framed as a shrine / barracks / causeway-priority decision instead of a straight bridge fight
-16. `Forge of Spells`
+14. `Resonant Vault Outer Galleries`
+15. `Blackglass Causeway`, now framed as a shrine / barracks / causeway-priority decision instead of a straight bridge fight
+16. `Meridian Forge`
 17. Act end summary records not just victory, but what kind of victory it was
 
 ### Drafted Early Side-Dungeon
 
 - `Glasswater Intake`
   - Best unlocked after the first cleared early lead and before `Sabotage Night`.
-  - Functions as a medium optional dungeon that foreshadows Wave Echo by way of waterworks, courier ledgers, claims fraud, and containment choices instead of full late-act spectacle.
+  - Functions as a medium optional dungeon that foreshadows the Resonant Vaults by way of waterworks, courier ledgers, claims fraud, and containment choices instead of full late-act spectacle.
   - Intended to carry 4 to 5 encounter beats, one real finale, and multiple metric-facing choices rather than reading like a throwaway side room chain.
   - Its final chamber can center on `Brother Merik Sorn`, a Quiet Choir field operator who treats water pressure, logistics discipline, and doctrine as the same system.
   - Full draft: `information/Story/ACT2_GLASSWATER_INTAKE_DRAFT.md`
 - Additional branch-heavy location packets:
-  - `information/Story/ACT2_LOCATION_BRANCH_PACKETS.md` collects deeper multi-stage branch webs for `Conyberry and Agatha's Circuit`, `Neverwinter Wood Survey Camp`, `Stonehollow Dig`, `Broken Prospect`, and `Black Lake Causeway`
-  - `information/Story/ACT2_CONYBERRY_AGATHA_DRAFT.md` expands `Conyberry and Agatha's Circuit` into a dedicated implementation-facing branch draft with `Circuit Strain`, exact scene beats, Agatha dialogue goals, and warning-custody outcomes
+  - `information/Story/ACT2_LOCATION_BRANCH_PACKETS.md` collects deeper multi-stage branch webs for the dead-testimony circuit, Greywake Survey Camp, `Stonehollow Dig`, `Broken Prospect`, and Blackglass Causeway.
+  - `information/Story/ACT2_CONYBERRY_AGATHA_DRAFT.md` is a legacy implementation draft for the dead-testimony circuit; keep only the warning-custody structure and replace old names during implementation.
 
 ## Choice Web
 
 ### Early lead consequences
 
-- Delay `Conyberry`
-  - The player reaches sabotage night without Agatha's full warning.
+- Delay the dead-testimony circuit
+  - The player reaches sabotage night without the full warning.
   - `Whisper Pressure` rises and the southern adit stays less clearly mapped.
-  - Recovering Conyberry later still matters, but it becomes a damaged warning rather than a clean one.
-- Delay `Neverwinter Wood`
+  - Recovering the circuit later still matters, but it becomes a damaged warning rather than a clean one.
+- Delay Greywake Survey Camp
   - The saboteur line feeds directly into the midpoint riot.
   - `Town Stability` and `Route Control` both drop because the enemy reaches town through confusion and false routework.
   - Recovering the wood later stops future damage, but cannot erase the riot's cost.
@@ -155,12 +155,12 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
   - More lives saved, stronger moral authority, better human memory of the expedition.
   - The route race hardens elsewhere and `Broken Prospect` becomes a meaner recovery scene.
 
-## Hidden Truth Under Wave Echo
+## Hidden Truth Under The Resonant Vaults
 
-- The old Phandelver Pact did not merely share a profitable mine. In this version of the story, the Pact also functioned as a discipline of listening and restraint. The cave's echoing properties were useful, but dangerous enough that the Pact distributed access, route knowledge, and sacred obligations across multiple groups so that no single claimant could weaponize the whole site alone.
-- The Forge of Spells matters because it can amplify whatever intention is fed into it. Under the Pact, that meant craft, enchantment, and controlled wonder. Under the Quiet Choir, it becomes a listening lens aimed through the mine's natural resonance.
+- Old Meridian custody rules did not merely share a profitable site. They also functioned as a discipline of listening and restraint. The Vaults' echoing properties were useful, but dangerous enough that access, route knowledge, and sacred obligations were distributed so that no single claimant could weaponize the whole site alone.
+- The Meridian Forge matters because it can amplify whatever intention is fed into it. In careful hands, that means repair and controlled wonder. Under the Quiet Choir, it becomes a listening lens aimed through the Vaults' natural resonance.
 - Sister Caldra Voss should therefore read less like a greedy necromancer-in-a-dungeon and more like a field theologian of something cosmic and wrong. She believes revelation is not spoken to mortals directly because mortals are too loud. The Choir's work is to make the world quiet enough to hear what was always there.
-- The horror of Act 2 is that she is partly right. The mine does answer. The problem is what answers back.
+- The horror of Act 2 is that she is partly right. The Vaults do answer. The problem is what answers back.
 - This lets Act 3 escalate naturally:
   - if `Whisper Pressure` stayed low, Act 3 begins as containment after a near miss
   - if `Whisper Pressure` stayed medium, Act 3 begins with fragments already leaking into dreams, notes, and rituals
@@ -174,16 +174,16 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 
 | Companion | Race / Class | Summary | Recruitment point | Relationship bonuses |
 | --- | --- | --- | --- | --- |
-| Nim Ardentglass | Rock Gnome Wizard | Pact cartographer and practical ruin scholar | joins after a rescue or breakthrough around `Stonehollow Dig` or the first early-route convergence | Great: `+1 Arcana`, `+1 Investigation`; Exceptional: `+1 spell attack` |
-| Irielle Ashwake | Tiefling Warlock | escaped cult augur trying to stay ahead of the whispers that marked her | freed during `South Adit` around the late-act 70 percent mark | Great: `+1 spell damage`, `+1 Insight`; Exceptional: `+1 WIS saves` |
+| Nim Ardentglass | Unrecorded Wizard | Pact cartographer and practical ruin scholar | joins after a rescue or breakthrough around `Stonehollow Dig` or the first early-route convergence | Great: `+1 Arcana`, `+1 Investigation`; Exceptional: `+1 spell attack` |
+| Irielle Ashwake | Fire-Blooded Warlock | escaped cult augur trying to stay ahead of the whispers that marked her | freed during `South Adit` around the late-act 70 percent mark | Great: `+1 spell damage`, `+1 Insight`; Exceptional: `+1 WIS saves` |
 
 ### Scene support hooks
 
 - Nim: `stonehollow_dig`, gives hero bonus and player Blessed
-- Nim: `wave_echo_outer_galleries`, gives hero bonus and enemy Reeling
-- Nim: `forge_of_spells`, reads support traffic aloud at the threshold so the Forge feels like routework as well as spectacle
+- Nim: `wave_echo_outer_galleries`, gives hero bonus and enemy Reeling; public text should call this the Resonant Vaults.
+- Nim: `forge_of_spells`, reads support traffic aloud at the threshold so the Meridian Forge feels like routework as well as spectacle.
 - Irielle: `south_adit`, gives hero bonus and player Invisible
-- Irielle: `forge_of_spells`, gives hero bonus and enemy Frightened, and now speaks into the resonance-lens / counter-cadence reads directly
+- Irielle: `forge_of_spells`, gives hero bonus and enemy Frightened, and now speaks into the resonance-lens / counter-cadence reads directly.
 
 ## Companion Arc Hooks
 
@@ -191,13 +191,13 @@ Act 2 should deepen the whole party by revealing personal history through option
 
 | Companion | Optional quest id | Primary location | Theme | Decision | Persistent payoff |
 | --- | --- | --- | --- | --- | --- |
-| Kaelis Starling | `ashes_in_the_boughs` | Neverwinter Wood | old scout loyalties, guilt, and the cost of reading danger too well | preserve a hidden trail or burn it | better route speed vs stronger town security |
+| Kaelis Starling | `ashes_in_the_boughs` | Greywake Wood | old scout loyalties, guilt, and the cost of reading danger too well | preserve a hidden trail or burn it | better route speed vs stronger town security |
 | Rhogar Valeguard | `oath_beneath_stone` | sealed miners' chapel | oath, mercy, and whether duty means guarding relics or people first | anchor his oath in the town or the threshold | stronger civic stability vs lower whisper seepage |
 | Tolan Ironshield | `last_wagon_standing` | Broken Prospect road | caravan memory, survivor anger, and whether pragmatism is moral enough | salvage tainted structure or destroy profitable wrongness | better route control vs cleaner spiritual state |
 | Bryn Underbough | `false_ledgers` | Miner's Exchange / sponsor stores | smuggling instincts, bad old contacts, and choosing who gets trusted with the truth | quietly falsify bad ledgers or expose the scheme in public | better covert route leverage vs stronger civic trust |
-| Elira Dawnmantle | `lantern_of_tymora` | Conyberry chapel ruins | faith under pressure, grief, and whether hope is luck or discipline | carry the warding lantern into the field or leave it in town | lower whisper pressure vs higher town stability |
+| Elira Dawnmantle | `lantern_of_tymora` | dead-testimony chapel ruins | faith under pressure, grief, and whether hope is luck or discipline | carry the warding lantern into the field or leave it in town | lower whisper pressure vs higher town stability |
 | Nim Ardentglass | `missing_theorem` | South Adit archive room | mentor legacy, academic pride, and whether knowledge is worth carrying out intact | preserve the dangerous theorem or burn its corrupted pages | stronger forge options vs safer Act 3 contamination profile |
-| Irielle Ashwake | `starved_signal` | Black Lake shrine | resisting the cult's hold and deciding whether dangerous knowledge should be destroyed or studied | teach the counter-cadence or bury it | stronger forge opening vs cleaner containment into Act 3 |
+| Irielle Ashwake | `starved_signal` | Blackglass shrine | resisting the cult's hold and deciding whether dangerous knowledge should be destroyed or studied | teach the counter-cadence or bury it | stronger forge opening vs cleaner containment into Act 3 |
 
 ## Act 2 Exclusive Item Spotlight
 
