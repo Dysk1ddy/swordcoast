@@ -214,7 +214,7 @@ class CharacterCreationMixin:
         self.banner("Character Summary")
         self.say(
             f"{character.name}, {character.race} {character.class_name} ({character.background})\n"
-            f"HP {character.current_hp}/{character.max_hp}, AC {character.armor_class}, weapon: {character.weapon.name}"
+            f"HP {character.current_hp}/{character.max_hp}, Defense {character.armor_class}, weapon: {character.weapon.name}"
         )
         abilities = ", ".join(f"{ability} {character.ability_scores[ability]}" for ability in ABILITY_ORDER)
         self.say(f"Abilities: {abilities}")

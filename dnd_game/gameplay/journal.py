@@ -41,7 +41,7 @@ class JournalMixin:
         if not visible_resources:
             return "None"
         return ", ".join(
-            f"{resource_label(name).title()} {member.resources.get(name, 0)}/{member.max_resources.get(name, 0)}"
+            f"{resource_label(name) if name == 'mp' else resource_label(name).title()} {member.resources.get(name, 0)}/{member.max_resources.get(name, 0)}"
             for name in visible_resources
         )
 
@@ -105,7 +105,7 @@ class JournalMixin:
         header.add_row("People / Role", f"Level {member.level} {member.public_identity}")
         header.add_row("Background", member.background)
         header.add_row("Status", strip_ansi(self.character_health_summary(member)))
-        header.add_row("Guard", str(member.armor_class))
+        header.add_row("Defense", str(member.armor_class))
         header.add_row("Training", f"+{member.proficiency_bonus}")
         if getattr(member, "companion_id", ""):
             header.add_row("Relationship", f"{self.relationship_label_for(member)} ({member.disposition})")
@@ -133,7 +133,7 @@ class JournalMixin:
             combat.add_row("Channel strike", f"+{spell_attack}")
             magic_bar = self.format_member_magic_bar(member)
             if magic_bar is not None:
-                combat.add_row("Reserve", self.rich_from_ansi(magic_bar))
+                combat.add_row("MP", self.rich_from_ansi(magic_bar))
 
         saves = Table(box=box.SIMPLE_HEAVY, expand=True, pad_edge=False)
         saves.add_column("Resist", style=f"bold {rich_style_name('light_aqua')}")

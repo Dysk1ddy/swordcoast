@@ -311,7 +311,7 @@ Do this:
 
 Examples of low-pain originalization targets:
 
-- `Armor Class` -> `Guard` or `Defense`
+- `Armor Class` -> `Defense`
 - `saving throw` -> `resist check` or `defense roll`
 - `death saves` -> `bleed-out checks` or `last-chance checks`
 - class labels -> role labels
@@ -495,4 +495,3 @@ If you want a practical implementation order, the next pass should be:
 3. rewrite the Act 1 and Act 2 setting anchors
 4. decide the rules lane and build the whitelist or rename pass
 5. mirror the same cleanup into `android_port`
-

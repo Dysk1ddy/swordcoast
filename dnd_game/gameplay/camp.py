@@ -48,7 +48,7 @@ class CampMixin:
         active_party = Group(
             *(
                 self.rich_from_ansi(
-                    f"{member.name}: {self.character_health_summary(member)} | Guard {member.armor_class} | "
+                    f"{member.name}: {self.character_health_summary(member)} | Defense {member.armor_class} | "
                     f"{self.character_condition_summary(member)}"
                 )
                 for member in self.state.party_members()

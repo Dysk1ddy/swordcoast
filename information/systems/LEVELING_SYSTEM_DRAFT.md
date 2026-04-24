@@ -33,7 +33,7 @@ Current thresholds:
 ## Keep
 
 - Existing level-up loop and threshold checks.
-- Current HP, MP/channel reserve, feature, and resource synchronization helpers.
+- Current HP, MP, feature, and resource synchronization helpers.
 - The Act II level-4 test snapshot tooling.
 - Class identities as internal mechanical keys until the public class redesign pass is ready.
 

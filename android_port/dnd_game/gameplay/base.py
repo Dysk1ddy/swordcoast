@@ -863,9 +863,9 @@ class GameBase:
                 ),
             },
             "Armor and Shields": {
-                "menu": "Armor sets base Guard, while shields protect the off hand.",
+                "menu": "Armor sets base Defense, while shields protect the off hand.",
                 "text": (
-                    "Armor defines your base Guard and may limit how much Agility helps. Shields are handled separately "
+                    "Armor defines your base Defense and may limit how much Agility helps. Shields are handled separately "
                     "in the off-hand slot and improve survivability when your other hand is free.\n\n"
                     "Heavy or two-handed weapon setups can conflict with shields, so the game checks hand-use rules "
                     "when gear is equipped. Relic armor and shields can also add resistances or extra defensive traits."
@@ -878,7 +878,7 @@ class GameBase:
                     "fingers, a cloak or cape on the shoulders, and similar pieces only work when worn in the right "
                     "place. This game simplifies that into clear slots for head, neck, chest, "
                     "gloves, boots, cape, and two ring slots.\n\n"
-                    "Most of these pieces grant passive bonuses such as Guard, skill bonuses, resist boosts, "
+                    "Most of these pieces grant passive bonuses such as Defense, skill bonuses, resist boosts, "
                     "initiative bonuses, resistances, or other always-on utility effects."
                 ),
             },
@@ -886,7 +886,7 @@ class GameBase:
                 "menu": "Single-use items that heal, restore, protect, or clear conditions.",
                 "text": (
                     "Consumables are one-use resources such as draughts, field tonics, and travel aids. In this game "
-                    "they usually restore hit points, temporary hit points, channel reserves, or remove harmful "
+                    "they usually restore hit points, temporary hit points, MP, or remove harmful "
                     "conditions.\n\n"
                     "Most are best saved for emergencies because they are consumed immediately on use. Healing draughts "
                     "follow the game-specific combat timing rules already shown elsewhere: drinking one yourself is "

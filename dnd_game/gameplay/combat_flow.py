@@ -1059,7 +1059,7 @@ class CombatFlowMixin:
             display_label = f"Strike with {spell_label(spell_id)}"
         else:
             display_label = label
-        suffix = f"{magic_point_cost(spell_id)} reserve"
+        suffix = f"{magic_point_cost(spell_id)} MP"
         if note:
             suffix = f"{suffix}, {note}"
         return f"{display_label} ({suffix})"

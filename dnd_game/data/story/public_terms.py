@@ -147,7 +147,7 @@ FEATURE_PUBLIC_LABELS = {
 
 
 RESOURCE_PUBLIC_LABELS = {
-    "mp": "channel reserve",
+    "mp": "MP",
     "rage": "battle surge",
     "bardic_inspiration": "rally note",
     "lay_on_hands": "oath mend",
@@ -159,8 +159,8 @@ RESOURCE_PUBLIC_LABELS = {
 
 
 TERM_REPLACEMENTS = (
-    (r"\bArmor Class\b", "Guard"),
-    (r"\barmor class\b", "Guard"),
+    (r"\bArmor Class\b", "Defense"),
+    (r"\barmor class\b", "Defense"),
     (r"\bSaving Throws\b", "Resist Checks"),
     (r"\bsaving throws\b", "resist checks"),
     (r"\bSaving Throw\b", "Resist Check"),
@@ -273,11 +273,11 @@ def marks_label(value: int) -> str:
 
 
 def guard_label(value: int) -> str:
-    return f"Guard {value}"
+    return f"Defense {value}"
 
 
 def target_guard_label(value: int) -> str:
-    return f"Guard {value}"
+    return f"Defense {value}"
 
 
 def d20_edge_label(advantage_state: int) -> str:

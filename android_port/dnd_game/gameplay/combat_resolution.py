@@ -93,7 +93,7 @@ class CombatResolutionMixin:
                 attacker,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -105,7 +105,7 @@ class CombatResolutionMixin:
                 critical_hit = False
                 self.say(f"{self.style_name(target)}'s armor turns a critical hit into a normal one.")
             if not critical_hit and total < target_ac:
-                self.say(f"{self.style_name(attacker)} attacks {self.style_name(target)} but misses AC {target_ac}.")
+                self.say(f"{self.style_name(attacker)} attacks {self.style_name(target)} but misses Defense {target_ac}.")
                 return
             damage_roll = self.roll_with_display_bonus(attacker.weapon.damage, bonus=attacker.damage_bonus(), critical=critical_hit)
             weapon_damage = damage_roll.total + attacker.damage_bonus()
@@ -160,7 +160,7 @@ class CombatResolutionMixin:
             attacker,
             advantage,
             target_number=target_ac,
-            target_label=f"AC {target_ac}",
+            target_label=f"Defense {target_ac}",
             modifier=total_modifier,
         )
         total = d20.kept + total_modifier
@@ -233,7 +233,7 @@ class CombatResolutionMixin:
                 caster,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -265,7 +265,7 @@ class CombatResolutionMixin:
                 caster,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -336,7 +336,7 @@ class CombatResolutionMixin:
                 caster,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -387,7 +387,7 @@ class CombatResolutionMixin:
                 attacker,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -442,7 +442,7 @@ class CombatResolutionMixin:
                 attacker,
                 advantage,
                 target_number=target_ac,
-                target_label=f"AC {target_ac}",
+                target_label=f"Defense {target_ac}",
                 modifier=total_modifier,
             )
             total = d20.kept + total_modifier
@@ -797,7 +797,7 @@ class CombatResolutionMixin:
             return f"{self.style_name(creature)}: {self.format_health_bar(0, creature.max_hp)} (down){conditions}"
         return (
             f"{self.style_name(creature)}: {self.format_health_bar(creature.current_hp, creature.max_hp)}, "
-            f"AC {self.effective_armor_class(creature)}{temp}{conditions}"
+            f"Defense {self.effective_armor_class(creature)}{temp}{conditions}"
         )
 
     def handle_defeat(self, reason: str) -> None:

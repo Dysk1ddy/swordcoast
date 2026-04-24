@@ -771,7 +771,7 @@ class CoreTests(unittest.TestCase):
     def test_magic_bar_summary_uses_blue_blocks_and_numbers(self) -> None:
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(900640))
         rendered = game.format_magic_bar(7, 12)
-        self.assertEqual(strip_ansi(rendered), "Channel [███████     ]  7/12")
+        self.assertEqual(strip_ansi(rendered), "MP [███████     ]  7/12")
         self.assertIn(colorize("███████", "blue"), rendered)
 
     def test_health_bar_thresholds_match_requested_breakpoints(self) -> None:
@@ -8612,7 +8612,7 @@ class CoreTests(unittest.TestCase):
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(15))
         game.state = GameState(player=player, inventory={"potion_healing": 1}, current_scene="road_ambush")
         options = game.get_player_combat_options(player, SimpleNamespace(allow_parley=True, allow_flee=True))
-        self.assertIn("Strike with Oathflare Strike (4 reserve, on hit)", options)
+        self.assertIn("Strike with Oathflare Strike (4 MP, on hit)", options)
         self.assertIn("[PERSUASION / INTIMIDATION] Attempt Parley", options)
         self.assertIn("[STEALTH] Try to Flee", options)
         self.assertIn("Drink a Red Recovery Draught", options)
@@ -8698,8 +8698,8 @@ class CoreTests(unittest.TestCase):
             turn_state=TurnState(bonus_action_spell_cast=True),
             heroes=[player],
         )
-        self.assertIn("Channel Lantern Flare (1 reserve)", options)
-        self.assertNotIn("Channel Field Mend (3 reserve)", options)
+        self.assertIn("Channel Lantern Flare (1 MP)", options)
+        self.assertNotIn("Channel Field Mend (3 MP)", options)
 
     def test_healing_word_cost_matches_cure_wounds_and_stays_bonus_action(self) -> None:
         player = build_character(
@@ -8719,10 +8719,10 @@ class CoreTests(unittest.TestCase):
             heroes=[player],
         )
         self.assertEqual(magic_point_cost("healing_word"), magic_point_cost("cure_wounds"))
-        self.assertIn("Channel Field Mend (3 reserve)", options)
-        self.assertIn("Channel Pulse Restore (3 reserve, Bonus Action)", options)
-        self.assertEqual(game.combat_option_group("Channel Field Mend (3 reserve)"), "Action")
-        self.assertEqual(game.combat_option_group("Channel Pulse Restore (3 reserve, Bonus Action)"), "Bonus Action")
+        self.assertIn("Channel Field Mend (3 MP)", options)
+        self.assertIn("Channel Pulse Restore (3 MP, Bonus Action)", options)
+        self.assertEqual(game.combat_option_group("Channel Field Mend (3 MP)"), "Action")
+        self.assertEqual(game.combat_option_group("Channel Pulse Restore (3 MP, Bonus Action)"), "Bonus Action")
 
     def test_healing_word_is_bonus_action_and_still_allows_action_cantrip(self) -> None:
         player = build_character(
@@ -9097,11 +9097,32 @@ class CoreTests(unittest.TestCase):
         lines = strip_ansi(rendered).splitlines()
         self.assertEqual(len(lines), 2)
         self.assertIn("Nyra: HP", lines[0])
-        self.assertIn("Guard", lines[0])
+        self.assertIn("Defense", lines[0])
         self.assertNotIn("MP", lines[0])
-        self.assertTrue(lines[1].startswith(" " * len("Nyra: ") + "Channel ["))
-        self.assertIn("Channel [███████     ]  7/12", strip_ansi(rendered))
+        self.assertTrue(lines[1].startswith(" " * len("Nyra: ") + "MP ["))
+        self.assertIn("MP [███████     ]  7/12", strip_ansi(rendered))
         self.assertIn(colorize("███████", "blue"), rendered)
+
+    def test_describe_living_combatants_aligns_mp_bars_for_spellcasters(self) -> None:
+        elira = build_character(
+            name="Elira Lanternward",
+            race="Human",
+            class_name="Cleric",
+            background="Acolyte",
+            base_ability_scores={"STR": 10, "DEX": 12, "CON": 13, "INT": 10, "WIS": 15, "CHA": 14},
+            class_skill_choices=["Medicine", "Persuasion"],
+        )
+        rhogar = build_character(
+            name="Rhogar Valeguard",
+            race="Dragonborn",
+            class_name="Paladin",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 10, "CON": 13, "INT": 8, "WIS": 12, "CHA": 14},
+            class_skill_choices=["Athletics", "Intimidation"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(1206))
+        rendered = [strip_ansi(line).splitlines() for line in game.describe_living_combatants([elira, rhogar])]
+        self.assertEqual(rendered[0][1].index("MP ["), rendered[1][1].index("MP ["))
 
     def test_warlock_short_rest_restores_pact_slots(self) -> None:
         warlock = build_character(
@@ -9282,7 +9303,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(game.use_item_from_inventory())
         self.assertEqual(player.resources["mp"], 4)
         self.assertNotIn("resonance_tonic", game.state.inventory)
-        self.assertIn("restores 4 channel reserve", self.plain_output(log))
+        self.assertIn("restores 4 MP", self.plain_output(log))
 
     def test_long_rest_restores_spell_slots_for_player_and_companion(self) -> None:
         player = build_character(
@@ -9389,7 +9410,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(expressions, [])
         self.assertEqual(target.current_hp, target.max_hp)
         self.assertEqual(current_magic_points(wizard), 4)
-        self.assertIn("needs 5 channel reserve to use Arc Pulse", self.plain_output(log))
+        self.assertIn("needs 5 MP to use Arc Pulse", self.plain_output(log))
 
     def test_camp_menu_shows_revivify_option_for_dead_companion(self) -> None:
         player = build_character(
@@ -12175,7 +12196,7 @@ class CoreTests(unittest.TestCase):
         game.state = GameState(player=player, companions=[cleric], current_scene="phandalin_hub")
         rendered = game.hud_party_summary()
         self.assertIn("Ash", strip_ansi(rendered))
-        self.assertIn("Channel [███   ]  6/13", strip_ansi(rendered))
+        self.assertIn("MP [███   ]  6/13", strip_ansi(rendered))
         self.assertIn(colorize("███", "blue"), rendered)
 
     def test_map_command_opens_map_menu_and_can_show_travel_ledger(self) -> None:
@@ -12595,7 +12616,7 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("Current Head: Roadworn Iron Cap", rendered)
         self.assertIn("Roadworn Traveler's Hood", rendered)
-        self.assertIn("Guard -1", rendered)
+        self.assertIn("Defense -1", rendered)
         self.assertIn("Perception +1", rendered)
 
     def test_map_command_opens_map_menu_each_time_it_is_requested(self) -> None:

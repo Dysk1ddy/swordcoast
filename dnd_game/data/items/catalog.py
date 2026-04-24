@@ -487,7 +487,7 @@ SHIELD_BASES = [
         "item_type": "shield",
         "weight": 6.0,
         "value": 10,
-        "description": "A standard shield that adds 2 Guard when your other hand is free.",
+        "description": "A standard shield that adds 2 Defense when your other hand is free.",
         "shield_bonus": 2,
         "properties": ["shield"],
     }
@@ -607,7 +607,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.3,
         "value": 30,
         "spell_slot_restore": 1,
-        "notes": ["Restores 4 channel reserve and helps shake off rattled footing."],
+        "notes": ["Restores 4 MP and helps shake off rattled footing."],
     },
     {
         "item_id": "superior_healing_elixir",
@@ -721,7 +721,7 @@ CONSUMABLE_ITEMS = [
         "weight": 0.2,
         "value": 26,
         "spell_slot_restore": 1,
-        "notes": ["Restores 4 channel reserve."],
+        "notes": ["Restores 4 MP."],
     },
     {
         "item_id": "moonmint_drops",
@@ -777,7 +777,7 @@ SCROLL_EFFECTS = [
     ("scroll_mending_word", "Script of Mending Pulse", "common", "A quick field script that releases a compact healing pulse.", "Lantern posts, hedge channelers, and healer caches.", "1d6", 2, 0, 0, False),
     ("scroll_lesser_restoration", "Restoration Script", "uncommon", "A clean restorative script that breaks poison and weakness.", "Lantern archives and rare support caches.", None, 0, 0, 0, True),
     ("scroll_revivify", "Revival Script", "uncommon", "A tightly warded revival script for camp rites after a fresh battlefield death.", "Rarely stocked by frontier traders and occasionally recovered from hard-fought battles.", None, 0, 0, 0, False),
-    ("scroll_arcane_refresh", "Channeler's Refresh Script", "rare", "An elegant sigil-chain that restores a surge of channel reserve.", "Scholar satchels, hidden libraries, and rare resonance drops.", None, 0, 0, 1, False),
+    ("scroll_arcane_refresh", "Channeler's Refresh Script", "rare", "An elegant sigil-chain that restores a surge of MP.", "Scholar satchels, hidden libraries, and rare resonance drops.", None, 0, 0, 1, False),
     ("scroll_echo_step", "Echostep Script", "rare", "A delicate step-script that blurs the reader between falling dust and reflected sound.", "Resonant Vault script tubes, hidden survey lockers, and expert scout caches.", None, 0, 0, 0, False),
     ("scroll_counter_cadence", "Counter-Cadence Script", "uncommon", "A prison-smudged script of wrong-beat notations that turns the Choir's first settling whisper back on itself.", "South Adit caches, freed augur notes, and prisoner escape kits kept against the Quiet Choir.", None, 0, 0, 0, False),
     ("scroll_quell_the_deep", "Deep-Quell Script", "rare", "A warding script copied by keepers and delvers who learned that some caverns answer back.", "Sanctum satchels, ruined lantern halls, and counter-Choir ward caches.", "2d6", 2, 0, 0, False),
@@ -2208,7 +2208,7 @@ def item_rules_text(item: Item) -> str:
         if item.weapon.to_hit_bonus or item.weapon.damage_bonus:
             rules.append(f"tuned +{item.weapon.to_hit_bonus} strike / +{item.weapon.damage_bonus} damage")
     if item.armor is not None:
-        armor_bits = [f"Guard {item.armor.base_ac}"]
+        armor_bits = [f"Defense {item.armor.base_ac}"]
         if item.armor.dex_cap is None and item.item_type != "clothing":
             armor_bits.append("full Dex")
         elif item.armor.dex_cap is not None:
@@ -2217,9 +2217,9 @@ def item_rules_text(item: Item) -> str:
             armor_bits.append("Stealth strain")
         rules.append(", ".join(armor_bits))
     if item.shield_bonus:
-        rules.append(f"+{item.shield_bonus} Guard")
+        rules.append(f"+{item.shield_bonus} Defense")
     if item.ac_bonus:
-        rules.append(f"Guard +{item.ac_bonus}")
+        rules.append(f"Defense +{item.ac_bonus}")
     if item.heal_dice is not None:
         rules.append(f"restores {item.heal_dice}+{item.heal_bonus}")
     if item.revive_hp:
@@ -2230,7 +2230,7 @@ def item_rules_text(item: Item) -> str:
     if item.temp_hp:
         rules.append(f"{item.temp_hp} temp HP")
     if item.spell_slot_restore:
-        rules.append(f"restores {item.spell_slot_restore * 4} channel reserve")
+        rules.append(f"restores {item.spell_slot_restore * 4} MP")
     if item.skill_bonuses:
         rules.append("skills " + ", ".join(f"{name} +{value}" for name, value in item.skill_bonuses.items()))
     if item.save_bonuses:

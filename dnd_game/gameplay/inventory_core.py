@@ -473,7 +473,7 @@ class InventoryCoreMixin:
         if item.spell_slot_restore and target.spellcasting_ability is not None:
             restored_mp = restore_magic_points(target, spell_slot_restore_units_to_mp(item.spell_slot_restore))
             if restored_mp:
-                effects.append(f"restores {restored_mp} channel reserve")
+                effects.append(f"restores {restored_mp} MP")
         if item.cure_poison and "poisoned" in target.conditions:
             target.conditions.pop("poisoned", None)
             effects.append("cures poison")

@@ -413,7 +413,7 @@ SHIELD_BASES = [
         "item_type": "shield",
         "weight": 6.0,
         "value": 10,
-        "description": "A standard shield that adds 2 to Armor Class when your other hand is free.",
+        "description": "A standard shield that adds 2 Defense when your other hand is free.",
         "shield_bonus": 2,
         "properties": ["shield"],
     }
@@ -1351,7 +1351,7 @@ def item_rules_text(item: Item) -> str:
         if item.weapon.to_hit_bonus or item.weapon.damage_bonus:
             rules.append(f"magic +{item.weapon.to_hit_bonus} hit / +{item.weapon.damage_bonus} damage")
     if item.armor is not None:
-        armor_bits = [f"AC {item.armor.base_ac}"]
+        armor_bits = [f"Defense {item.armor.base_ac}"]
         if item.armor.dex_cap is None and item.item_type != "clothing":
             armor_bits.append("full Dex")
         elif item.armor.dex_cap is not None:
@@ -1360,9 +1360,9 @@ def item_rules_text(item: Item) -> str:
             armor_bits.append("Stealth disadvantage")
         rules.append(", ".join(armor_bits))
     if item.shield_bonus:
-        rules.append(f"+{item.shield_bonus} AC")
+        rules.append(f"+{item.shield_bonus} Defense")
     if item.ac_bonus:
-        rules.append(f"AC +{item.ac_bonus}")
+        rules.append(f"Defense +{item.ac_bonus}")
     if item.heal_dice is not None:
         rules.append(f"heals {item.heal_dice}+{item.heal_bonus}")
     if item.revive_hp:

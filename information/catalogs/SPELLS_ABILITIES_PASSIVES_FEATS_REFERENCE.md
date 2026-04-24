@@ -17,7 +17,7 @@ This file replaces the old long spell, feature, passive, and feat draft that par
 ## Current Rules Lane
 
 - The game still uses a compact SRD-derived d20 math chassis internally.
-- Player-facing text should prefer Aethrune terms: `Guard`, `resist check`, `strike check`, `edge`, `strain`, `channeling`, `channel reserve`, `draught`, `script`, `relic`, and `marks`.
+- Player-facing text should prefer Aethrune terms: `Guard`, `resist check`, `strike check`, `edge`, `strain`, `channeling`, `MP`, `draught`, `script`, `relic`, and `marks`.
 - Internal class, spell, feature, and item ids may remain legacy-shaped until save migration and display-name adapters are finished.
 - Do not re-add external spell descriptions, feat catalogs, subclass prose, borrowed setting lore, or comparison notes here.
 

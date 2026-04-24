@@ -42,7 +42,7 @@ class CombatResolutionMixin:
             return True
         channel_name = spell_label(spell_id, spell_name)
         self.say(
-            f"{self.style_name(caster)} needs {cost} channel reserve to use {channel_name}, "
+            f"{self.style_name(caster)} needs {cost} MP to use {channel_name}, "
             f"but has {current_magic_points(caster)}."
         )
         return False
@@ -1504,7 +1504,9 @@ class CombatResolutionMixin:
         return [entry["actor"] for entry in entries]
 
     def describe_living_combatants(self, combatants) -> list[str]:
-        return [self.describe_combatant(combatant) for combatant in combatants if not combatant.dead]
+        living = [combatant for combatant in combatants if not combatant.dead]
+        name_width = max((len(strip_ansi(self.style_name(combatant))) for combatant in living), default=0)
+        return [self.describe_combatant(combatant, name_width=name_width) for combatant in living]
 
     def combat_roster_panel(self, title: str, color: str, lines: list[str], *, empty_message: str):
         return Panel(
@@ -1549,23 +1551,30 @@ class CombatResolutionMixin:
         self.say("Party: " + " | ".join(hero_lines))
         self.say("Enemies: " + " | ".join(enemy_lines))
 
-    def describe_combatant(self, creature) -> str:
+    def describe_combatant(self, creature, *, name_width: int | None = None) -> str:
         active_conditions = [self.status_name(name) for name, value in creature.conditions.items() if value != 0]
         conditions = f" ({', '.join(active_conditions)})" if active_conditions else ""
         temp = f", temp {creature.temp_hp}" if creature.temp_hp else ""
-        if creature.dead:
-            return f"{self.style_name(creature)}: {self.format_health_bar(0, creature.max_hp)} (dead){conditions}"
-        if creature.current_hp == 0 and not creature.dead:
-            return f"{self.style_name(creature)}: {self.format_health_bar(0, creature.max_hp)} (down){conditions}"
         name = self.style_name(creature)
+        plain_name = strip_ansi(name)
+        if name_width is None:
+            prefix = f"{name}: "
+            indent_width = len(plain_name) + 2
+        else:
+            prefix = f"{name}:{' ' * (max(0, name_width - len(plain_name)) + 1)}"
+            indent_width = name_width + 2
+        if creature.dead:
+            return f"{prefix}{self.format_health_bar(0, creature.max_hp)} (dead){conditions}"
+        if creature.current_hp == 0 and not creature.dead:
+            return f"{prefix}{self.format_health_bar(0, creature.max_hp)} (down){conditions}"
         line = (
-            f"{name}: {self.format_health_bar(creature.current_hp, creature.max_hp)}, "
+            f"{prefix}{self.format_health_bar(creature.current_hp, creature.max_hp)}, "
             f"{target_guard_label(self.effective_armor_class(creature))}{temp}{conditions}"
         )
         magic_bar = self.format_member_magic_bar(creature)
         if magic_bar is None:
             return line
-        indent = " " * len(f"{strip_ansi(name)}: ")
+        indent = " " * indent_width
         return f"{line}\n{indent}{magic_bar}"
 
     def handle_defeat(self, reason: str) -> None:

@@ -196,7 +196,7 @@ Open naming conflict:
 | potion | draught |
 | scroll | script |
 | gold / gp | marks |
-| Armor Class | Guard |
+| Armor Class | Defense |
 | saving throw | resist check |
 | attack roll | strike check |
 | advantage | edge |
@@ -298,7 +298,7 @@ Implementation notes:
 - `dnd_game/data/story/lore.py` now presents Aethrune, the Shatterbelt Frontier, Greywake, the Emberway, Iron Hollow, the Vein of Glass, the Resonant Vaults, the Meridian Forge, Aethrune peoples, Aethrune public class labels, factions, Lantern Faith, and SRD-derived mechanics notes
 - internal class/race/background keys are preserved so character creation and save compatibility are not forced into a rules-presentation migration yet
 - lore menu labels now honor an optional `label` field, allowing entries such as `Barbarian` to display publicly as `Vanguard`
-- item manual copy now uses Aethrune-facing terms such as Guard, draughts, scripts, relics, channeling, strike checks, and resist checks
+- item manual copy now uses Aethrune-facing terms such as Defense, draughts, scripts, relics, channeling, strike checks, and resist checks
 - broader runtime scene labels, scene objectives, character introductions, Act 1 dialogue, and Act 2 dialogue still contain old public names and are intentionally deferred to Phases 3 and 4
 
 ### Phase 3. Act 1 surface rewrite
@@ -448,7 +448,7 @@ Goal:
 
 Implemented the Phase 5 item/enemy presentation pass and the linked item UI cleanup it exposed:
 
-- rewritten `dnd_game/data/items/catalog.py` item names, descriptions, sources, unique rewards, enchantment notes, trinket framing, and player-facing render helpers toward draughts, scripts, relics, gear, marks, Guard, strike, channeling, and resist checks
+- rewritten `dnd_game/data/items/catalog.py` item names, descriptions, sources, unique rewards, enchantment notes, trinket framing, and player-facing render helpers toward draughts, scripts, relics, gear, marks, Defense, strike, channeling, and resist checks
 - regenerated `information/catalogs/ITEM_CATALOG.md` from the updated catalog source so the reference doc now matches runtime item presentation
 - rewritten enemy display names in `dnd_game/data/story/factories.py` for Scrapling Raider, Ashfang Hound / Beast, Ashen Brand Cutter / Marksman, Red Mesa Raider, Mesa Warlord, Hollow Giant, Cistern Eye, Tunnel Scavenger, Bloodmote Swarm, Corrosive Mass, Meridian Sentinel, Meridian Archive Warden, Blackglass Adjudicator, Cinderkin Scavenger, Quiet Choir Listener / Agent, and Lantern Wisp while preserving template keys, archetypes, and encounter behavior
 - updated linked player-facing item surfaces in `dnd_game/gameplay/base.py`, `dnd_game/gameplay/inventory_core.py`, `dnd_game/gameplay/inventory_management.py`, and `dnd_game/gameplay/camp.py` so identify, inventory, trade, recovery, and equipment-preview text follow the new Phase 5 vocabulary
@@ -496,8 +496,8 @@ Recommended approach:
 
 Implemented the Phase 6 rules-presentation pass while preserving internal save and mechanics keys:
 
-- added `dnd_game/data/story/public_terms.py` as the central public-label layer for ability/skill labels, channels, features, resources, marks, Guard, edge/strain, resist checks, and rules-text cleanup
-- updated character creation, preset/custom summaries, class/race lore, progression text, party views, character sheets, combat menus, combat resolution output, dice labels, channel reserve displays, charge-band summaries, developer/help surfaces, rest costs, camp/town rest options, and random-encounter currency text to use Aethrune-facing vocabulary
+- added `dnd_game/data/story/public_terms.py` as the central public-label layer for ability/skill labels, channels, features, resources, marks, Defense, edge/strain, resist checks, and rules-text cleanup
+- updated character creation, preset/custom summaries, class/race lore, progression text, party views, character sheets, combat menus, combat resolution output, dice labels, MP displays, charge-band summaries, developer/help surfaces, rest costs, camp/town rest options, and random-encounter currency text to use Aethrune-facing vocabulary
 - added model-level public identity helpers so runtime output can centralize displayed race/class identity without changing stored `race` / `class_name` values
 - kept internal spell, resource, class, race, feature, currency, and advantage keys stable for save compatibility; public combat options now map back to legacy internal action keys
 - updated `tests/test_core.py` to assert the new player-facing language and fixed one control-flow regression where the `Veilstrike` message escaped its Rogue-only branch

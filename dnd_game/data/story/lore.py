@@ -30,7 +30,7 @@ LORE_INTRO = (
     "This codex covers the roads, factions, and rules language of Aethrune. "
     "Start with Greywake, the Emberway, Iron Hollow, the Resonant Vaults, and the Meridian works still moving under newer stone. "
     "Combat and character math still ride on an SRD-derived d20 chassis, while the public language leans on Aethrune terms such as "
-    "channeling, relics, draughts, scripts, Guard, edge, strain, and resist checks."
+    "channeling, relics, draughts, scripts, Defense, edge, strain, and resist checks."
 )
 
 
@@ -687,7 +687,7 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
     "Appendix E: Public Vocabulary": {
         "menu": "A quick bridge from old mechanics language to Aethrune language.",
         "text": (
-            "Preferred public terms include Guard, strike check, resist check, edge, strain, channeling, draught, script, relic, and marks. "
+            "Preferred public terms include Defense, strike check, resist check, edge, strain, channeling, draught, script, relic, and marks. "
             "Some internals still use legacy keys until the rules-presentation phase adds display-name adapters across combat, inventory, and saves."
         ),
     },
@@ -809,7 +809,7 @@ def format_armor_summary(class_name: str) -> str:
     shield = "shield included" if CLASSES[class_name]["shield"] else "no shield"
     if armor is None:
         return f"Starts unarmored with {shield}."
-    armor_bits = [f"{armor.name} (base Guard {armor.base_ac})", shield]
+    armor_bits = [f"{armor.name} (base Defense {armor.base_ac})", shield]
     if armor.heavy:
         armor_bits.append("heavy shell")
     elif armor.dex_cap is None:
@@ -836,7 +836,7 @@ def format_class_manual(class_name: str) -> str:
         f"Resist proficiencies: {', '.join(ability_label(save) for save in details['saving_throws'])}",
         f"Skill picks: choose {details['skill_picks']} from {', '.join(details['skill_choices'])}",
         f"Starting weapon: {format_weapon_summary(class_name)}",
-        f"Guard profile: {format_armor_summary(class_name)}",
+        f"Defense profile: {format_armor_summary(class_name)}",
         (
             f"Channeling: uses {ability_label(details['spellcasting_ability'])}; "
             f"starting resources {format_resource_summary(details['resources'])}."

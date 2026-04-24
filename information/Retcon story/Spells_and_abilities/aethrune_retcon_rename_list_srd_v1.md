@@ -124,7 +124,7 @@
 |---------|--------|
 | Advantage | Edge |
 | Disadvantage | Strain |
-| Armor Class | Guard |
+| Armor Class | Defense |
 | Saving Throw | Resist Check |
 | Attack Roll | Strike Check |
 

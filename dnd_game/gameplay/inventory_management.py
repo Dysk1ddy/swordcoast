@@ -271,7 +271,7 @@ class InventoryManagementMixin:
     def equipment_comparison_summary(self, before: Character, after: Character) -> str:
         parts: list[str] = []
         core_stats = [
-            ("Guard", after.armor_class - before.armor_class),
+            ("Defense", after.armor_class - before.armor_class),
             ("strike", after.attack_bonus() - before.attack_bonus()),
             ("damage", after.damage_bonus() - before.damage_bonus()),
             ("initiative", self.initiative_bonus(after) - self.initiative_bonus(before)),

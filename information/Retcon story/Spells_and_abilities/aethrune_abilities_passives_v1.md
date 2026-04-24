@@ -89,7 +89,7 @@ All abilities are now “Channels”:
 
 ## WARD SHELL (Former: Shield)
 - Type: Reactive Channel
-- Effect: +Guard boost
+- Effect: +Defense boost
 - Duration: Short
 - Theme: Instant defensive projection
 
@@ -97,7 +97,7 @@ All abilities are now “Channels”:
 
 ## PHASE WEAVE (Former: Mage Armor)
 - Type: Sustained Channel
-- Effect: Base Guard increase
+- Effect: Base Defense increase
 - Theme: Layered energy mesh
 
 ---

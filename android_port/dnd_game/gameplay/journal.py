@@ -75,7 +75,7 @@ class JournalMixin:
             temp_hp = f", temp {member.temp_hp}" if member.temp_hp else ""
             self.output_fn(
                 f"- {member.name}: Level {member.level} {member.race} {member.class_name}, "
-                f"{self.character_health_summary(member)}, AC {member.armor_class}{temp_hp}, "
+                f"{self.character_health_summary(member)}, Defense {member.armor_class}{temp_hp}, "
                 f"conditions [{conditions}]"
             )
             if getattr(member, "companion_id", ""):
@@ -131,7 +131,7 @@ class JournalMixin:
         self.banner(f"Character Sheet: {member.name}")
         self.say(
             f"Level {member.level} {member.race} {member.class_name} | Background: {member.background} | "
-            f"Status: {self.character_health_summary(member)} | AC {member.armor_class} | "
+            f"Status: {self.character_health_summary(member)} | Defense {member.armor_class} | "
             f"Proficiency bonus +{member.proficiency_bonus}"
         )
         self.output_fn("")
