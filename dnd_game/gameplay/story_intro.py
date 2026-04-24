@@ -484,7 +484,7 @@ class StoryIntroMixin:
             "How do you respond?",
             [
                 self.skill_tag("ATHLETICS", self.action_option("Hit the gate hard before the runner clears the yard.")),
-                self.skill_tag("INSIGHT", self.action_option("Read the panic and pick the real escape lane.")),
+                self.skill_tag("INSIGHT", self.action_option("Read the panic and pick the only escape lane still open.")),
                 self.skill_tag("INTIMIDATION", self.action_option("Lock the teamsters in line and make the thief choose fear over speed.")),
             ],
             allow_meta=False,
@@ -502,7 +502,7 @@ class StoryIntroMixin:
                 self.apply_status(self.state.player, "reeling", 1, source="a rushed impact")
                 self.say("You still get there first, but not as cleanly as you wanted.")
         elif choice == 2:
-            self.player_action("Read the panic and pick the real escape lane.")
+            self.player_action("Read the panic and pick the only escape lane still open.")
             if self.skill_check(self.state.player, "Insight", 11, context="to identify the true breakout line"):
                 enemies[0].current_hp = 5
                 hero_bonus = 1
@@ -624,7 +624,7 @@ class StoryIntroMixin:
             self.say("A creaking beam turns the theft into a chase.")
         else:
             self.player_action("Lift the ledger and leave the silver where it lies.")
-            if self.skill_check(self.state.player, "Sleight of Hand", 12, context="to steal the real value out from under armed men"):
+            if self.skill_check(self.state.player, "Sleight of Hand", 12, context="to steal the payoff out from under armed men"):
                 self.reward_party(xp=30, gold=10, reason="lifting the ledger out of a live exchange")
                 self.finish_background_prologue(
                     "Criminal",
@@ -756,7 +756,7 @@ class StoryIntroMixin:
         self.finish_background_prologue(
             "Outlander",
             "Among the raiders' gear is a scrap pointing toward Iron Hollow, and before noon a road warden tells you Mira Thann has been trying to get ahead of exactly this pattern.",
-            clue="The raiders are probing camps north of Iron Hollow, not just hitting wagons once they reach the frontier town itself.",
+            clue="The raiders are probing camps north of Iron Hollow and testing the road long before wagons reach town.",
         )
 
     def prologue_charlatan(self) -> None:
@@ -956,7 +956,7 @@ class StoryIntroMixin:
         elif evidence_kind == "matched_triage_tags":
             self.speaker(
                 "Mira Thann",
-                "Matching triage tags before the wagons arrived is enough. Someone is not merely attacking the road; they are deciding what the road will produce.",
+                "Matching triage tags before the wagons arrived is enough. Someone is deciding who the road gets to wound before the wagons even roll through the gate.",
             )
             self.add_clue("Mira treats the matched Greywake triage tags as proof of pre-sorted road outcomes.")
         else:
@@ -971,7 +971,7 @@ class StoryIntroMixin:
                 "People will talk because they lived long enough to be angry.",
             )
             self.add_clue("Greywake survivors can testify because the wounded line lived through the attack.")
-        self.add_journal("Mira Thann treated Greywake's outcome marks as concrete proof that the Ashen Brand is coordinating losses, not merely causing them.")
+        self.add_journal("Mira Thann treated Greywake's outcome marks as proof that the Ashen Brand was coordinating who got hurt and when.")
 
     def mira_dialogue_stage(self) -> str:
         assert self.state is not None
@@ -1052,7 +1052,7 @@ class StoryIntroMixin:
         if flags.get("ashfall_watch_cleared") and not flags.get("mira_q_ashfall_return"):
             options.append(("ashfall_return", "\"Ashfall Watch is broken.\""))
         if (flags.get("tresendar_cleared") or flags.get("emberhall_revealed")) and not flags.get("mira_q_cellars_return"):
-            options.append(("cellars_return", "\"The manor is not just a ruin.\""))
+            options.append(("cellars_return", "\"The manor is built over something active.\""))
         if (flags.get("varyn_body_defeated_act1") or flags.get("act1_victory_tier")) and not flags.get("mira_q_act1_after_report"):
             options.append(("act1_after_report", "\"Varyn is beaten.\""))
         if self.mira_city_beneficiary_question_available() and not flags.get("mira_q_city_return"):
@@ -1113,11 +1113,11 @@ class StoryIntroMixin:
             self.state.flags["briefing_q_neverwinter"] = True
         self.speaker(
             "Mira Thann",
-            "Greywake is bruised, not broken. That is the line the Greywake council prefers, and to be fair, it is not entirely a lie.",
+            "Greywake is still functioning. The council calls that resilience. I call it a city holding itself together with wet rope, ledgers, and habit.",
         )
         self.speaker(
             "Mira Thann",
-            "The city rebuilds faster than fear can settle. New stone goes up over old ash. Traders come back because profit has a stronger stomach than memory. But roads are how a city proves it is more than walls. If the road to Iron Hollow fails, every merchant in Greywake learns that the frontier can still reach north and take what it wants.",
+            "New stone goes up over old ash before the soot cools. Traders come back because profit has a stronger stomach than memory. Roads prove whether Greywake governs anything beyond its harbor. If the road to Iron Hollow fails, every merchant in the city learns the frontier can still reach north and take its cut.",
         )
         if self.state.flags.get("greywake_manifest_preserved"):
             self.speaker("Mira Thann", "And now I have a schedule pretending to be a manifest. That makes this a city problem, not a frontier inconvenience.")
@@ -1130,7 +1130,7 @@ class StoryIntroMixin:
             self.speaker("Mira Thann", "A burned cache is less useful in court, but useful on the road. Sometimes stopping the next attack matters more than proving the last one.")
         self.speaker(
             "Mira Thann",
-            "Because soldiers make a road look occupied, not understood. If I send a column south, the Brand scatters, Iron Hollow panics, and the person shaping the route learns exactly which pressure made us flinch.",
+            "Soldiers can occupy a road without understanding it. If I send a column south, the Brand scatters, Iron Hollow panics, and the hand shaping the route learns exactly which pressure made us flinch.",
         )
         self.speaker(
             "Mira Thann",
@@ -1145,23 +1145,23 @@ class StoryIntroMixin:
             self.state.flags["briefing_q_phandalin"] = True
         self.speaker(
             "Mira Thann",
-            "Iron Hollow is a town built by people who know ruins do not stay ruins if someone is stubborn enough. That makes them brave, practical, and terribly vulnerable to anyone who can make tomorrow's bread look less certain than today's fear.",
+            "Iron Hollow was built by people willing to stack fresh timber against old ruin stone and keep using both. That makes them practical, stubborn, and easy to shake if someone can make tomorrow's bread look uncertain.",
         )
         self.speaker(
             "Mira Thann",
-            "The miners matter. The provisioners matter. The shrine matters more than it admits, because the wounded go there before they go to law. If the Ashen Brand can make those people distrust one another, Iron Hollow becomes easier to hold without ever being conquered.",
+            "The miners keep the town paid. The provisioners keep it fed. The shrine keeps the wounded alive long enough to speak. If the Ashen Brand turns those rooms against one another, Iron Hollow starts choking itself.",
         )
         if self.state.flags.get("steward_vow_made"):
             self.speaker("Mira Thann", "Tessa Harrow will remember a vow. Be careful with that. Frontier towns live on promises, but they also keep score.")
         if self.state.flags.get("phandalin_arrived") and self.state.flags.get("steward_seen"):
-            self.speaker("Mira Thann", "Now you have seen Tessa's room. That town is not waiting for rescue. It is arguing over how much of itself it can spend to survive.")
+            self.speaker("Mira Thann", "Now you have seen Tessa's room. Iron Hollow is spending itself to stay upright.")
         if self.state.flags.get("stonehill_instigator_unmasked"):
             self.speaker("Mira Thann", "The paid mouth at Ashlamp tells me the Brand is attacking the room before the road. That is cheaper than killing a caravan and usually cleaner.")
         elif self.state.flags.get("stonehill_barfight_resolved"):
             self.speaker("Mira Thann", "A brawl in the Ashlamp sounds small until you remember that panic is logistics too. A town that cannot share a room cannot hold a gate.")
         self.speaker(
             "Mira Thann",
-            "Trust slowly. Tessa Harrow will try to hold the town together even if it costs her sleep and friends. Hadrik will know what is missing before the law knows what was stolen. Linene Ironward will notice which weapons arrive late. Elira, if she is there, will tell you who is hurt before she tells you who is guilty.",
+            "Trust slowly. Tessa Harrow will spend sleep and friends to hold that town together. Hadrik notices missing stock before the law notices theft. Linene Ironward clocks which blades arrive late. Elira, if she is there, counts the hurt before she names the guilty.",
         )
         self.speaker("Mira Thann", "And listen at the Ashlamp. Inns lie constantly, but they lie in public. That makes the useful ones easier to catch.")
 
@@ -1177,15 +1177,15 @@ class StoryIntroMixin:
             "Raiders take what is loose. The Ashen Brand is deciding what becomes loose. They pressure miners, bend caravan routes, poison witnesses, and use old ruins like a clerk uses shelves. Someone taught them that fear moves goods as well as horses do.",
         )
         if self.state.flags.get("wayside_false_road_marks_found"):
-            self.speaker("Mira Thann", "Those false road marks you found near the shrine matter. The Brand is not only ambushing wagons. It is borrowing the shape of authority long enough to make honest people obey the wrong command.")
+            self.speaker("Mira Thann", "Those false road marks you found near the shrine matter. The Brand is borrowing the shape of authority long enough to make honest people obey the wrong command.")
         if self.state.flags.get("greywake_outcome_sorting_seen"):
-            self.speaker("Mira Thann", "Greywake makes the danger uglier. Someone is not merely predicting losses. They are preparing the road to accept those losses as normal.")
+            self.speaker("Mira Thann", "Greywake makes the danger uglier. Someone is building the road to accept these losses as normal before the wagons even arrive.")
         if self.state.flags.get("old_owl_notes_found") or self.state.flags.get("varyn_filter_logic_seen"):
-            self.speaker("Mira Thann", "Blackglass Well adds a filter to the pattern. They are not only choosing targets. They are sorting which kinds of fear travel best.")
+            self.speaker("Mira Thann", "Blackglass Well adds a filter to the pattern. They are sorting fear by type and choosing which version travels best.")
         if self.state.flags.get("wyvern_beast_stampede") or self.state.flags.get("varyn_detour_logic_seen"):
             self.speaker("Mira Thann", "Red Mesa Hold shows the other hand: force the road to detour, then punish the detour until the detour feels inevitable.")
         if self.state.flags.get("cinderfall_relay_destroyed"):
-            self.speaker("Mira Thann", "Cinderfall was a relay, not a camp. That means messages, timing, and fallback orders. You did not just burn a nest. You cut a nerve.")
+            self.speaker("Mira Thann", "Cinderfall was a relay station. It carried messages, timing, and fallback orders. You burned a nerve out of the line.")
         self.speaker(
             "Mira Thann",
             "The field name I have is Rukhar Cinderfang, a hobgoblin with enough discipline to make cruelty useful. But Greywake, Blackwake, and the false manifests point above him.",
@@ -1207,7 +1207,7 @@ class StoryIntroMixin:
         if self.state.flags.get("greywake_manifest_destroyed"):
             self.speaker("Mira Thann", "With the manifest gone, I use witnesses. Messier, yes. But a witness can answer a question a page cannot: who looked relieved when the proof burned?")
         if self.state.flags.get("greywake_wounded_line_guarded") or self.state.flags.get("greywake_wounded_stabilized"):
-            self.speaker("Mira Thann", "Protecting the wounded line did more than save lives. It preserved memory under pressure.")
+            self.speaker("Mira Thann", "Protecting the wounded line kept witnesses alive long enough to speak.")
         if self.state.flags.get("greywake_yard_steadied"):
             self.speaker("Mira Thann", "Steadying the yard gave me public witnesses. Public witnesses are dangerous to the guilty because they are harder to buy one at a time.")
         self.speaker("Mira Thann", "Yes. Greywake was close to the city because the system is safest to test near the place that trusts paperwork most. Iron Hollow is where that system becomes hunger, missing tools, and frightened miners.")
@@ -1245,7 +1245,7 @@ class StoryIntroMixin:
         elif trust == "spiritual_kinship":
             self.speaker("Mira Thann", "Faith that keeps people alive is useful. Faith that only decorates fear is not. Dawnmantle knows the difference.")
         elif trust == "wary_respect":
-            self.speaker("Mira Thann", "Wary respect from a field healer is worth more than praise from a comfortable officer.")
+            self.speaker("Mira Thann", "Wary respect from a field healer beats praise from a comfortable officer.")
         elif trust == "reserved_kindness":
             self.speaker("Mira Thann", "She is kind, but do not confuse that for easy trust. People who work triage learn the cost of every delay.")
         if self.state.flags.get("elira_phandalin_recruited"):
@@ -1290,7 +1290,7 @@ class StoryIntroMixin:
         if self.state.flags.get("blackwake_completed"):
             self.speaker("Mira Thann", "And if Blackwake follows you south, do not let people call it a side matter. It is the road showing you its teeth early.")
         if self.has_companion("Elira Dawnmantle") and not self.state.flags.get("early_companion_recruited"):
-            self.speaker("Mira Thann", "You already have Dawnmantle. I can still assign a scout or shield if you have room, but I will not pretend a roster matters more than the road's own choices.")
+            self.speaker("Mira Thann", "You already have Dawnmantle. I can still assign a scout or shield if you have room, but the road chose your field priest before I did.")
 
     def mira_handle_blackwake_return_question(self) -> None:
         assert self.state is not None
@@ -1371,7 +1371,7 @@ class StoryIntroMixin:
         self.speaker("Mira Thann", "No. It is a mouth.")
         self.speaker(
             "Mira Thann",
-            "Old stone gives criminals privacy. Older stone gives worse things patience. If the Brand used Duskmere as more than shelter, then Iron Hollow has been standing over part of the answer since the beginning.",
+            "Old stone gives criminals privacy. Older stone gives worse things patience. If the Brand used Duskmere for shelter and work, then Iron Hollow has been standing over part of the answer since the beginning.",
         )
         route = self.state.flags.get("tresendar_nothic_route")
         if route == "kill":
@@ -1911,7 +1911,7 @@ class StoryIntroMixin:
                 self.player_speaker("How are the false seals getting traction at all?")
                 self.speaker(
                     "Garren Flint",
-                    "Because the real road has been tired for months. Too many hungry hands, not enough clean patrols, and one copied seal is all panic needs before it starts obeying the wrong man.",
+                    "Because the road has been tired for months. Too many hungry hands, not enough clean patrols, and one copied seal is all panic needs before it starts obeying the wrong man.",
                 )
             elif selection_key == "pressure":
                 self.state.flags["neverwinter_garren_pressed"] = True
@@ -1942,7 +1942,7 @@ class StoryIntroMixin:
             "The contract house tilts toward a fight. What do you do?",
             [
                 self.skill_tag("PERSUASION", self.action_option("Make them sit before pride turns into blood.")),
-                self.skill_tag("INSIGHT", self.action_option("Name the real liar before the loudest fool gets to define the room.")),
+                self.skill_tag("INSIGHT", self.action_option("Name the planted liar before the loudest fool gets to define the room.")),
                 self.skill_tag("SLEIGHT OF HAND", self.action_option("Make the loaded cup and marked die disappear at the same time.")),
                 self.skill_tag("INTIMIDATION", self.action_option("Freeze the room with one promise nobody wants tested.")),
                 self.skill_tag("ATHLETICS", self.action_option("Step between them and catch the first shove cleanly.")),
@@ -1955,7 +1955,7 @@ class StoryIntroMixin:
             self.player_action("Make them sit before pride turns into blood.")
             success = self.skill_check(self.state.player, "Persuasion", 12, context="to stop the contract-house fight before the room takes a side")
         elif choice == 2:
-            self.player_action("Name the real liar before the loudest fool gets to define the room.")
+            self.player_action("Name the planted liar before the loudest fool gets to define the room.")
             success = self.skill_check(self.state.player, "Insight", 12, context="to call out the actual liar in the contract-house flare-up")
         elif choice == 3:
             self.player_action("Make the loaded cup and marked die disappear at the same time.")
@@ -2056,7 +2056,7 @@ class StoryIntroMixin:
             reward_xp = 15
             self.state.flags["blackwake_millers_ford_lead"] = True
             self.state.flags["road_patrol_writ"] = True
-            self.say("The lie lands exactly badly enough. Sabra flinches, Oren corrects you on instinct, and the real manifest chain all but writes itself into the silence.")
+            self.say("The lie lands exactly badly enough. Sabra flinches, Oren corrects you on instinct, and the manifest chain all but writes itself into the silence.")
         self.state.flags["neverwinter_private_room_scene_done"] = True
         self.state.flags["neverwinter_private_room_intel"] = True
         self.add_clue("Oren and Sabra's upstairs room confirms that copied manifests, false room bookings, and fake roadwarden cadence are all part of one Greywake-side correction line feeding the frontier.")
@@ -2139,7 +2139,7 @@ class StoryIntroMixin:
         if self.has_companion("Elira Dawnmantle"):
             return
         options = [
-            self.quoted_option("RECRUIT", "Walk with us. The road needs a field priest more than a waiting shrine."),
+            self.quoted_option("RECRUIT", "Walk with us. The road needs a field priest out in the weather, not one waiting at a quiet shrine."),
             self.quoted_option("SAFE", "Finish your work here. If Iron Hollow still needs you, we will find you there."),
         ]
         recruit_choice = self.scenario_choice("Elira looks from the shrine to the south road.", options, allow_meta=False)

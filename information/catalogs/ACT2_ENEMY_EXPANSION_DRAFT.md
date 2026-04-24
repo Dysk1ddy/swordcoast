@@ -166,7 +166,7 @@ These are intentionally tuned above Act 1 fodder. The opening of Act 2 should al
 - Signature abilities:
   - `sentence_of_entry` once: WIS save DC 15 or target becomes `slowed` and cannot move closer to the lake threshold next turn
   - `mirror_verdict` passive: the first ranged hit against it each round reflects `1d6` force back to the attacker
-- Theme fit: a near-final guardian representing the Meridian Compact's idea that access to dangerous places should be judged, not merely found
+- Theme fit: a near-final guardian representing the Meridian Compact's belief that dangerous thresholds require judgment before entry
 - Suggested locations: Blackglass causeway, ritual bridgeheads, threshold rooms before the Meridian Forge
 
 ### Forge-Echo Stalker
@@ -177,7 +177,7 @@ These are intentionally tuned above Act 1 fodder. The opening of Act 2 should al
 - Signature abilities:
   - `answering_screech` once: if a target is already `reeling`, it takes an extra `2d6` thunder and falls `prone` on failed CON save DC 15
   - `heatshadow_prowl` once: gains `invisible` 1 and bonus movement through forge-lit terrain
-- Theme fit: what happens when the mine truly starts answering back rather than merely resonating
+- Theme fit: what happens when the mine starts answering back instead of humming in the walls
 - Suggested locations: Resonant Vault deeper chambers, Meridian Forge side halls, whisper-surged boss support packs
 
 ### Covenant Breaker Wight

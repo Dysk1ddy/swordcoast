@@ -14,16 +14,16 @@ What changes here is everything around that payoff. Conyberry should become a lo
 
 ## Story Role
 
-Conyberry should be the early lead that teaches the player three things before the act turns more overtly subterranean:
+Conyberry is the early lead that teaches the player three things before the act turns more overtly subterranean:
 
-1. The old Pact was not only about sharing profit. It was also about distributing custody so no one claimant could weaponize Wave Echo's deeper properties.
-2. The Quiet Choir is already attacking systems of restraint, not only attacking people.
+1. The old Pact distributed custody so no one claimant could weaponize Wave Echo's deeper properties alone.
+2. The Quiet Choir is already attacking systems of restraint and the people who keep them.
 3. The party will keep facing the same question in Act 2:
    - do you tell everyone what is wrong
    - tell only the people who can use it
    - or bind the truth to something safer than public speech
 
-Conyberry should therefore feel less like a ghost errand and more like a test case for the whole act.
+Conyberry should play like a test case for the whole act. Pilgrims, graves, and ward signs let the player handle public warning before the story drops underground.
 
 ## Placement
 
@@ -320,7 +320,7 @@ Agatha should sound like testimony that resents extraction but still recognizes 
 
 ### On The Quiet Choir
 
-- "They do not only defile. They instruct. That is why their damage keeps the posture of order."
+- "They teach as they defile. That is why their damage keeps the posture of order."
 - "They would rather teach a ward to obey than simply shatter it. That is how wrong devotion announces ambition."
 
 ### Exit-Decision Reactions
@@ -602,7 +602,7 @@ Suggested flag:
 
 ## Beat 5: Watcher Cut
 
-This is optional and should not always appear, but it is the best place for a human enemy to prove that Conyberry is not only haunted space.
+This beat is optional. Use it when a human enemy needs to prove that Conyberry still has living operators inside the haunting.
 
 ### Unlocks
 
@@ -675,7 +675,7 @@ Clean answer:
 
 - the southern adit is real
 - it was once used for labor and handling
-- the Forge is being tuned to listen, not only to enchant
+- the Forge is being tuned to listen and carry an answer back
 
 Suggested flag:
 
@@ -709,7 +709,7 @@ Best for:
 Clean answer:
 
 - the Pact divided custody because Wave Echo was never meant to belong to a single listener
-- the real danger was not only who owned the mine, but who could feed intention into it without restraint
+- the danger sat with whoever could feed intention into the mine without restraint
 
 Suggested flag:
 
@@ -851,7 +851,7 @@ Agatha should sound:
 
 ## Rewards
 
-Conyberry should reward truth-shape, not only gear.
+Conyberry should reward the shape of truth the party carries out, alongside gear.
 
 ### Baseline Reward Ideas
 

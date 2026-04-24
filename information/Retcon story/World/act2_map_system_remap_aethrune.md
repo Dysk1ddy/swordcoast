@@ -150,7 +150,7 @@ Public conflict:
 - a claims war over salvage, route authority, and infrastructure access
 
 Private conflict:
-- the Quiet Choir has learned that the Meridian Forge can function not only as a power or shaping site, but as a **listening lens**
+- the Quiet Choir has learned that the Meridian Forge can function as a **listening lens** as well as a power or shaping site
 
 Act 2 should feel layered:
 1. local recovery and claim politics
@@ -280,7 +280,7 @@ Hushfen is:
 
 The Pale Circuit is:
 - a ritual path built by Meridian Compact wardens
-- meant to regulate who may carry certain truths safely
+- built to regulate which truths could travel safely
 
 ### The Agatha equivalent
 Do not frame this as a direct banshee replacement.
@@ -380,7 +380,7 @@ This remains the physical proof point that Act 2's battlefield is:
 - flow control
 - supply truth
 - infrastructure ownership
-- not just monster clearing
+- routework pressure and contested infrastructure
 
 ### Preserve map expectations
 Keep its structure as a medium dungeon:
@@ -576,7 +576,6 @@ Blackglass Causeway is:
 
 ### Why this works
 It preserves the current excellent function:
-- not just a bridge fight
 - a layered decision-space about what kind of victory reaches the finale
 
 ### Public option framing
@@ -604,7 +603,7 @@ Preserve:
 ### Aethrune framing
 The Meridian Forge is:
 - an Accord-era shaping and resonance engine
-- not merely a magical forge, but a civic-technical instrument
+- a civic-technical instrument for shaping, amplifying, and transmitting resonance
 - capable of:
   - amplification
   - alignment

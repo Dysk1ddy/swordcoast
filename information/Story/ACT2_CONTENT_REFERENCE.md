@@ -22,20 +22,20 @@ The tone and structure now target the original Aethrune frame: Iron Hollow polit
   - `Route Control`: how much of the expedition map your side genuinely owns
   - `Whisper Pressure`: how much of the mine's wrong resonance is escaping containment
 
-## Story Spine
+## Act 2 Throughline
 
-- Varyn Sable's ledgers do more than point to the Resonant Vaults. They reveal that the Ashen Brand were functioning as a buffer force, keeping prospectors, merchants, town leaders, and rival diggers away from older Meridian routes until somebody better prepared could claim them.
-- The act's public conflict is a frontier claims war. Its private conflict is stranger: the Quiet Choir has found an obelisk shard below the Vaults and realized the Meridian Forge can be used not just to repair, but to listen.
-- In this version of Act 2, Caldra Voss is not trying to merely seize a treasure site. She is trying to tune the Vaults into a resonant instrument capable of hearing something farther down and farther away than any ordinary ruin should answer.
-- The act should therefore feel layered:
-  - first as a political fight over who gets to name the future of Iron Hollow
-  - then as an expedition race where incomplete information is more dangerous than monsters
-  - then as a ruin-crawl where old Meridian custody rules and the Quiet Choir are competing to define what the Vaults mean
-  - and only near the end as obvious cosmic wrongness
+- Varyn Sable's ledgers point to the Resonant Vaults and show how the Ashen Brand held the road. They kept prospectors, merchants, town leaders, and rival diggers off older Meridian routes until a better-prepared claimant arrived.
+- The act opens as a frontier claims war. Under that noise, the Quiet Choir has an obelisk shard below the Vaults and knows the Meridian Forge can carry a listening signal through stone.
+- Caldra Voss is tuning the Vaults into a resonant instrument. She wants an answer from farther down and farther away than any ordinary ruin should give.
+- The act should unfold in layers:
+  - as a political fight over who gets to name Iron Hollow's future
+  - as an expedition race where incomplete information is more dangerous than monsters
+  - as a ruin-crawl where old Meridian custody rules and the Quiet Choir are fighting to define the Vaults
+  - with the cosmic wrongness fully visible near the end
 
 ## Act 1 Carryover
 
-Act 2 should not start from a blank emotional or strategic slate. Several Act 1 choices now push directly into the opening metrics and later scene texture.
+Act 2 opens with Act 1 choices already pressing on the opening metrics and later scene texture.
 
 | Act 1 carryover | Typical source | Act 2 consequence |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 14. `Resonant Vault Outer Galleries`
 15. `Blackglass Causeway`, now framed as a shrine / barracks / causeway-priority decision instead of a straight bridge fight
 16. `Meridian Forge`
-17. Act end summary records not just victory, but what kind of victory it was
+17. Act end summary records the shape of the victory and who paid for it
 
 ### Drafted Early Side-Dungeon
 
@@ -157,9 +157,9 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 
 ## Hidden Truth Under The Resonant Vaults
 
-- Old Meridian custody rules did not merely share a profitable site. They also functioned as a discipline of listening and restraint. The Vaults' echoing properties were useful, but dangerous enough that access, route knowledge, and sacred obligations were distributed so that no single claimant could weaponize the whole site alone.
-- The Meridian Forge matters because it can amplify whatever intention is fed into it. In careful hands, that means repair and controlled wonder. Under the Quiet Choir, it becomes a listening lens aimed through the Vaults' natural resonance.
-- Sister Caldra Voss should therefore read less like a greedy necromancer-in-a-dungeon and more like a field theologian of something cosmic and wrong. She believes revelation is not spoken to mortals directly because mortals are too loud. The Choir's work is to make the world quiet enough to hear what was always there.
+- Old Meridian custody rules split access, route knowledge, and sacred obligations across many hands. The Vaults echoed well enough to profit from and dangerously enough that no single claimant was meant to hold the whole instrument alone.
+- The Meridian Forge amplifies the intention fed into it. Careful hands can use it for repair and measured wonder. The Quiet Choir turns it into a listening lens aimed through the Vaults' natural resonance.
+- Sister Caldra Voss should read like a field theologian of something cosmic and wrong. She believes mortals drown revelation in their own noise, so the Choir strips voices, bells, and witness away until the stone can answer.
 - The horror of Act 2 is that she is partly right. The Vaults do answer. The problem is what answers back.
 - This lets Act 3 escalate naturally:
   - if `Whisper Pressure` stayed low, Act 3 begins as containment after a near miss
@@ -187,7 +187,7 @@ Act 2 should not start from a blank emotional or strategic slate. Several Act 1 
 
 ## Companion Arc Hooks
 
-Act 2 should deepen the whole party by revealing personal history through optional side tracks, not mandatory main-path bottlenecks. Each arc now needs a decision with a real campaign-facing consequence, not just a disposition increase.
+Act 2 should deepen the whole party through optional side tracks that pull personal history into expedition work. Each arc needs a campaign-facing consequence that changes a pressure, later scene, or Act 3 setup flag.
 
 | Companion | Optional quest id | Primary location | Theme | Decision | Persistent payoff |
 | --- | --- | --- | --- | --- | --- |
@@ -369,7 +369,7 @@ Implementation note for later: add an act-scope field such as `act_exclusive` or
 
 - The early expedition route should allow any two of three leads to unlock the midpoint, but the third lead should remain recoverable later in a degraded state
 - Delaying an early lead must apply its consequence exactly once when sabotage night begins, not every time the hub is revisited
-- Nim's recruitment should be reachable from more than one valid success path, but `has_companion()` style checks should still prevent duplicates
+- Nim's recruitment should remain available through several success paths, but `has_companion()` style checks should still prevent duplicates
 - Companion side tracks should deepen the act without blocking the main route; they should alter one of the campaign pressures, a later scene, or an Act 3 setup flag
 - `Broken Prospect` and `South Adit` should both become available after the midpoint and should not force a single canonical order anymore
 - The route chosen first must change the second route's tone and stakes even if the player ultimately clears both

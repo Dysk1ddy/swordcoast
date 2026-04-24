@@ -205,7 +205,7 @@ Remnants now:
 # WORLD RULES
 
 ## 1. Roads Are Systems
-They are not just paths, but controlled structures.
+They are controlled structures, not loose paths.
 
 ## 2. Information Is Unstable
 Records can be altered or corrupted.

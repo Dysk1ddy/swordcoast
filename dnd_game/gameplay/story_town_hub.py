@@ -212,7 +212,7 @@ class StoryTownHubMixin:
                 ):
                     self.speaker(
                         "Tessa Harrow",
-                        "Break that watchtower and you won't just win a fight. You'll give this town room to breathe.",
+                        "Break that watchtower and this town gets room to breathe again.",
                     )
             elif selection_key == "ruins":
                 self.state.flags["steward_ruins_asked"] = True
@@ -230,7 +230,7 @@ class StoryTownHubMixin:
                         "Tessa Harrow",
                         "False seals this close to Greywake changes every petition on my desk. Give me names and route marks, and I can make officials answer a harder question than 'why are you afraid?'",
                     )
-                    self.add_clue("Tessa can use the Blackwake ledgers to argue that the Ashen Brand is corrupting route authority, not merely raiding wagons.")
+                    self.add_clue("Tessa can use the Blackwake ledgers to argue that the Ashen Brand is corrupting route authority and shaping the road before wagons ever reach town.")
                     self.reward_party(gold=8, reason="sharing Blackwake proof with Iron Hollow's steward")
                 elif resolution == "rescue":
                     self.speaker(
@@ -624,7 +624,7 @@ class StoryTownHubMixin:
             elif not self.has_quest("find_dain_harl") and not self.quest_is_completed("find_dain_harl"):
                 options.append(("quest", "\"If I go to Ashfall, what truth do you want carried back?\""))
             elif not self.state.flags.get("stonehill_jerek_route_marks_shared") and not self.state.flags.get("dain_harl_truth_found"):
-                options.append(("marks", "\"Tell me what would let me know I found Dain, not just another dead road hand.\""))
+                options.append(("marks", "\"Tell me how I'd know I found Dain and not some poor road hand nobody named.\""))
             if not self.state.flags.get("stonehill_jerek_grievance_asked"):
                 options.append(("grievance", "\"Who are you angry at, really?\""))
             if not self.state.flags.get("songs_for_missing_jerek_detail"):
@@ -668,7 +668,7 @@ class StoryTownHubMixin:
                     )
             elif selection_key == "marks":
                 self.state.flags["stonehill_jerek_route_marks_shared"] = True
-                self.player_speaker("Tell me what would let me know I found Dain, not just another dead road hand.")
+                self.player_speaker("Tell me how I'd know I found Dain and not some poor road hand nobody named.")
                 self.speaker(
                     "Jerek Harl",
                     "Blue scarf through the wrist ring. Left-handed knot, always ugly. And if a lock needed forcing, he'd leave scrape marks low because he never trusted top hinges. Dain fixed roads like he expected strangers to be the ones needing them next.",
@@ -719,7 +719,7 @@ class StoryTownHubMixin:
         options: list[tuple[str, str]] = [
             (
                 "investigation",
-                self.skill_tag("INVESTIGATION", self.action_option("Lay the payment note beside the courier strip and find the real route hidden between them.")),
+                self.skill_tag("INVESTIGATION", self.action_option("Lay the payment note beside the courier strip and pull the true route out from between them.")),
             ),
             (
                 "insight",
@@ -744,7 +744,7 @@ class StoryTownHubMixin:
         selection_key, _ = options[choice - 1]
         reward_xp = 10
         if selection_key == "investigation":
-            self.player_action("Lay the payment note beside the courier strip and find the real route hidden between them.")
+            self.player_action("Lay the payment note beside the courier strip and pull the true route out from between them.")
             if self.skill_check(self.state.player, "Investigation", 12, context="to decode the stolen courier packet cleanly"):
                 reward_xp = 15
                 self.say("The marks line up fast once you stop reading them like words and start reading them like habits.")
@@ -760,7 +760,7 @@ class StoryTownHubMixin:
         elif selection_key == "blessing":
             self.player_action("Speak the false countersign aloud and wait for the packet to correct you.")
             reward_xp = 15
-            self.say("The lie lands exactly where it should. Nera smiles without warmth as the real handoff phrase practically underlines itself.")
+            self.say("The lie lands exactly where it should. Nera smiles without warmth as the handoff phrase rises cleanly out of the packet.")
         else:
             self.player_action("Have Nera walk you through the courier habits and take the cleanest lead she can name.")
             self.speaker(
@@ -1053,7 +1053,7 @@ class StoryTownHubMixin:
             ),
             (
                 "insight",
-                self.skill_tag("INSIGHT", self.action_option("Name the real instigator and make the room turn the right way.")),
+                self.skill_tag("INSIGHT", self.action_option("Name the planted instigator and make the room turn the right way.")),
             ),
             (
                 "intimidation",
@@ -1085,7 +1085,7 @@ class StoryTownHubMixin:
             self.player_action("Pull the room back from the edge before the first chair flies.")
             success = self.skill_check(self.state.player, "Persuasion", 13, context="to keep the Ashlamp's fear from finding a target")
         elif selection_key == "insight":
-            self.player_action("Name the real instigator and make the room turn the right way.")
+            self.player_action("Name the planted instigator and make the room turn the right way.")
             success = self.skill_check(self.state.player, "Insight", 12, context="to expose the paid mouth in the room")
         elif selection_key == "intimidation":
             self.player_action("Shut the whole room down with one harder threat.")

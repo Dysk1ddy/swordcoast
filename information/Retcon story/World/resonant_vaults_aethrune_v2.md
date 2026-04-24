@@ -2,14 +2,10 @@
 
 ## OVERVIEW
 
-The Resonant Vaults are not static structures.
-
-They are **adaptive system environments**.
+The Resonant Vaults are **adaptive system environments**.
 
 In V2, the Vaults evolve from reactive spaces into:
 > **pattern-learning, behavior-adapting systems**
-
-They do not just respond.
 
 They **learn**.
 

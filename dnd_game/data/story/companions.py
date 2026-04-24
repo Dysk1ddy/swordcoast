@@ -146,7 +146,7 @@ COMPANION_PROFILES: dict[str, dict[str, object]] = {
             {
                 "id": "blackwake_aftermath",
                 "prompt": "\"What should I carry from Blackwake?\"",
-                "response": "Carry the faces, not only the proof. Records can make officials move, but people are why movement matters.",
+                "response": "Carry the faces with the proof. Records move officials, and faces remind them who the records are for.",
                 "delta": 1,
                 "requires_flags": ["blackwake_completed"],
             },

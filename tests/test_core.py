@@ -7715,7 +7715,7 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("=== Lore Codex ===", rendered)
         self.assertIn("=== World & Locations: Greywake ===", rendered)
-        self.assertIn("Greywake is the campaign's opening city", rendered)
+        self.assertIn("Greywake opens the campaign with salt on the wind", rendered)
 
     def test_lore_codex_skills_section_has_visible_exit(self) -> None:
         answers = iter(["6", "1", "10", "1"])
@@ -9958,7 +9958,7 @@ class CoreTests(unittest.TestCase):
             rendered.index("Choose what you say to Tessa."),
         )
         self.assertLess(
-            rendered.index("Break that watchtower and you won't just win a fight"),
+            rendered.index("Break that watchtower and this town gets room to breathe again."),
             rendered.index('"I\'ll break their grip on Iron Hollow."'),
         )
         self.assertEqual(rendered.count('"I\'ll break their grip on Iron Hollow."'), 1)
@@ -10562,7 +10562,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertTrue(game.state.flags["stonehill_barfight_ready"])
 
-        game.scenario_choice = lambda prompt, options, **kwargs: self.option_index_containing(options, "Name the real instigator")  # type: ignore[method-assign]
+        game.scenario_choice = lambda prompt, options, **kwargs: self.option_index_containing(options, "Name the planted instigator")  # type: ignore[method-assign]
         game.stonehill_resolve_barfight()
 
         self.assertTrue(game.state.flags["quiet_table_knives_resolved"])
@@ -11359,7 +11359,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("People will talk because they lived long enough to be angry.", rendered)
         self.assertTrue(any("pre-sorting road casualties" in clue for clue in game.state.clues))
         self.assertTrue(any("survivors can testify" in clue for clue in game.state.clues))
-        self.assertTrue(any("coordinating losses" in entry for entry in game.state.journal))
+        self.assertTrue(any("coordinating who got hurt and when" in entry for entry in game.state.journal))
 
     def test_neverwinter_briefing_reacts_to_burned_greywake_manifest(self) -> None:
         player = build_character(

@@ -590,7 +590,7 @@ CAMP_BANTERS: list[dict[str, object]] = [
             {
                 "set_flags": ["camp_cistern_eye_warning"],
                 "companion_deltas": {"bryn_underbough": 1, "kaelis_starling": 1},
-                "journal": "Bryn and Kaelis marked the Cistern Eye as lingering truth-pressure, not just a dead or bargained monster.",
+                "journal": "Bryn and Kaelis marked the Cistern Eye as lingering truth-pressure that could keep echoing after death or bargain.",
                 "clues": ["The Cistern Eye's truths may keep echoing even after Duskmere Manor is cleared."],
             },
             {
@@ -725,7 +725,7 @@ CAMP_BANTERS: list[dict[str, object]] = [
                 "clues": ["Nim and Bryn notice a recurring missing ledger column that behaves less like accounting and more like bait."],
                 "journal": "Nim and Bryn made the campaign's ledger motif concrete without yet naming the hidden author behind it.",
                 "companion_lore": {
-                    "nim_ardentglass": "Nim has begun tracking the campaign's impossible ledgers as records that want future entries, not only records of the past.",
+                    "nim_ardentglass": "Nim has begun tracking the campaign's impossible ledgers as records already leaning toward entries that have not happened yet.",
                     "bryn_underbough": "Bryn recognizes the missing ledger column as bait because it behaves like a smuggler's trap with better handwriting.",
                 },
             }
@@ -1140,7 +1140,7 @@ CAMP_BANTERS: list[dict[str, object]] = [
             {
                 "set_flags": ["camp_secret_act4_margin_seeded"],
                 "flag_increments": {"act3_companion_testimony_count": 2, "act3_mercy_or_contradiction_count": 1},
-                "journal": "The party began to suspect the Ledger wants to own not only events, but the shape of the ending itself.",
+                "journal": "The party began to suspect the Ledger wants the ending as badly as it wants the events that lead to it.",
                 "clues": ["A secret path may depend on companions contradicting the Ledger's preferred ending together."],
             }
         ],

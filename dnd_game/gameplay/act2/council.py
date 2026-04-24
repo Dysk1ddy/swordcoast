@@ -392,7 +392,7 @@ class StoryAct2CouncilMixin:
                 else:
                     self.speaker(
                         "Town Council",
-                        "Then the Hushfen warning is not only spiritual. It is evidence. The next claim read in this room gets read against the dead as well as the ledgers.",
+                        "Then the Hushfen warning belongs in evidence. The next claim read in this room gets read against the dead as well as the ledgers.",
                     )
                     if not self.state.flags.get("agatha_claim_cover_council_reaction_recorded"):
                         self.act2_shift_metric(

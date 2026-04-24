@@ -1947,7 +1947,7 @@ class MapSystemMixin:
             if self.skill_check(self.state.player, "Stealth", 12, context="to watch Miller's Ford unseen"):
                 self.state.flags["blackwake_ford_surveyed"] = True
                 self._blackwake_adjust_named_companion("Kaelis Starling", 1, "you read the ford before triggering its alarm")
-                self.say("You count the hired guards, the real loyalists, and the tent where the seals are being copied.")
+                self.say("You count the hired guards, the believers, and the tent where the seals are being copied.")
         self.complete_map_room(dungeon, room.room_id)
 
     def _blackwake_wagon_snarl(self, dungeon: DungeonMap, room: DungeonRoom) -> None:
@@ -3281,12 +3281,12 @@ class MapSystemMixin:
         if self._glasswater_active_companion("Bryn Underbough") is not None:
             self.speaker(
                 "Bryn Underbough",
-                "Ignore the polished case. The real packet is always the one trying hardest not to look like the room is built around it.",
+                "Ignore the polished case. The packet that matters is always the one trying hardest not to look important.",
             )
         choice = self.scenario_choice(
             "What do you seize before the room scatters?",
             [
-                self.skill_tag("STEALTH", self.action_option("Take the live satchel. Real orders matter more than neat shelves.")),
+                self.skill_tag("STEALTH", self.action_option("Take the live satchel before the shelves teach you the wrong lesson.")),
                 self.skill_tag("INVESTIGATION", self.action_option("Read the claim manifests and name who profits from the intake staying sick.")),
                 self.skill_tag("INTIMIDATION", self.action_option("Pressure the clerk or fixer before fear turns them useless.")),
             ],
@@ -3294,13 +3294,13 @@ class MapSystemMixin:
         )
         resolved_cleanly = False
         if choice == 1:
-            self.player_action("Take the live satchel. Real orders matter more than neat shelves.")
+            self.player_action("Take the live satchel before the shelves teach you the wrong lesson.")
             if self.skill_check(self.state.player, "Stealth", 14, context="to steal the Glasswater live satchel without blowing the office"):
                 resolved_cleanly = True
                 self.state.flags["glasswater_relay_ledgers_taken"] = True
                 self.state.flags["glasswater_relay_route_decoded"] = True
                 self.add_clue("A Glasswater satchel tracks reserve schedules, copied manifests, and 'special transfers' that do not belong on a waterworks line.")
-                self.say("You lift the real packet before the shelves can become theater. The room suddenly makes sense in the worst possible way.")
+                self.say("You lift the live packet before the shelves can become theater. The room suddenly makes sense in the worst possible way.")
         elif choice == 2:
             self.player_action("Read the claim manifests and name who profits from the intake staying sick.")
             if self.skill_check(self.state.player, "Investigation", 14, context="to expose the false manifests in Glasswater's relay office"):
@@ -3330,7 +3330,7 @@ class MapSystemMixin:
         outcome = self.run_encounter(
             Encounter(
                 title="Glasswater Relay Office",
-                description="When the office stops pretending to be paperwork, hired route muscle and watchers try to erase the real packet with you in the room.",
+                description="When the office stops pretending to be paperwork, hired route muscle and watchers try to erase the live packet with you in the room.",
                 enemies=enemies,
                 allow_flee=True,
                 allow_parley=False,
@@ -4078,7 +4078,7 @@ class MapSystemMixin:
         if not self.state.flags.get("south_adit_seen"):
             self.say(
                 "The southern workings smell like old iron, cold water, and fear kept quiet too long. Cells have been built into the support chambers. "
-                "The Quiet Choir has not just occupied Resonant Vaults. It has been sorting people here.",
+                "The Quiet Choir turned part of Resonant Vaults into a sorting room.",
                 typed=True,
             )
             if self._south_adit_delayed():
@@ -4287,7 +4287,7 @@ class MapSystemMixin:
             "A shaken tiefling augur stands among the freed captives, eyes fixed on the deeper dark.",
             [
                 self.quoted_option("RECRUIT", "Then come with us and help end the Choir properly."),
-                self.quoted_option("SAFE", "Get topside and breathe real air first. We will speak in camp."),
+                self.quoted_option("SAFE", "Get topside and take one clean breath first. We will speak in camp."),
             ],
             allow_meta=False,
         )
@@ -4492,7 +4492,7 @@ class MapSystemMixin:
             self.player_action("Follow the survey marks and keep the old mine from lying about its own shape.")
             if self.skill_check(self.state.player, "Investigation", 14, context="to read the Resonant Vaults' outer rail junction"):
                 self.state.flags["outer_survey_marks_read"] = True
-                self.say("The false marks fall away from the real route, at least for this first junction.")
+                self.say("The false marks fall away, and one usable route stays in your hand at this first junction.")
         elif choice == 2:
             self.player_action("Find the side-runs the grimlocks trust before they find you.")
             if self.skill_check(self.state.player, "Survival", 14, context="to read the grimlock side-runs"):
@@ -4571,7 +4571,7 @@ class MapSystemMixin:
             [
                 self.skill_tag("SURVIVAL", self.action_option("Take the side-runs the grimlocks trust and beat them to the angle.")),
                 self.skill_tag("STEALTH", self.action_option("Let the hunters hear a false company while you move around them.")),
-                self.skill_tag("PERCEPTION", self.action_option("Count the echoes until the real breathing separates from the false.")),
+                self.skill_tag("PERCEPTION", self.action_option("Count the echoes until one set of breathing separates from the rest.")),
             ],
             allow_meta=False,
         )
@@ -4586,8 +4586,8 @@ class MapSystemMixin:
                 enemies[0].current_hp = max(1, enemies[0].current_hp - 4)
                 hero_bonus += 1
         else:
-            self.player_action("Count the echoes until the real breathing separates from the false.")
-            if self.skill_check(self.state.player, "Perception", 14, context="to hear the real side-run ambush"):
+            self.player_action("Count the echoes until one set of breathing separates from the rest.")
+            if self.skill_check(self.state.player, "Perception", 14, context="to hear the hidden side-run ambush"):
                 hero_bonus += 2
         outcome = self.run_encounter(
             Encounter(
@@ -4643,7 +4643,7 @@ class MapSystemMixin:
         choice = self.scenario_choice(
             "How do you map the false echo loop?",
             [
-                self.skill_tag("INVESTIGATION", self.action_option("Mark every repeated echo until the real path is the only one left.")),
+                self.skill_tag("INVESTIGATION", self.action_option("Mark every repeated echo until only one path still matches your steps.")),
                 self.skill_tag("ARCANA", self.action_option("Treat the false echoes as resonance and break their timing.")),
                 self.skill_tag("SURVIVAL", self.action_option("Trust the air and stone instead of the sounds trying to guide you.")),
             ],
@@ -4710,7 +4710,7 @@ class MapSystemMixin:
         )
         if choice == 1:
             self.player_action("Follow the survey marks and keep the old mine from lying about its own shape.")
-            if self.skill_check(self.state.player, "Investigation", 14, context="to keep the party on the real line through false echoes"):
+            if self.skill_check(self.state.player, "Investigation", 14, context="to keep the party on the usable line through false echoes"):
                 hero_bonus += 2
         elif choice == 2:
             self.player_action("Take the side-runs the grimlocks trust and beat them to the angle.")
@@ -4947,7 +4947,7 @@ class MapSystemMixin:
             hero_bonus += 1
             self.state.flags["black_lake_barracks_orders_taken"] = True
             self.apply_status(enemies[1], "surprised", 1, source="you took the live courier satchel first")
-            self.add_clue("The quiet-room courier habits still hold underground: the real Blackglass reserve orders were carried in the least impressive satchel in the room.")
+            self.add_clue("The quiet-room courier habits still hold underground: Blackglass reserve orders rode in the least impressive satchel in the room.")
         outcome = self.run_encounter(
             Encounter(
                 title="Blackglass Barracks",
@@ -5377,7 +5377,7 @@ class MapSystemMixin:
             self.return_to_act2_hub("You retreat from the shard channels before the Forge can pin the whole company in them.")
             return
         self.complete_act2_map_room(dungeon, room.room_id)
-        self.add_clue("The shard channels were feeding the Forge from a deeper pressure seam, not just from Caldra's platform.")
+        self.add_clue("The shard channels were feeding the Forge from a deeper pressure seam below Caldra's platform.")
         self.add_journal("You broke the shard channels and turned the Forge's hidden pressure seam into a wound instead of a weapon.")
 
     def _forge_resonance_lens(self, dungeon: DungeonMap, room: DungeonRoom) -> None:

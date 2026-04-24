@@ -890,7 +890,7 @@ class StoryAct2ScaffoldMixin:
             [
                 self.quoted_option("PERSUASION", "Hold the claims hall together. If the council breaks tonight, the mine owns the aftermath."),
                 self.skill_tag("MEDICINE", self.action_option("Get to the shrine lane and keep the wounded and terrified from becoming a stampede.")),
-                self.skill_tag("PERCEPTION", self.action_option("Find the infiltrator cell and cut out the real strike team before they vanish again.")),
+                self.skill_tag("PERCEPTION", self.action_option("Find the infiltrator cell and cut out the hidden strike team before they vanish again.")),
             ],
             allow_meta=False,
         )
@@ -916,7 +916,7 @@ class StoryAct2ScaffoldMixin:
                 if self.state.flags.get("elira_town_lantern"):
                     hero_bonus += 1
         else:
-            self.player_action("Find the infiltrator cell and cut out the real strike team before they vanish again.")
+            self.player_action("Find the infiltrator cell and cut out the hidden strike team before they vanish again.")
             if self.skill_check(self.state.player, "Perception", 14, context="to see through the sabotage pattern"):
                 hero_bonus = 2
                 self.apply_status(enemies[1], "surprised", 1, source="your clean read of the trap")
@@ -1096,7 +1096,7 @@ class StoryAct2ScaffoldMixin:
         self.banner("South Adit")
         self.say(
             "The southern workings smell like old iron, cold water, and fear kept quiet too long. Cells have been built into the support chambers. "
-            "The Quiet Choir has not just occupied Resonant Vaults. It has been sorting people here.",
+            "The Quiet Choir turned part of Resonant Vaults into a sorting room.",
             typed=True,
         )
         if delayed:
@@ -1180,7 +1180,7 @@ class StoryAct2ScaffoldMixin:
                 "A shaken tiefling augur stands among the freed captives, eyes fixed on the deeper dark.",
                 [
                     self.quoted_option("RECRUIT", "Then come with us and help end the Choir properly."),
-                    self.quoted_option("SAFE", "Get topside and breathe real air first. We will speak in camp."),
+                    self.quoted_option("SAFE", "Get topside and take one clean breath first. We will speak in camp."),
                 ],
                 allow_meta=False,
             )
@@ -1237,7 +1237,7 @@ class StoryAct2ScaffoldMixin:
         hero_bonus = self.apply_scene_companion_support("wave_echo_outer_galleries")
         if choice == 1:
             self.player_action("Follow the survey marks and keep the old mine from lying about its own shape.")
-            if self.skill_check(self.state.player, "Investigation", 14, context="to keep the party on the real line through false echoes"):
+            if self.skill_check(self.state.player, "Investigation", 14, context="to keep the party on the usable line through false echoes"):
                 hero_bonus += 2
         elif choice == 2:
             self.player_action("Take the side-runs the grimlocks trust and beat them to the angle.")

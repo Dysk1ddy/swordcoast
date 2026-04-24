@@ -4,11 +4,7 @@
 
 **Greywake** is the principal survey outpost of the eastern Shatterbelt and the first great threshold between surface frontier life and the deeper logic of the Vein of Glass.
 
-It is not a city.
-It is not a permanent fortress.
-It is not truly a settlement in the same sense as Iron Hollow.
-
-Greywake is a **measurement colony**.
+Greywake is a **measurement colony** built from survey sheds, signal towers, ledger rooms, and hard-edged camps rather than town streets.
 
 It exists to do four things:
 - map what still exists
@@ -35,7 +31,7 @@ The player first learns in Emberway that routes can be controlled.
 
 In Greywake, they learn something stranger:
 
-> A map is not only a record of the world.  
+> A map records the world.  
 > In the wrong hands, it becomes an argument about what the world is allowed to be.
 
 ---
@@ -50,9 +46,7 @@ But beneath that question is another, more dangerous one:
 
 > “If the world resists verification, what must be sacrificed to force an answer?”
 
-Greywake is therefore not merely a hub for scouts and engineers.
-
-It is a machine for producing trust:
+Greywake is a machine for producing trust:
 - trust in routes
 - trust in measurements
 - trust in records
@@ -123,9 +117,7 @@ Its placement was chosen for practical reasons:
 
 Over time, those practical reasons became political ones.
 
-Because Greywake does not merely observe access.
-
-It legitimizes it.
+Greywake legitimizes access as much as it observes it.
 
 A route “confirmed by Greywake” carries weight far beyond the outpost itself.
 
@@ -160,9 +152,7 @@ In this reading, Greywake means:
 ## 3. The Deeper Interpretation
 Some reclaimers and Choir listeners believe the name unintentionally reveals the outpost’s true purpose.
 
-They argue that Greywake is not merely where surveyors wake.
-
-It is where **the deeper system wakes** in response to being measured.
+They argue that Greywake is where **the deeper system wakes** in response to being measured.
 
 This theory is not accepted publicly, but many quiet people in the outpost have thought it.
 
@@ -923,8 +913,7 @@ But the player slowly realizes it may also be helping activate the very deeper l
 
 # GREYWAKE AS A GAMEPLAY SYSTEM
 
-Greywake should not only be described.
-It should support multiple systems.
+Greywake should support multiple systems in play.
 
 ## 1. ROUTE CONFIDENCE
 Routes can have different confidence states:
@@ -940,7 +929,7 @@ Greywake is where these states are determined and displayed.
 Greywake strongly affects the `map_integrity` variable because it governs whether route knowledge remains honest, communal, and usable.
 
 ## 3. ROUTE CONTROL
-Greywake affects `route_control` because it authorizes access and frames who can act on a route, not just whether a route exists.
+Greywake affects `route_control` because it authorizes access and frames who can act on a route.
 
 ## 4. WHISPER PRESSURE
 Greywake is vulnerable to rising `whisper_pressure` because measurement and observation intersect with hidden signal phenomena here.

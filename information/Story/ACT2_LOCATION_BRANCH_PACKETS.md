@@ -24,11 +24,11 @@ It intentionally does not re-draft `Glasswater Intake`, because that location al
 
 ## Cross-Location Logic
 
-- `Conyberry and Agatha's Circuit` should influence how much the party understands sacred restraint, public warning, and what the old Pact was trying to prevent.
-- `Neverwinter Wood Survey Camp` should decide how honest the expedition's map becomes before the midpoint.
-- `Stonehollow Dig` should decide how much of the deeper route is understood through rescue, scholarship, or sealed loss.
-- `Broken Prospect` should decide whether the expedition owns Wave Echo's threshold publicly, secretly, or not at all.
-- `Black Lake Causeway` should decide what kind of victory reaches the Forge:
+- `Conyberry and Agatha's Circuit` shapes how much the party understands sacred restraint, public warning, and what the old Pact was trying to prevent.
+- `Neverwinter Wood Survey Camp` determines how honest the expedition's map becomes before the midpoint.
+- `Stonehollow Dig` determines how much of the deeper route is understood through rescue, scholarship, or sealed loss.
+- `Broken Prospect` determines whether the expedition owns Wave Echo's threshold publicly, secretly, or not at all.
+- `Black Lake Causeway` sends the party to the Forge carrying one of three victories:
   - cleaner, holier, and less informed
   - harsher, sharper, and more militarized
   - or strategically brilliant but spiritually compromised
@@ -37,11 +37,11 @@ It intentionally does not re-draft `Glasswater Intake`, because that location al
 
 Detailed expansion draft: `information/Story/ACT2_CONYBERRY_AGATHA_DRAFT.md`
 
-### Theme
+### Packet Focus
 
-`Conyberry` should be the branch packet about warning, grief, and the politics of who gets to carry a truth that should frighten everyone.
+`Conyberry` carries warning, grief, and the politics of who gets to carry a truth that should frighten everyone.
 
-The central tension is not just "can the party speak with Agatha?" It is:
+Agatha opens the packet. The lasting questions are:
 
 - whether the truth becomes public warning, private leverage, or sacred restraint
 - whether Elira's mercy-oriented faith can survive contact with a place that was already abandoned badly
@@ -176,7 +176,7 @@ Conditional modifiers:
 
 - If `conyberry_chapel_relit`, Agatha is colder but clearer about civic warning.
 - If `conyberry_sigil_copied`, Agatha is more suspicious and may only answer leverage questions reluctantly.
-- If `conyberry_dead_named`, she treats the party as people, not merely another claimant line.
+- If `conyberry_dead_named`, she treats the party like mourners and witnesses. The claimant cadence drops from her voice.
 
 Suggested follow-up flags:
 
@@ -186,7 +186,7 @@ Suggested follow-up flags:
 
 ### Phase 4: The Exit Decision
 
-The final branch should decide what the party does with the truth, not just what truth they received.
+The final branch decides how the truth leaves Conyberry and who has to carry it.
 
 Resolution families:
 
@@ -236,11 +236,11 @@ Suggested flags:
 
 ## Packet 2: Neverwinter Wood Survey Camp
 
-### Theme
+### Packet Focus
 
-`Neverwinter Wood Survey Camp` should be the branch packet about map truth, hidden routes, and the difference between reclaiming a line and learning to use dirty route logic better than the people who started it.
+`Neverwinter Wood Survey Camp` carries map truth, hidden routes, and the risk of learning dirty route logic too well.
 
-The central tension is:
+This packet turns on:
 
 - whether the party wants an honest map, a superior ambush network, or a scorched-clean woods
 - whether Kaelis's old scout instincts remain an asset or become a morally dangerous reflex
@@ -358,7 +358,7 @@ Suggested flags:
 
 ### Phase 3: The Quartermaster Branch
 
-The heart of the packet should be a logistics scene, not only a combat beat.
+The heart of the packet is a logistics scene with manifests, boots, and frightened runners in it.
 
 The player corners a quartermaster, fixer, or line-runner who knows:
 
@@ -390,7 +390,7 @@ Suggested flags:
 
 ### Phase 4: Decide What Map Exists Afterward
 
-The player should not merely clear the zone. They should decide what kind of route reality leaves it.
+After the zone is cleared, the player decides what kind of map survives it.
 
 #### Civic Resolution: Publish The Clean Route
 
@@ -438,11 +438,11 @@ Suggested flags:
 
 ## Packet 3: Stonehollow Dig
 
-### Theme
+### Packet Focus
 
-`Stonehollow Dig` should be the branch packet about rescue, dangerous scholarship, and whether the expedition thinks saving people and preserving knowledge are the same duty.
+`Stonehollow Dig` carries rescue, dangerous scholarship, and the question of whether saving people and preserving knowledge belong to the same duty.
 
-The central tension is:
+This packet turns on:
 
 - whether the party prioritizes bodies, notes, or containment
 - whether Nim enters the act as a grateful rescued scholar, a furious survivor of delay, or a keeper of knowledge nobody should have carried out intact
@@ -519,7 +519,7 @@ Suggested flags:
 
 This is where Nim's optional quest should truly branch rather than wait until a later side room.
 
-The theorem should not just be "dangerous notes." It should be a practical countermeasure theory that could make later route reading stronger while also making the party more willing to work close to resonance.
+The theorem should land as a practical countermeasure theory. It can strengthen later route reading and tempt the party to work closer to resonance.
 
 Resolution families:
 
@@ -556,7 +556,7 @@ Suggested flag:
 
 ### Phase 4: The Breakout Choice
 
-The lower breakout should not only be a final extraction fight. It should also decide what relationship the campaign has with Stonehollow afterward.
+The lower breakout decides what relationship the campaign has with Stonehollow after the extraction.
 
 #### Civic Resolution: Bring Everyone Out, Even If The Notes Suffer
 
@@ -598,11 +598,11 @@ Suggested flags:
 
 ## Packet 4: Broken Prospect
 
-### Theme
+### Packet Focus
 
-`Broken Prospect` should be the branch packet about threshold ownership, dead labor memory, and the difference between claiming access and deserving custody.
+`Broken Prospect` carries threshold ownership, dead labor memory, and the question of who deserves custody.
 
-The central tension is:
+This packet turns on:
 
 - whether the expedition wants a public claim, a hidden edge, or a denied threshold
 - whether Tolan's pragmatism becomes necessary leadership or profitable rot
@@ -652,7 +652,7 @@ Suggested flag:
 
 ### Phase 2: Tolan's Decision Space
 
-`last_wagon_standing` should be more than a single dialogue choice. It should sit inside the location's main route logic.
+`last_wagon_standing` belongs inside the location's main route logic. It should change how the player reads the whole road.
 
 Tolan should push the player toward one of three readings:
 
@@ -676,7 +676,7 @@ Suggested flags:
 
 ### Phase 3: Rival Claimant Resolution
 
-The rival crew should be more than enemies in a shelf fight. They are an ideological fork in miniature.
+The rival crew are an ideological fork in miniature. They show the kind of claimant the expedition might become.
 
 Resolution families:
 
@@ -756,17 +756,17 @@ Suggested flags:
 
 ## Packet 5: Black Lake Causeway
 
-### Theme
+### Packet Focus
 
-`Black Lake Causeway` should be the branch packet where the act finally asks what victory is for.
+`Black Lake Causeway` is where the act finally asks what victory is for.
 
-The central tension is:
+This packet turns on:
 
 - whether the player protects sanctity, witnesses, or tactical control first
 - whether Irielle's counter-cadence becomes a tool, a doctrine, or a buried mercy
 - whether the approach to the Forge is made cleaner, harsher, or more compromised
 
-This should feel like the act's last major branch location before the Forge. Every choice here should say something about the party's values, not just their combat preferences.
+This is the act's last major branch location before the Forge. Every choice here should expose the party's values in shrine rooms, barracks ledgers, and anchor machinery.
 
 ### Branch Axes
 
@@ -778,7 +778,7 @@ This should feel like the act's last major branch location before the Forge. Eve
 
 ### Phase 1: Choose The First Duty
 
-The location already wants shrine, barracks, and anchors. This packet should make that a fully branching sequence, not only a priority list.
+The location already wants shrine, barracks, and anchors. Run them as a fully branching sequence with order-based consequences.
 
 #### Priority A: Drowned Shrine First
 
@@ -882,7 +882,7 @@ Suggested flags:
 
 #### Anchors Internal Branch: Break, Hold, Or Retune
 
-The anchor scene should not only be demolition.
+The anchor scene should offer break, hold, and retune outcomes.
 
 Options:
 
@@ -984,8 +984,8 @@ If these packets are used for actual content work, the cleanest order is:
 
 These location packets should make Act 2 feel less like a line of good dungeons and more like a campaign where every reclaimed site changes what kind of expedition the party is becoming.
 
-That is the real spine of the act:
+Act 2 turns on three outcomes:
 
-- not just who reaches Wave Echo
-- but what kind of people they have to become to do it
-- and whether they are still resisting the Quiet Choir's worldview or merely learning to operate it better
+- who reaches Wave Echo
+- what habits, debts, and compromises they carry to the threshold
+- whether they keep resisting the Quiet Choir's worldview or start using its methods with steadier hands

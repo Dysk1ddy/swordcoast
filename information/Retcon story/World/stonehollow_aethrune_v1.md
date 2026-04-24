@@ -4,9 +4,7 @@
 
 **Stonehollow Dig** is the largest active excavation site in the Shatterbelt Frontier and the first place where the surface world directly intersects with intact Meridian structures.
 
-It is not just a dig site.
-
-It is:
+Stonehollow Dig is:
 - a wound cut into the earth
 - a controlled descent into something older
 - a place where knowledge is physically unearthed

@@ -20,7 +20,7 @@ This file documents the non-player cast currently surfaced by the game, includin
   - `information/Story/ACT1_CONTENT_REFERENCE.md`
   - `information/Story/ACT2_CONTENT_REFERENCE.md`
   - `information/catalogs/enemies.md`
-- Enemy stats use the runtime `Character.armor_class` value from the live factory, not just armor base AC.
+- Enemy stats use the runtime `Character.armor_class` value from the live factory, including modifiers beyond armor base AC.
 - A named enemy alias keeps the base template's mechanics unless it is listed as its own factory key.
 - `gravecaller` is still factory-defined, but the current map content uses `vaelith_marr` as the Old Owl Well boss implementation.
 - Some supporting NPC entries are groups rather than named individuals because the story uses them as interactable witnesses, captives, patients, or quest-facing groups.

@@ -135,7 +135,7 @@ Realized her routes enabled violent raids. She didn’t *see* the consequences u
 ### Personal Quest: “Loose Ends (Expanded)”
 1. Ledger fragments found
 2. Old contacts resurface
-3. Ledger is more than routes—it’s influence networks
+3. The ledger tracks routes and the influence networks riding on them
 4. Resolution:
    - Burn it → freedom, but loss of power
    - Sell it → wealth, but moral decay
@@ -153,7 +153,7 @@ Realized her routes enabled violent raids. She didn’t *see* the consequences u
 Raised in a temple that emphasized hope, but stationed in harsh frontier regions where hope often failed.
 
 ### Crisis of Faith
-Saw prayers unanswered during a plague outbreak. Since then, she believes action matters more than faith alone.
+Saw prayers unanswered during a plague outbreak. Since then, she trusts the work in her hands faster than faith left standing by itself.
 
 ### Personality
 - Warm but intense
@@ -209,8 +209,8 @@ This expansion aligns with:
 - Existing NPC framework and relationship systems fileciteturn0file5
 
 Design intent:
-- Companions are not just buffs—they are *perspectives*
-- Player choices shape not only story outcomes, but **who these characters become**
+- Companions are *perspectives* with mechanical weight, not floating bonuses
+- Player choices shape story outcomes and **who these characters become**
 
 
 

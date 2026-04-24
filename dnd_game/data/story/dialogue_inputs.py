@@ -152,7 +152,7 @@ DIALOGUE_INPUTS: list[dict[str, object]] = [
         "lines": [
             (
                 "rhogar_valeguard",
-                "Trade is not just coin. It is whether a frightened family believes tomorrow has flour and nails in it.",
+                "Trade is tomorrow's flour and nails on a shelf. A frightened family watches that shelf before it trusts any promise.",
             )
         ],
     },

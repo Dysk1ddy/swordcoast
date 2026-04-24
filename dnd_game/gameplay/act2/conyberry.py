@@ -95,7 +95,7 @@ class StoryAct2ConyberryMixin:
                 )
             if self.skill_check(self.state.player, "Survival", 13, context="to track the wrongness moving through Hushfen's road"):
                 self.state.flags["conyberry_whisper_track_named"] = True
-                self.add_clue("Hushfen's silence has been handled, not merely suffered. Something practical has been teaching the road where to sound wrong.")
+                self.add_clue("Hushfen's silence has been worked over with tools and intent. Something practical has been teaching the road where to sound wrong.")
                 self.say("The wrongness has a route to it. That is worse and more useful than a haunting would have been.")
             else:
                 self._conyberry_shift_circuit_strain(1)

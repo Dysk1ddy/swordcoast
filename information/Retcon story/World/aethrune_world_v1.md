@@ -21,9 +21,7 @@ Most people believe they are rebuilding civilization.
 
 ## What It Was
 
-The Meridian Accord was not just an empire.
-
-It was a **total system of control and coordination**, built to eliminate uncertainty.
+The Meridian Accord was a **total system of control and coordination** built to eliminate uncertainty.
 
 It unified:
 
@@ -295,9 +293,7 @@ It is:
 
 # PLAYER POSITION
 
-The player is not just an adventurer.
-
-They are:
+The player enters this world as:
 
 - A participant in the system  
 - A variable within it  

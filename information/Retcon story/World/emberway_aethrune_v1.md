@@ -4,9 +4,7 @@
 
 **The Emberway** is the primary overland artery of the Shatterbelt Frontier and the most important road system in early Aethrune.
 
-It is not merely a road.
-
-It is:
+It carries:
 - a trade spine
 - a military corridor
 - a memory lane of collapse
@@ -15,7 +13,7 @@ It is:
 
 At first glance, Emberway appears to be a frontier road damaged by war, neglect, and opportunism.
 
-In truth, it is something far older and more deliberate.
+Under the patched stone and wagon ruts, it is something older and more deliberate.
 
 The visible road is only the surface expression of a deeper routing structure:
 - buried foundations
@@ -37,9 +35,7 @@ To control Emberway is to influence:
 
 That is why Act 1 revolves around it.
 
-The player does not merely travel the Emberway.
-
-They enter the struggle over who decides what movement means.
+The player travels the Emberway and steps into the struggle over who decides what movement means.
 
 ---
 
@@ -141,9 +137,7 @@ Among the people of Iron Hollow and the surrounding frontier, “embers” carry
 
 In this sense, Emberway is the perfect name.
 
-It is not whole.
-
-But it is not dead.
+The road survives in fragments, patched spans, and habits people refuse to abandon.
 
 ---
 
@@ -233,9 +227,7 @@ These are open but psychologically oppressive stretches where control is exercis
 ### Tone
 The road here feels exposed rather than enclosed.
 
-The danger is not only being attacked.
-
-It is being seen, categorized, and measured.
+The danger here includes being seen, categorized, and measured.
 
 ### Gameplay Function
 - patrol events
@@ -260,7 +252,7 @@ This section lies closer to Iron Hollow and carries the emotional weight of the 
 ### Tone
 This is the most human part of Emberway.
 
-It shows not just what factions do to roads, but what civilians must do to keep them usable.
+It shows what factions do to roads and what civilians must do to keep them usable.
 
 The road here feels defended by effort, not by power.
 
@@ -289,7 +281,7 @@ Here Emberway stops feeling like a public road and starts feeling like a weapon.
 ### Gameplay Function
 - late Act 1 route-control escalation
 - support for fortress assault logic
-- proof that the Ashen Brand is not just raiding the road, but redesigning it through force
+- proof that the Ashen Brand is redesigning the road through force
 
 ---
 
@@ -475,7 +467,7 @@ People say things like:
 - “You’re not alone just because you can’t see them.”
 - “A lit marker is a promise. An unlit one is a warning.”
 
-These sayings help Emberway feel like a lived route culture, not just a map line.
+These sayings make Emberway feel like a lived route culture with its own working superstitions.
 
 ---
 
@@ -741,7 +733,7 @@ Rumors reach town from it.
 ## Emotional Dependence
 If Emberway feels closed, Iron Hollow feels doomed.
 
-That means road victories matter emotionally, not just strategically.
+Road victories matter emotionally as well as strategically.
 
 Saving Emberway in pieces is how the player saves the idea that Iron Hollow can continue.
 
@@ -762,9 +754,7 @@ It produces:
 - rumor spread
 - and concentrations of witness, fear, and choice
 
-For the Choir, Emberway is not merely a corridor.
-
-It is a listening instrument.
+For the Choir, Emberway is a listening instrument.
 
 They care about:
 - who moves where
@@ -778,9 +768,7 @@ This relationship can be seeded subtly in Act 1 and clarified later.
 
 # EMBERWAY AND THE MERIDIAN PAST
 
-Emberway is one of the player’s first clues that Meridian civilization did not merely build cities or vaults.
-
-It built behaviors.
+Emberway is one of the player’s first clues that Meridian civilization built behaviors as well as cities and vaults.
 
 Road engineering at Meridian scale meant:
 - deciding what was connected

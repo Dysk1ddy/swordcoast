@@ -332,13 +332,13 @@ class Act2SmokeTests(unittest.TestCase):
                 return self.option_index_containing(options, "chapel line first")
             if prompt == "How do you answer the Chapel of Lamps?":
                 return self.option_index_containing(options, "Relight the chapel")
-            if prompt == "Which second part of the circuit do you answer before Agatha speaks?":
+            if prompt == "Which second part of the circuit do you answer before the Pale Witness speaks?":
                 return self.option_index_containing(options, "Grave Ring")
             if prompt == "How do you read the Grave Ring?":
                 return self.option_index_containing(options, "Name the dead aloud")
-            if prompt == "How do you approach the banshee's truth?":
+            if prompt == "How do you approach the Pale Witness's truth?":
                 return self.option_index_containing(options, "We are not here to plunder your dead")
-            if prompt == "How do you carry Agatha's warning out of Conyberry?":
+            if prompt == "How do you carry the Pale Witness's warning out of Hushfen?":
                 return self.option_index_containing(options, "Share it publicly")
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
@@ -379,13 +379,13 @@ class Act2SmokeTests(unittest.TestCase):
                 return self.option_index_containing(options, "tampered line first")
             if prompt == "What do you do with the defiled sigil?":
                 return self.option_index_containing(options, "Break the sigil")
-            if prompt == "Which second part of the circuit do you answer before Agatha speaks?":
+            if prompt == "Which second part of the circuit do you answer before the Pale Witness speaks?":
                 return self.option_index_containing(options, "Chapel of Lamps")
             if prompt == "How do you answer the Chapel of Lamps?":
                 return self.option_index_containing(options, "Relight the chapel")
-            if prompt == "How do you approach the banshee's truth?":
+            if prompt == "How do you approach the Pale Witness's truth?":
                 return self.option_index_containing(options, "what vow was broken")
-            if prompt == "How do you carry Agatha's warning out of Conyberry?":
+            if prompt == "How do you carry the Pale Witness's warning out of Hushfen?":
                 return self.option_index_containing(options, "Bind the warning")
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
@@ -425,13 +425,13 @@ class Act2SmokeTests(unittest.TestCase):
                 return self.option_index_containing(options, "chapel line first")
             if prompt == "How do you answer the Chapel of Lamps?":
                 return self.option_index_containing(options, "Relight the chapel")
-            if prompt == "Which second part of the circuit do you answer before Agatha speaks?":
+            if prompt == "Which second part of the circuit do you answer before the Pale Witness speaks?":
                 return self.option_index_containing(options, "Grave Ring")
             if prompt == "How do you read the Grave Ring?":
                 return self.option_index_containing(options, "Name the dead aloud")
-            if prompt == "How do you approach the banshee's truth?":
+            if prompt == "How do you approach the Pale Witness's truth?":
                 return self.option_index_containing(options, "We are not here to plunder your dead")
-            if prompt == "How do you carry Agatha's warning out of Conyberry?":
+            if prompt == "How do you carry the Pale Witness's warning out of Hushfen?":
                 return self.option_index_containing(options, "Share it publicly")
             if prompt == "What do you protect first when the sabotage breaks wide open?":
                 return self.option_index_containing(options, "shrine lane")
@@ -458,8 +458,8 @@ class Act2SmokeTests(unittest.TestCase):
         self.assertNotIn("black_lake_conyberry_pressure_payoff", game.state.flags)
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 0)
         self.assertEqual(encounters[0].title, "Midpoint: Sabotage Night")
-        self.assertIn("Pilgrims from Conyberry arrive with lamp discipline", rendered)
-        self.assertIn("The lamp discipline you restored at Conyberry catches at the Black Lake shrine", rendered)
+        self.assertIn("Pilgrims from Hushfen arrive with lamp discipline", rendered)
+        self.assertIn("The lamp discipline you restored at Hushfen catches at the Blackglass shrine", rendered)
 
     def test_midpoint_convergence_smoke_records_pattern_and_returns_to_hub(self) -> None:
         game = self.make_game(

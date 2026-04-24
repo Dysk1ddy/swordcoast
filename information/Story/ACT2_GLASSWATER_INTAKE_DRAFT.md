@@ -23,15 +23,15 @@
 
 - `Glasswater Intake` is a Pact-era water-control annex buried in the lower slopes between Phandalin and the Wave Echo approaches.
 - On the surface it is practical dwarfwork: sluice gates, pressure valves, lamp niches, and a relay office that once tracked safe flow and ration timing.
-- Under Quiet Choir use, it becomes an early-act proof point that the cult is not just haunting ruins. It is seizing infrastructure, falsifying logistics, and learning how to turn ordinary systems into listening lines.
-- The dungeon's job is to bridge the tone between:
+- Under Quiet Choir use, it becomes an early-act proof point that the cult is seizing infrastructure, falsifying logistics, and turning ordinary systems into listening lines.
+- The dungeon bridges the tone between:
   - frontier recovery and claims politics
   - expedition routework
   - the first believable signs that the mine's resonance can be weaponized
 
 ## Experience Goals
 
-- Teach that Act 2's real battlefield is not just combat space, but flow control, supply truth, and who gets to name a working route.
+- Teach that Act 2's battlefield includes flow control, supply truth, and who gets to name a working route.
 - Give `Town Stability`, `Route Control`, and `Whisper Pressure` a physical, player-readable location before the midpoint.
 - Foreshadow `South Adit` with courier discipline, prisoner-routing hints, and anti-whisper improvisation in a less catastrophic form.
 - Give early-Act-2 companions and sponsors a place to speak with authority before Nim and Irielle dominate the underground story.
@@ -154,7 +154,7 @@ This is the contaminated lower end. The ritual pressure is still small by Act 2 
   - `Brother Merik Sorn`, Quiet Choir field operator and waterworks quartermaster
   - support from one `animated_armor` or hired `expedition_reaver`
 - Function:
-  - this should feel like stopping a dangerous process, not just killing a person with cult dialogue
+  - this should feel like shutting down a dangerous process with one operator at its center
 - Core pressure:
   - the headgate is being tuned into a low-grade listening pipe that can carry rumor, chant cadence, and altered runoff toward camp lines
 
@@ -244,7 +244,7 @@ This is the contaminated lower end. The ritual pressure is still small by Act 2 
   - reserve schedules
   - occasional "special transfers" that hint at South Adit without fully revealing it
 - The office should support:
-  - Bryn reading the real satchel
+  - Bryn reading the live satchel
   - a stealth steal
   - a hard interrogation
   - a public-document route that helps `Town Stability`
@@ -561,7 +561,7 @@ This section is meant to be implementation-facing. The writing can still be tigh
 - Opening text:
   - "The Relay Office is too orderly for a ruin. Satchels hang by route mark, manifests are weighted against damp, and one wall is given over entirely to copied names."
 - Core revelation:
-  - this annex has been used to edit traffic, not just contaminate water
+  - this annex has been used to edit traffic, with fouled water serving as cover
 - Prompt:
   - "What do you seize before the room scatters?"
 - Recommended options:
@@ -569,7 +569,7 @@ This section is meant to be implementation-facing. The writing can still be tigh
   - `"Read the claim manifests and name who profits from the intake staying sick."`
   - `"Pressure the clerk or fixer before fear turns them useless."`
 - Exact support line if Bryn is present:
-  - `Bryn Underbough`: "Ignore the polished case. The real packet is always the one trying hardest not to look like the room is built around it."
+  - `Bryn Underbough`: "Ignore the polished case. The live packet is always the one trying hardest not to look like the room is built around it."
 - Exact clue beat:
   - one ledger references "special transfers" moving through lower rooms on nights when town water ran foul, foreshadowing South Adit without explaining it
 
@@ -619,7 +619,7 @@ This section is meant to be implementation-facing. The writing can still be tigh
 - Opening text:
   - "The pump gallery is where the annex stops pretending to be neglected. The housings are warm, the rods are greased, and somebody has been keeping this machine alive on purpose."
 - Pre-boss truth:
-  - the headgate is not just being fouled; it is being tuned
+  - the headgate is being tuned into a listening pipe, with fouling used as cover
 - Prompt:
   - "What do you secure before the headgate chamber?"
 - Recommended options:

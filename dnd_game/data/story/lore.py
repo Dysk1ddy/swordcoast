@@ -27,12 +27,10 @@ LoreSection = Mapping[str, LoreEntry]
 
 
 LORE_INTRO = (
-    "This codex introduces the world, factions, and rules framing of Aethrune. "
-    "It focuses on Greywake, the Emberway, Iron Hollow, the Resonant Vaults, and "
-    "the Meridian systems still shaping the world after their builders are gone. "
-    "The underlying combat and character math still uses an SRD-derived d20 chassis, "
-    "but the public story language now favors Aethrune terms such as channeling, "
-    "relics, draughts, scripts, Guard, edge, strain, and resist checks."
+    "This codex covers the roads, factions, and rules language of Aethrune. "
+    "Start with Greywake, the Emberway, Iron Hollow, the Resonant Vaults, and the Meridian works still moving under newer stone. "
+    "Combat and character math still ride on an SRD-derived d20 chassis, while the public language leans on Aethrune terms such as "
+    "channeling, relics, draughts, scripts, Guard, edge, strain, and resist checks."
 )
 
 
@@ -40,109 +38,99 @@ LOCATION_LORE: dict[str, LoreEntry] = {
     "Aethrune": {
         "menu": "A broken world where old roads, records, and buried systems still answer.",
         "text": (
-            "Aethrune is a world rebuilt on top of a dead infrastructure empire. The Meridian Accord once "
-            "bound cities, routes, waterworks, signal towers, vaults, and ledgers into a single living system. "
-            "When that order collapsed, people survived by scavenging its roads, sheltering under its ruins, "
-            "and arguing over what its records still mean.\n\n"
-            "That history matters because the world is not empty wilderness. A broken road can still remember "
-            "where travelers are meant to go. A sealed gate can still recognize old authority. A village ledger "
-            "can become a weapon if the right faction learns how to read it."
+            "Aethrune grew over Meridian foundations that never fully died. The Accord once bound roads, cisterns, "
+            "signal towers, vaults, and ledgers into one working body. Now people live among cracked milestones, "
+            "sleeping gates, and records that still answer the right stamp.\n\n"
+            "That leaves every town arguing with inheritance. A road can remember where a caravan belongs. A sealed "
+            "culvert can still know an old title. A village ledger can ruin a family if the wrong hand learns how "
+            "to wake it."
         ),
     },
     "Shatterbelt Frontier": {
         "menu": "The Act I borderland where trade, fear, and old roadwork collide.",
         "text": (
-            "The Shatterbelt Frontier is the rough belt between Greywake's city reach and the settlements that "
-            "depend on the Emberway. It is practical country: milehouses, supply camps, shrine-lanterns, quarry "
-            "tracks, farms, drainage cuts, ruined towers, and old Accord stone half-buried under newer work.\n\n"
-            "The frontier is tense because nobody fully controls it. Greywake wants order, Iron Hollow wants "
-            "breathing room, the Ashen Brand wants routes it can tax by fear, and older Meridian machinery waits "
-            "below all of them with its own cold logic."
+            "The Shatterbelt Frontier runs from Greywake's wet stone out into milehouses, quarry tracks, shrine lamps, "
+            "farm cuts, and busted Accord masonry sticking through newer mud. Wagon ruts share the same ground as "
+            "survey stakes and old drainage channels.\n\n"
+            "No one governs it cleanly. Greywake wants order in the books, Iron Hollow wants breathing room, the "
+            "Ashen Brand wants toll by fear, and buried Meridian machinery waits below them like cold weather trapped "
+            "under stone."
         ),
     },
     "Greywake": {
         "menu": "A salt-gray harbor city trying to govern roads it can no longer fully secure.",
         "text": (
-            "Greywake is the campaign's opening city: a harbor of wet stone, ash-stained warehouses, emergency "
-            "triage yards, and officials who know every road failure becomes a city problem eventually. Its power "
-            "comes from shipping, paperwork, and the stubborn belief that a route can be saved if enough people "
-            "are willing to stand in the rain and do the work.\n\n"
-            "In Act I, Greywake is not a shining capital. It is a pressured city with too many wounded travelers, "
-            "too many missing wagons, and too many factions trying to decide whether the Emberway is still worth "
-            "defending."
+            "Greywake opens the campaign with salt on the wind, ash on the warehouse walls, and intake ropes strung "
+            "across triage yards. The city runs on manifests, dock work, and wet-cloaked officials who know every road "
+            "failure arrives at the harbor eventually.\n\n"
+            "It is a pressured city. Wounded teamsters come in ahead of their wagons, missing freight turns into ledger "
+            "fights, and every faction in town wants to decide whether the Emberway gets saved or written off."
         ),
     },
     "Emberway": {
         "menu": "The old road artery whose milestones, shrines, and tollmarks still shape Act I.",
         "text": (
-            "The Emberway is more than a trade road. It is an Accord-era route laid across older survey lines, "
-            "reinforced with milemarkers, culverts, watchpoints, signal stones, and shrine-lanterns. Travelers use "
-            "it because the alternatives are slower and meaner, but every wagon that moves along it also enters a "
-            "contest over who gets to define safe passage.\n\n"
-            "When the Ashen Brand starts forging authority along the Emberway, the threat is not just violence. "
-            "False papers, fake checkpoints, controlled rumors, and staged rescues can make a road obey the wrong "
-            "masters long before anyone admits the route has fallen."
+            "The Emberway is an Accord road laid over older survey lines, with culverts, milemarkers, watchpoints, "
+            "signal stones, and shrine-lamps still doing half their jobs. Travelers keep using it because the side "
+            "tracks are slower, meaner, and easier to disappear on.\n\n"
+            "That makes control of the road a daily contest. False papers, copied seals, fake checkpoints, and staged "
+            "rescues can bend traffic long before anyone admits the route changed hands."
         ),
     },
     "Iron Hollow": {
         "menu": "A frontier hub built around claims, supply ledgers, and stubborn local survival.",
         "text": (
-            "Iron Hollow is the Act I hub: a hard-working settlement with mine claims, supply posts, inn rooms, "
-            "orchard walls, council arguments, and a population tired of being treated as someone else's margin "
-            "note. The town survives because people keep showing up for one another even when the road fails them.\n\n"
-            "That makes Iron Hollow the heart of grounded heroics. Reopening the Emberway means food arrives, "
-            "tools move, wounded people get medicine, and families stop making every plan around fear."
+            "Iron Hollow lives by claims ledgers, spare tools, inn rooms, orchard walls, and whoever still shows up "
+            "when a neighbor's axle snaps. The town looks patched together because it is.\n\n"
+            "When the Emberway chokes, Iron Hollow feels it at once. Bread shortens, medicine stalls on the road, and "
+            "families start planning around absence instead of work."
         ),
     },
     "Lantern Shrine Network": {
         "menu": "Wayside refuges where road faith, first aid, and rumor all meet.",
         "text": (
-            "The Lantern Shrine Network grew around small waystations that keep lamps burning for travelers. Some "
-            "are staffed by faithful caretakers, some by volunteers, and some by whoever survived long enough to "
-            "light the wick again.\n\n"
-            "In story terms, a lantern shrine is never only holy ground. It is a field hospital, message drop, "
-            "weather shelter, witness stand, and moral test. Who gets treated first? Which report gets believed? "
-            "Which names are spoken aloud when the road starts taking people?"
+            "The Lantern Shrine Network grew out of small waystations that kept a lamp burning for late travelers. "
+            "Some still have trained caretakers. Some have one volunteer, a kettle, and a good memory for names.\n\n"
+            "A shrine holds bandages, weather shelter, road gossip, and witness work under the same roof. The order "
+            "of the cots matters. The next report matters. So does who gets named aloud when the road starts taking people."
         ),
     },
     "Blackglass Well": {
         "menu": "A cracked waterwork where old salvage, grave dust, and route history surface.",
         "text": (
-            "Blackglass Well is an Accord-era waterwork whose dark lining still holds heat and memory. Salvagers "
-            "come for copper, pumps, old seals, and anything a hungry market will buy. The trouble is that some "
-            "systems were buried for reasons better than forgetfulness.\n\n"
-            "The site gives Act I a different flavor of danger: not raiders on the road, but people profiting from "
-            "the frontier's dead infrastructure before anyone understands what they have reopened."
+            "Blackglass Well is an Accord waterwork with a dark lining that still holds heat and memory. Salvagers "
+            "come for copper, pumps, old seals, and anything a hungry market will buy. Some of those systems were "
+            "buried for better reasons than forgetfulness.\n\n"
+            "The danger here comes out of cracked masonry, old valves, and people selling dead infrastructure before "
+            "anyone understands what they opened."
         ),
     },
     "Red Mesa Hold": {
         "menu": "A raider stronghold on broken red stone above the trade cuts.",
         "text": (
-            "Red Mesa Hold overlooks dry cuts and supply approaches where a disciplined raiding band can make "
-            "itself feel larger than it is. Its danger is logistical as much as martial: one fortified height can "
-            "shape which wagons move, which scouts vanish, and which town leaders start bargaining with fear.\n\n"
-            "The hold also shows how old Accord routes can be repurposed. A place built to watch the land can "
-            "become a fist around it."
+            "Red Mesa Hold sits above dry cuts and supply approaches where a disciplined raiding band can look larger "
+            "than it is. One fortified height can decide which wagons move, which scouts vanish, and which town elders "
+            "start bargaining with fear.\n\n"
+            "The hold also shows what happens when old Accord watch positions fall into hungrier hands. A place built "
+            "to survey the land can close around it like a fist."
         ),
     },
     "Cinderfall Ruins": {
         "menu": "A scorched relay ruin that hints at older signal logic beneath Act I.",
         "text": (
-            "Cinderfall Ruins mark one of the frontier's half-understood signal scars. Burned stone, fused brackets, "
-            "and relay fragments suggest the Meridian Accord once moved instructions through the region faster than "
-            "horses could carry them.\n\n"
-            "For the current story, Cinderfall is a hinge between ordinary bandit pressure and the stranger question "
-            "underneath it: what happens when people learn to imitate a system the world forgot how to question?"
+            "Cinderfall Ruins carry one of the frontier's old signal scars. Burned stone, fused brackets, and relay "
+            "fragments show where the Meridian Accord once pushed orders through faster than horses could haul them.\n\n"
+            "That makes Cinderfall the point where roadside extortion starts touching something stranger. People can "
+            "learn to imitate a system long after the world forgets how to challenge it."
         ),
     },
     "Duskmere Manor": {
         "menu": "A buried estate whose cellars turn local extortion into an older secret.",
         "text": (
-            "Duskmere Manor is the renamed Act I manor site: a broken estate over sealed rooms, smuggling paths, "
-            "and old stone that never quite stopped listening. It looks like a gang hideout from the surface, which "
-            "is exactly why it works so well as one.\n\n"
-            "Below the rot and bravado, the manor points toward the campaign's deeper pattern. People think they are "
-            "using ruins as cover. The ruins may be using them as evidence."
+            "Duskmere Manor is a broken estate over sealed rooms, smuggling paths, and old stone that never quite "
+            "stopped listening. From the surface it reads like a gang hideout, which is why it serves that purpose so well.\n\n"
+            "Below the rot and swagger, the manor points at the deeper campaign wound. People hide inside the ruins. "
+            "The ruins keep a record of them."
         ),
     },
     "Vein of Glass": {
@@ -150,31 +138,29 @@ LOCATION_LORE: dict[str, LoreEntry] = {
         "text": (
             "The Vein of Glass is a fractured region of mineral seams, flooded cuts, reflective stone, broken "
             "prospects, and old intake works. It draws miners, reclaimers, claim lawyers, scavengers, and zealots "
-            "because every exposed layer seems to promise proof of something valuable.\n\n"
-            "Act II turns the campaign from road control toward memory control. The question is no longer only who "
-            "owns the route. It is who gets to define what the buried world was trying to say."
+            "because every fresh break in the rock looks like evidence.\n\n"
+            "Act II turns the campaign from road control toward memory control. Ownership still matters, but the sharper "
+            "fight is over who gets to name what the buried world was trying to say."
         ),
     },
     "Resonant Vaults": {
         "menu": "The deep ruin complex beneath Act II, where record and reality begin to blur.",
         "text": (
-            "The Resonant Vaults are the Act II deep site: a network of galleries, flooded crossings, tuned chambers, "
-            "and command spaces where Meridian systems still answer patterns, titles, and lies. The vaults do not "
-            "feel dead. They feel paused.\n\n"
-            "The Quiet Choir wants the Vaults because a system that remembers authority can be taught to obey a new "
-            "voice. The player reaches them after seeing what route control did above ground, which makes the deeper "
-            "threat easier to understand and harder to dismiss."
+            "The Resonant Vaults are a network of galleries, flooded crossings, tuned chambers, and command rooms where "
+            "Meridian systems still answer patterns, titles, and lies. The place does not feel dead. It feels paused, "
+            "as if the next order might wake it.\n\n"
+            "The Quiet Choir wants that pause. A system that remembers authority can learn a new voice if someone feeds "
+            "it enough ritual, pressure, and patience."
         ),
     },
     "Meridian Forge": {
         "menu": "The Act II convergence point where old infrastructure can be repaired or weaponized.",
         "text": (
-            "The Meridian Forge is not just a workshop. It is a control chamber for making broken systems agree with "
-            "one another again. In merciful hands, it could stabilize routes, waterworks, and signal relays. In the "
-            "wrong hands, it could make oppression look like restored order.\n\n"
-            "That is why the Forge matters to the long arc of Aethrune. It forces the story to ask whether "
-            "a broken world should be repaired exactly as it was, or whether survival requires refusing some of the "
-            "old system's permissions."
+            "The Meridian Forge is a control chamber where broken systems can be brought back into alignment. In careful "
+            "hands it could steady routes, waterworks, and signal relays. In cruel hands it could make oppression look "
+            "like restored order.\n\n"
+            "That puts the whole campaign argument in one room. The Forge can restore old permissions, or it can force "
+            "survivors to decide which parts of the old world deserve to stay buried."
         ),
     },
 }
@@ -186,8 +172,8 @@ CLASS_LORE: dict[str, LoreEntry] = {
         "menu": "Front-line survivors who turn pressure into momentum.",
         "text": (
             "In Aethrune, the Barbarian is the person who reaches the breach first and refuses to let it widen. "
-            "Their fury is not mindless anger; it is a practiced survival state built from pain tolerance, field "
-            "instinct, and the hard knowledge that hesitation can kill a whole caravan.\n\n"
+            "Their fury is a practiced survival state built from pain tolerance, field instinct, and the hard "
+            "knowledge that hesitation can kill a whole caravan.\n\n"
             "Barbarians fit the Shatterbelt as convoy breakers, tunnel guardians, militia shock troops, or people "
             "who learned to survive when the road stopped being fair."
         ),
@@ -251,8 +237,7 @@ CLASS_LORE: dict[str, LoreEntry] = {
         "text": (
             "Paladins are people whose promises have become load-bearing structures. They walk into corruption, "
             "extortion, and despair carrying an oath that does not bend just because the road got expensive.\n\n"
-            "They are not defined by a borrowed pantheon. They are defined by what they have sworn to protect when "
-            "the old systems offer easier answers."
+            "They are defined by what they have sworn to protect when the old systems offer easier answers."
         ),
     },
     "Ranger": {
@@ -271,8 +256,8 @@ CLASS_LORE: dict[str, LoreEntry] = {
         "text": (
             "Rogues survive by seeing openings other people miss. Locks, false papers, quiet steps, coded marks, "
             "crowd flow, and bad assumptions are all part of their toolkit.\n\n"
-            "In Aethrune, that makes them more than thieves. A Rogue is often the only person who can move through "
-            "a controlled route without becoming part of the control."
+            "That makes Rogues useful wherever a route is under control. A Rogue is often the only person who can "
+            "move through a controlled line without becoming part of the control."
         ),
     },
     "Sorcerer": {
@@ -613,8 +598,8 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
     "Appendix B: Lantern Faith": {
         "menu": "Road shrines, witness lamps, field mercy, and practical doctrine.",
         "text": (
-            "The Lantern Faith is not a single centralized church. It is a family of road practices built around lamps, "
-            "names, triage, funeral memory, safe passage, and the belief that people deserve to be witnessed when systems fail."
+            "The Lantern Faith grew out of road practice: lamp tending, field triage, funeral witness, safe passage, "
+            "and the belief that a lost traveler still deserves to be seen when systems fail."
         ),
     },
     "Appendix B: Shrine-Lanterns": {
@@ -631,13 +616,13 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
     },
     "Appendix B: False Doctrine": {
         "menu": "When faith language becomes a tool of control.",
-        "text": "The Quiet Choir often imitates comfort, confession, and order. The danger is not belief itself, but belief turned into obedience without consent.",
+        "text": "The Quiet Choir borrows the language of comfort, confession, and order. It uses those words to train obedience.",
     },
     "Appendix C: Factions Overview": {
         "menu": "The major powers competing over roads, records, claims, and truth.",
         "text": (
-            "Aethrune's factions are defined by what they think should control the future: force, testimony, trade, repair, faith, or hidden authority. "
-            "Most are not pure villains or pure heroes, but each becomes dangerous when its answer is the only answer allowed."
+            "Aethrune's factions fight over roads, records, claims, and the right to define what happened. "
+            "Each one has an answer for how the future should be run. The danger starts when one answer tries to close every other door."
         ),
     },
     "Appendix C: Ashen Brand": {
@@ -658,7 +643,7 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
     },
     "Appendix C: Iron Hollow Council": {
         "menu": "Local leadership balancing fear, claims, trade, and survival.",
-        "text": "The Iron Hollow Council is less grand than necessary. It has to decide which crisis gets labor, guards, marks, and public trust before the next wagon fails to arrive.",
+        "text": "The Iron Hollow Council works in a town that cannot afford grand language. Someone still has to decide whether the next wagon means guards, grain, labor, or trust.",
     },
     "Appendix C: Ironbound Guild": {
         "menu": "Supply, tools, claims, and the hard politics of repair.",
@@ -670,7 +655,7 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
     },
     "Appendix D: Aethrune Cosmology": {
         "menu": "How the world treats echoes, channels, relics, and system memory.",
-        "text": "Aethrune does not need distant named planes to feel strange. Its wonder comes from resonance, buried command logic, living memory, and old systems that still shape the present.",
+        "text": "Aethrune draws its wonder from resonance, buried command logic, living memory, and old systems that still lean on the present.",
     },
     "Appendix D: The Near World": {
         "menu": "The lived surface of roads, towns, ruins, rivers, and weather.",
@@ -696,7 +681,7 @@ APPENDIX_LORE: dict[str, LoreEntry] = {
         "menu": "A plain-language note on the current rules chassis.",
         "text": (
             "Aethrune currently keeps an SRD-derived d20 math base for character creation, checks, combat timing, conditions, and equipment. "
-            "The public presentation is being rethemed in phases so the story, setting, factions, and terminology belong to Aethrune."
+            "The public presentation is being rewritten in phases so the story, setting, factions, and terminology all belong to Aethrune."
         ),
     },
     "Appendix E: Public Vocabulary": {
@@ -715,7 +700,7 @@ PLANNED_ACTS_LORE = {
         "text": (
             "Act I follows Greywake, the Emberway, Iron Hollow, and the Ashen Brand's attempt to turn route fear into rule. "
             "Act II descends into the Vein of Glass and the Resonant Vaults, where the Quiet Choir tries to teach old systems a new voice. "
-            "Act III points toward the Meridian Depths and the question of whether a broken world should be restored, rewritten, or refused."
+            "Act III points toward the Meridian Depths, where survival depends on deciding what parts of the old world get restored and what parts stay broken."
         ),
     }
 }

@@ -380,7 +380,7 @@ This location is already original-facing enough to preserve.
 ### Role
 - hidden strike site
 - relay / sabotage dungeon
-- proof that the Ashen Brand is a network, not just a gang
+- proof that the Ashen Brand operates as a network with relay discipline
 - optional weakening action before Ashfall Watch
 
 ### Surface framing in Aethrune

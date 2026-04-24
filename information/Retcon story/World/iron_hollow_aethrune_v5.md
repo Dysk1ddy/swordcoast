@@ -2,9 +2,7 @@
 
 ## OVERVIEW
 
-Iron Hollow is not just a settlement.
-
-It is a **living system under strain**.
+Iron Hollow is a **living system under strain**.
 
 Where Emberway is a system of movement, and Greywake is a system of truth,
 Iron Hollow is a system of **human continuity**.
@@ -37,8 +35,7 @@ But beneath it:
 - certain structural failures occur in patterns, not randomness
 
 **Implication:**
-Iron Hollow may survive not only because of people—
-but because it unknowingly sits on the edge of an old system that *still supports it.*
+Iron Hollow may survive because people keep it alive and because it sits on the edge of an old system that *still supports it.*
 
 ---
 
@@ -332,9 +329,7 @@ Control through **survival**
 
 # FINAL CONCEPT
 
-Iron Hollow is not just a place.
-
-It is a question:
+Iron Hollow asks a question:
 
 > If everything fails, what do people choose to hold onto?
 
