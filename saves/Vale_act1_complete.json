@@ -186,7 +186,7 @@
       },
       "notes": [
         "Veteran's kit: +1 to Athletics and Intimidation checks.",
-        "A caravan guard from Neverwinter with a shield wall mindset.",
+        "A caravan guard from Greywake with a shield wall mindset.",
         "A dwarven shield veteran who measures people by whether they hold the line when it matters."
       ],
       "tags": [
@@ -209,8 +209,8 @@
       "companion_id": "tolan_ironshield",
       "disposition": 0,
       "lore": [
-        "Tolan served on caravan routes out of Neverwinter for two decades, long enough to see three trade leagues fail and two rise in their place.",
-        "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the Mere of Dead Men.",
+        "Tolan served on Emberway caravans out of Greywake for two decades, long enough to see three trade leagues fail and two rise in their place.",
+        "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the drowned flats west of Blackwake.",
         "He trusts steady action more than speeches, but remembers every promise anyone makes in his hearing."
       ],
       "bond_flags": {
@@ -303,8 +303,8 @@
       },
       "notes": [
         "Healer's satchel: +1 to Medicine and Religion checks.",
-        "A priestess of Tymora tending the frontier faithful in Phandalin.",
-        "A priestess of Tymora whose compassion is sharpened, not softened, by the frontier's cruelty."
+        "A Lantern priestess tending the frontier faithful in Iron Hollow.",
+        "A priestess of the Lantern whose compassion is sharpened, not softened, by the frontier's cruelty."
       ],
       "tags": [
         "hero",
@@ -419,7 +419,7 @@
       "gear_bonuses": {},
       "notes": [
         "Thieves' tools: +1 to Stealth and Sleight of Hand checks.",
-        "A Neverwinter scout who knows how to read an ambush before it closes.",
+        "A Greywake scout who knows how to read an ambush before it closes.",
         "A sharp-eyed ranger scout who learned to trust patterns before promises."
       ],
       "tags": [
@@ -442,7 +442,7 @@
       "companion_id": "kaelis_starling",
       "disposition": 0,
       "lore": [
-        "Kaelis spent years guiding outriders and woodsmen through the northern edges of the Neverwinter Wood, where bad judgment kills faster than monsters do.",
+        "Kaelis spent years guiding outriders and woodsfolk through the northern edges of Greywake Wood, where bad judgment kills faster than steel does.",
         "He keeps private sketches of trails, ridges, and blind corners because memory alone has betrayed him once already.",
         "He rarely speaks first in a room, but once he commits to someone he watches over them with relentless attention."
       ],
@@ -491,8 +491,10 @@
       "node_history": [],
       "room_history": []
     },
+    "story_check_option_attempt::a45bf13420d66221": true,
     "emberhall_threshold_crossed": true,
     "emberhall_reserve_opened": true,
+    "story_check_option_attempt::143bb993037c037b": true,
     "introduced_characters": [
       "Varyn Sable"
     ],
@@ -509,7 +511,7 @@
   "clues": [],
   "journal": [
     "You broke the Ashen Brand and secured Iron Hollow through the end of Act 1.",
-    "Reward from securing Iron Hollow at the end of Act I: 250 XP, 80 marks."
+    "Reward from securing Iron Hollow at the end of Act I: 250 XP, 80 gold."
   ],
   "quests": {},
   "completed_acts": [

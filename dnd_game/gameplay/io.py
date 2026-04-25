@@ -437,6 +437,9 @@ class GameIOMixin:
         show_hud: bool = True,
         sticky_trailing_options: int = 0,
     ) -> int:
+        clear_pending_story_check_choice_attempt = getattr(self, "clear_pending_story_check_choice_attempt", None)
+        if callable(clear_pending_story_check_choice_attempt):
+            clear_pending_story_check_choice_attempt()
         return self.choose_with_display_mode(
             prompt,
             options,
@@ -459,19 +462,37 @@ class GameIOMixin:
         clear_pending_scaled_check_reward = getattr(self, "clear_pending_scaled_check_reward", None)
         if callable(clear_pending_scaled_check_reward):
             clear_pending_scaled_check_reward()
+        clear_pending_story_check_choice_attempt = getattr(self, "clear_pending_story_check_choice_attempt", None)
+        if callable(clear_pending_story_check_choice_attempt):
+            clear_pending_story_check_choice_attempt()
+        indexed_options = list(enumerate(options, start=1))
+        story_check_choice_attempted = getattr(self, "story_check_choice_attempted", None)
+        if callable(story_check_choice_attempted):
+            available_options = [
+                (index, option)
+                for index, option in indexed_options
+                if not story_check_choice_attempted(prompt, option)
+            ]
+            if available_options:
+                indexed_options = available_options
+        visible_options = [option for _, option in indexed_options]
         choice = self.choose_with_display_mode(
             prompt,
-            options,
+            visible_options,
             allow_meta=allow_meta,
             staggered=True,
             show_hud=show_hud,
             sticky_trailing_options=sticky_trailing_options,
         )
+        original_index, selected_option = indexed_options[choice - 1]
         if echo_selection:
             player_choice_output = getattr(self, "player_choice_output", None)
-            if callable(player_choice_output) and 1 <= choice <= len(options):
-                player_choice_output(options[choice - 1])
-        return choice
+            if callable(player_choice_output):
+                player_choice_output(selected_option)
+        queue_story_check_choice_attempt = getattr(self, "queue_story_check_choice_attempt", None)
+        if callable(queue_story_check_choice_attempt):
+            queue_story_check_choice_attempt(prompt, selected_option)
+        return original_index
 
     def keyboard_choice_menu_supported(self) -> bool:
         if not self.should_use_rich_ui():

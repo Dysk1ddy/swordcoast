@@ -61,7 +61,7 @@
       "Gaming Set"
     ],
     "resources": {
-      "second_wind": 0
+      "second_wind": 1
     },
     "max_resources": {
       "second_wind": 1
@@ -172,7 +172,7 @@
       ],
       "resources": {
         "spell_slots_1": 2,
-        "mp": 11
+        "mp": 13
       },
       "max_resources": {
         "spell_slots_1": 2,
@@ -217,7 +217,8 @@
         "Under stress she gets quieter, not colder, as though she is measuring every word for whether it heals or harms."
       ],
       "bond_flags": {
-        "talked_topics": []
+        "talked_topics": [],
+        "story_skill_modifiers": {}
       },
       "relationship_bonuses": {},
       "story_skill_bonuses": {},
@@ -236,10 +237,15 @@
   "flags": {
     "act1_started": true,
     "map_state": {
-      "current_node_id": "wayside_luck_shrine",
+      "current_node_id": "neverwinter_briefing",
       "current_dungeon_id": null,
       "current_room_id": null,
-      "visited_nodes": [],
+      "visited_nodes": [
+        "wayside_luck_shrine",
+        "greywake_triage_yard",
+        "greywake_road_breakout",
+        "neverwinter_briefing"
+      ],
       "cleared_rooms": [],
       "seen_story_beats": [],
       "node_history": [],
@@ -249,8 +255,11 @@
       "Ashen Brand Runner",
       "Elira Dawnmantle",
       "Elira Lanternward",
+      "Garren Flint",
       "Mira Thann",
-      "Oren Vale"
+      "Oren Vale",
+      "Sabra Kestrel",
+      "Vessa Marr"
     ],
     "background_prologue_completed": "Soldier",
     "system_profile_seeded": true,
@@ -282,14 +291,27 @@
     "briefing_q_phandalin": true,
     "identity_neverwinter_briefing_class_fighter_map": true,
     "briefing_q_brand": true,
-    "neverwinter_contract_house_seen": true
+    "neverwinter_contract_house_seen": true,
+    "neverwinter_oren_met": true,
+    "neverwinter_oren_room_asked": true,
+    "neverwinter_oren_mira_asked": true,
+    "neverwinter_sabra_met": true,
+    "neverwinter_sabra_fear_asked": true,
+    "neverwinter_vessa_met": true,
+    "false_manifest_vessa_detail": true,
+    "blackwake_millers_ford_lead": true,
+    "neverwinter_vessa_cards_played": true,
+    "neverwinter_smuggler_phrase_known": true,
+    "neverwinter_vessa_smoke_asked": true,
+    "neverwinter_garren_met": true
   },
   "clues": [
     "A stolen dispatch confirms the attacks around Iron Hollow are organized enough to rattle Greywake's quartermasters.",
     "Greywake's intake board sorted travelers into outcomes before their wagons reached the yard.",
     "The Greywake manifest pre-sorted travelers by expected wound, delay, and loss before their wagons arrived.",
     "Mira identifies Greywake's outcome-marked manifest as proof someone is pre-sorting road casualties.",
-    "Mira marks the switchback, likely scout perches, and the rough spacing the gang prefers when collapsing on a wagon."
+    "Mira marks the switchback, likely scout perches, and the rough spacing the gang prefers when collapsing on a wagon.",
+    "Sabra has a Greywake manifest showing one caravan marked delayed before departure, which means somebody north of the Emberway is prewriting losses."
   ],
   "journal": [
     "Your soldier's opening leaves you with a live look at how hard Greywake is leaning on thin patrol lines and tired veterans to protect the road south.",
@@ -312,12 +334,24 @@
     "Mira Thann treated Greywake's outcome marks as proof that the Ashen Brand was coordinating who got hurt and when.",
     "Clue: Mira marks the switchback, likely scout perches, and the rough spacing the gang prefers when collapsing on a wagon.",
     "Reward from Fighter identity choice: 10 XP.",
-    "You treated the contract like a fighter's field briefing and forced it into useful shape."
+    "You treated the contract like a fighter's field briefing and forced it into useful shape.",
+    "Quest accepted: False Manifest Circuit.",
+    "Clue: Sabra has a Greywake manifest showing one caravan marked delayed before departure, which means somebody north of the Emberway is prewriting losses.",
+    "Reward from surviving Vessa Marr's card table: 20 XP, 8 gold."
   ],
-  "quests": {},
+  "quests": {
+    "false_manifest_circuit": {
+      "quest_id": "false_manifest_circuit",
+      "status": "active",
+      "notes": [
+        "Sabra is not asking you to stop the whole network tonight. She just wants one clean manifest lie pinned to the wall before it can keep pretending it is routine paperwork.",
+        "Sabra wants the contract house's three cleanest tells cross-checked before the forged manifest line reaches the Emberway."
+      ]
+    }
+  },
   "completed_acts": [],
-  "xp": 220,
-  "gold": 59,
+  "xp": 240,
+  "gold": 67,
   "inventory": {
     "C0011": 3,
     "S0002": 4,

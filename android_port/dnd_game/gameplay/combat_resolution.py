@@ -691,6 +691,9 @@ class CombatResolutionMixin:
             actor.dead = True
 
     def skill_check(self, actor, skill: str, dc: int, *, context: str) -> bool:
+        commit_pending_story_check_choice_attempt = getattr(self, "commit_pending_story_check_choice_attempt", None)
+        if callable(commit_pending_story_check_choice_attempt):
+            commit_pending_story_check_choice_attempt()
         advantage = self.d20_disadvantage_state(actor, skill=skill, context=context)
         total_modifier = actor.skill_bonus(skill)
         d20 = self.roll_check_d20(actor, advantage, target_number=dc, target_label=f"DC {dc}", modifier=total_modifier)

@@ -102,7 +102,11 @@ class CharacterCreationMixin:
             player=character,
             current_act=1,
             current_scene="background_prologue",
-            flags={"act1_started": True, "background_prologue_pending": character.background},
+            flags={
+                "act1_started": True,
+                "background_prologue_pending": character.background,
+                "opening_tutorial_pending": True,
+            },
             clues=[],
             journal=[],
             completed_acts=[],

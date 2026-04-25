@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import random
 import re
@@ -21,7 +22,7 @@ from ..items import (
     initial_merchant_stock,
     starter_item_ids_for_character,
 )
-from ..models import Character, GameState, Weapon
+from ..models import Character, GameState, SKILL_TO_ABILITY, Weapon
 from ..ui.colors import strip_ansi
 from .constants import InputFn, MENU_PAGE_SIZE, OutputFn
 
@@ -31,6 +32,8 @@ class GameInterrupted(Exception):
 
 
 class GameBase:
+    STORY_CHECK_OPTION_FLAG_PREFIX = "story_check_option_attempt::"
+    STORY_CHECK_OPTION_TAGS = frozenset(skill.upper() for skill in SKILL_TO_ABILITY)
     NAMED_CHARACTER_INTROS = {
         "Mira Thann": "Mira Thann is a sharp-eyed Neverwinter officer who wears quiet authority like armor and studies every answer for weakness or leverage.",
         "Tessa Harrow": "Tessa Harrow is Phandalin's exhausted steward, all ink-stained hands, sleepless focus, and frontier resolve held together by sheer will.",
@@ -92,6 +95,7 @@ class GameBase:
             except Exception:
                 self.animate_dice = False
         self.state: GameState | None = None
+        self._pending_story_check_option: tuple[str, str] | None = None
         self._in_combat = False
         self._scene_handlers = {
             "background_prologue": self.scene_background_prologue,
@@ -170,6 +174,46 @@ class GameBase:
 
     def choice_text(self, option: str) -> str:
         return re.sub(r"^\[[^\]]+\]\s*", "", option).strip()
+
+    def option_tag(self, option: str) -> str | None:
+        match = re.match(r"^\[([^\]]+)\]\s*", strip_ansi(option))
+        if match is None:
+            return None
+        return match.group(1).strip().upper()
+
+    def option_is_story_skill_check(self, option: str) -> bool:
+        tag = self.option_tag(option)
+        if not tag:
+            return False
+        parts = [part.strip() for part in tag.split("/")]
+        return bool(parts) and all(part in self.STORY_CHECK_OPTION_TAGS for part in parts)
+
+    def story_check_choice_attempt_flag(self, prompt: str, option: str) -> str:
+        scene_key = self.state.current_scene if self.state is not None else "unknown"
+        payload = f"{scene_key}\n{strip_ansi(prompt).strip()}\n{strip_ansi(option).strip()}"
+        digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+        return f"{self.STORY_CHECK_OPTION_FLAG_PREFIX}{digest}"
+
+    def story_check_choice_attempted(self, prompt: str, option: str) -> bool:
+        if self.state is None or not self.option_is_story_skill_check(option):
+            return False
+        return bool(self.state.flags.get(self.story_check_choice_attempt_flag(prompt, option)))
+
+    def queue_story_check_choice_attempt(self, prompt: str, option: str) -> None:
+        if self.option_is_story_skill_check(option):
+            self._pending_story_check_option = (prompt, option)
+        else:
+            self._pending_story_check_option = None
+
+    def clear_pending_story_check_choice_attempt(self) -> None:
+        self._pending_story_check_option = None
+
+    def commit_pending_story_check_choice_attempt(self) -> None:
+        if self.state is None or self._pending_story_check_option is None:
+            return
+        prompt, option = self._pending_story_check_option
+        self.state.flags[self.story_check_choice_attempt_flag(prompt, option)] = True
+        self._pending_story_check_option = None
 
     def read_input(self, prompt: str) -> str:
         try:

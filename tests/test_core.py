@@ -7236,6 +7236,7 @@ class CoreTests(unittest.TestCase):
                 "1", "1", "1", "1", "1", "1",  # assign array
                 "1", "1",  # fighter skills
                 "1",  # confirm character
+                "2",  # skip tutorial
                 "1",  # soldier prologue choice
                 "4",  # keep the wayside shrine moving
                 "2",  # let Elira stay with the wounded for now
@@ -7255,6 +7256,10 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(game.state.current_scene, "background_prologue")
         game.run_encounter = lambda encounter: "victory"
         game.skill_check = lambda actor, skill, dc, context: True
+        game.scene_background_prologue()
+        self.assertEqual(game.state.current_scene, "opening_tutorial")
+        game.scene_opening_tutorial()
+        self.assertEqual(game.state.current_scene, "background_prologue")
         game.scene_background_prologue()
         self.assertEqual(game.state.current_scene, "wayside_luck_shrine")
         game.scene_wayside_luck_shrine()
@@ -7279,6 +7284,7 @@ class CoreTests(unittest.TestCase):
                 "1", "1", "1", "1", "1", "1",
                 "1", "1",
                 "1",
+                "2",  # skip tutorial
                 "1",  # soldier prologue choice
                 "4",  # keep the wayside shrine moving
                 "2",  # let Elira stay with the wounded for now
@@ -7296,6 +7302,10 @@ class CoreTests(unittest.TestCase):
         game.start_new_game()
         game.run_encounter = lambda encounter: "victory"
         game.skill_check = lambda actor, skill, dc, context: True
+        game.scene_background_prologue()
+        self.assertEqual(game.state.current_scene, "opening_tutorial")
+        game.scene_opening_tutorial()
+        self.assertEqual(game.state.current_scene, "background_prologue")
         game.scene_background_prologue()
         game.scene_wayside_luck_shrine()
         game.scene_greywake_triage_yard()
@@ -7869,6 +7879,98 @@ class CoreTests(unittest.TestCase):
         self.assertIn(PRESET_CHARACTERS["Fighter"]["name"], rendered)
         self.assertIn("Preset abilities:", rendered)
         self.assertIn("Starting point:", rendered)
+
+    def test_background_prologue_routes_new_games_into_opening_tutorial(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(4441))
+        game.begin_adventure(player)
+
+        game.scene_background_prologue()
+
+        self.assertIsNotNone(game.state)
+        self.assertEqual(game.state.current_scene, "opening_tutorial")
+        self.assertTrue(game.state.flags["opening_tutorial_pending"])
+
+    def test_opening_tutorial_can_be_skipped(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        answers = iter(["2"])
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(4442))
+        game.begin_adventure(player)
+        game.scene_background_prologue()
+
+        game.scene_opening_tutorial()
+
+        self.assertIsNotNone(game.state)
+        self.assertEqual(game.state.current_scene, "background_prologue")
+        self.assertTrue(game.state.flags["opening_tutorial_seen"])
+        self.assertTrue(game.state.flags["opening_tutorial_skipped"])
+        self.assertFalse(game.state.flags["opening_tutorial_pending"])
+        rendered = self.plain_output(log)
+        self.assertIn("Skip ahead to your character's opening.", rendered)
+        self.assertIn("You wave the primer off and keep moving.", rendered)
+
+    def test_opening_tutorial_teaches_core_loop_in_continue_batches(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(4443))
+        game.begin_adventure(player)
+        game.scene_background_prologue()
+        prompts: list[str] = []
+        options_seen: list[list[str]] = []
+
+        def tutorial_choice(prompt: str, options: list[str], **kwargs) -> int:
+            prompts.append(prompt)
+            options_seen.append([strip_ansi(option) for option in options])
+            return 1
+
+        game.scenario_choice = tutorial_choice  # type: ignore[method-assign]
+        game.run_encounter = lambda encounter: (_ for _ in ()).throw(AssertionError("Tutorial should not start combat"))  # type: ignore[method-assign]
+        game.skill_check = lambda actor, skill, dc, context: (_ for _ in ()).throw(AssertionError("Tutorial should not force a skill check"))  # type: ignore[method-assign]
+
+        game.scene_opening_tutorial()
+
+        self.assertIsNotNone(game.state)
+        self.assertEqual(game.state.current_scene, "background_prologue")
+        self.assertTrue(game.state.flags["opening_tutorial_completed"])
+        self.assertFalse(game.state.flags["opening_tutorial_pending"])
+        self.assertIn("You finished Greywake's frontier primer before the road turned serious.", game.state.journal)
+        self.assertEqual(
+            options_seen[0],
+            ["*Take the short tutorial.", "*Skip ahead to your character's opening."],
+        )
+        self.assertTrue(all(options == ["*Continue."] for options in options_seen[1:]))
+        self.assertGreaterEqual(len(options_seen), 5)
+        rendered = self.plain_output(log)
+        self.assertIn("Global Commands", rendered)
+        self.assertIn("companions start joining", rendered.lower())
+        self.assertIn("active lineup and anyone waiting at camp", rendered.lower())
+        self.assertIn("swap which companions travel with you", rendered.lower())
+        self.assertIn("type `help` whenever you want the command list again", rendered.lower())
+        self.assertIn("Combat gives you a menu of actions your character can use right now.", rendered)
+        self.assertNotIn("Frontier Primer: Sparring Lane", rendered)
+        self.assertNotIn("Greywake Drill Dummy", rendered)
 
     def test_background_prologues_converge_to_wayside_luck_shrine(self) -> None:
         for background in BACKGROUNDS:
@@ -10464,6 +10566,102 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("Vessa Marr", rendered)
         self.assertNotIn("Garren Flint", rendered)
         self.assertIn("Rent beds", rendered)
+
+    def test_contract_house_first_visit_introduces_oren(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Rogue",
+            background="Charlatan",
+            base_ability_scores={"STR": 10, "DEX": 15, "CON": 12, "INT": 14, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Insight", "Investigation", "Sleight of Hand"],
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(92044))
+        game.state = GameState(player=player, current_scene="neverwinter_briefing")
+
+        def capture_menu(prompt: str, options: list[str], **kwargs) -> int:
+            if prompt == "The contract house room keeps three conversations going at once.":
+                raise self._SceneExit
+            raise AssertionError(prompt)
+
+        game.scenario_choice = capture_menu  # type: ignore[method-assign]
+        with self.assertRaises(self._SceneExit):
+            game.visit_neverwinter_contract_house()
+
+        rendered = self.plain_output(log)
+        self.assertIn("Oren Vale runs his contract house in rolled sleeves and measured glances", rendered)
+        self.assertIn("If Mira sent you", rendered)
+
+    def test_scenario_choice_filters_spent_story_skill_options_and_keeps_original_index(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Rogue",
+            background="Charlatan",
+            base_ability_scores={"STR": 10, "DEX": 15, "CON": 12, "INT": 14, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Insight", "Investigation", "Sleight of Hand"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(92045))
+        game.state = GameState(player=player, current_scene="neverwinter_briefing")
+        prompt = "Choose what you say to Garren Flint."
+        spent_option = game.skill_tag(
+            "PERSUASION",
+            game.action_option("Ask what a real roadwarden would never write on an honest stop order."),
+        )
+        leave_option = game.action_option("Leave Garren Flint to his cooling temper.")
+        game.state.flags[game.story_check_choice_attempt_flag(prompt, spent_option)] = True
+        captured: list[str] = []
+
+        def fake_choose(prompt_text: str, options: list[str], **kwargs) -> int:
+            captured.extend(strip_ansi(option) for option in options)
+            return 1
+
+        game.choose_with_display_mode = fake_choose  # type: ignore[method-assign]
+        choice = game.scenario_choice(prompt, [spent_option, leave_option], allow_meta=False)
+
+        self.assertEqual(choice, 2)
+        self.assertEqual(captured, [strip_ansi(leave_option)])
+
+    def test_neverwinter_garren_failed_persuasion_hides_retry_option(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Rogue",
+            background="Charlatan",
+            base_ability_scores={"STR": 10, "DEX": 15, "CON": 12, "INT": 14, "WIS": 13, "CHA": 14},
+            class_skill_choices=["Insight", "Investigation", "Sleight of Hand"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(92046))
+        game.state = GameState(
+            player=player,
+            current_scene="neverwinter_briefing",
+            quests={"false_manifest_circuit": QuestLogEntry("false_manifest_circuit", status="active")},
+        )
+        captured: list[list[str]] = []
+        visits = 0
+
+        def fake_choose(prompt: str, options: list[str], **kwargs) -> int:
+            nonlocal visits
+            stripped = [strip_ansi(option) for option in options]
+            if prompt != "Choose what you say to Garren Flint.":
+                raise AssertionError(prompt)
+            visits += 1
+            captured.append(stripped)
+            if visits == 1:
+                return self.option_index_containing(stripped, "real roadwarden would never write")
+            return self.option_index_containing(stripped, "Leave Garren")
+
+        game.choose_with_display_mode = fake_choose  # type: ignore[method-assign]
+        game.roll_check_d20 = lambda actor, advantage, **kwargs: SimpleNamespace(kept=1)  # type: ignore[method-assign]
+
+        game.neverwinter_talk_garren()
+
+        first_menu = "\n".join(captured[0])
+        second_menu = "\n".join(captured[1])
+        self.assertIn("real roadwarden would never write", first_menu)
+        self.assertNotIn("real roadwarden would never write", second_menu)
+        self.assertIn("Stop protecting whoever taught the Brand your cadence.", second_menu)
 
     def test_exhausted_dialogue_npcs_show_leave_only_local_menu(self) -> None:
         player = build_character(

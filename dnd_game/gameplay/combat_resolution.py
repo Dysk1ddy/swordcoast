@@ -1362,6 +1362,9 @@ class CombatResolutionMixin:
                 self.clear_liars_blessing_on_player_death()
 
     def skill_check(self, actor, skill: str, dc: int, *, context: str) -> bool:
+        commit_pending_story_check_choice_attempt = getattr(self, "commit_pending_story_check_choice_attempt", None)
+        if callable(commit_pending_story_check_choice_attempt):
+            commit_pending_story_check_choice_attempt()
         dc = self.effective_skill_dc(dc, context=context)
         if self.always_fail_dice_checks_enabled() and self.is_party_member_actor(actor):
             self.set_pending_scaled_check_reward(False)

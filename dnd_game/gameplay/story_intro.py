@@ -16,8 +16,89 @@ class StoryIntroMixin:
     def intro_pick_enemy(self, templates, *, name: str | None = None):
         return create_enemy(self.rng.choice(tuple(templates)), name=name)
 
+    def finish_opening_tutorial(self, *, skipped: bool) -> None:
+        assert self.state is not None
+        self.state.flags["opening_tutorial_pending"] = False
+        self.state.flags["opening_tutorial_seen"] = True
+        self.state.flags["opening_tutorial_skipped"] = skipped
+        self.state.flags["opening_tutorial_completed"] = not skipped
+        self.state.current_scene = "background_prologue"
+
+    def opening_tutorial_continue_batch(self, *lines: str, show_commands: bool = False) -> None:
+        for line in lines:
+            self.say(line)
+        if show_commands:
+            self.show_global_commands()
+        self.scenario_choice(
+            "Continue to the next batch.",
+            [self.action_option("Continue.")],
+            allow_meta=False,
+        )
+
+    def scene_opening_tutorial(self) -> None:
+        assert self.state is not None
+        if self.state.flags.get("opening_tutorial_seen") and not self.state.flags.get("opening_tutorial_pending"):
+            self.state.current_scene = "background_prologue"
+            return
+
+        self.banner("Frontier Primer")
+        self.say(
+            "Greywake keeps one muddy rope lane for fresh hands: straw torsos on stakes, split shields on a rail, "
+            "and a spring-loaded drill dummy whose sparring arm has bruised half the road.",
+            typed=True,
+        )
+        choice = self.scenario_choice(
+            "Do you want the opening tutorial before your own prologue starts?",
+            [
+                self.action_option("Take the short tutorial."),
+                self.action_option("Skip ahead to your character's opening."),
+            ],
+        )
+        if choice == 2:
+            self.player_action("Skip ahead to your character's opening.")
+            self.say("You wave the primer off and keep moving. The road can teach the rest in its own hard time.")
+            self.finish_opening_tutorial(skipped=True)
+            return
+
+        self.player_action("Take the short tutorial.")
+        self.opening_tutorial_continue_batch(
+            "Numbered choices drive most scenes. At most prompts, you can also type a command instead of a number.",
+            "If you lose the thread, type `help`.",
+            show_commands=True,
+        )
+        self.opening_tutorial_continue_batch(
+            "Type `help` whenever you want that list again. `party`, `journal`, `inventory`, `equipment`, and `sheet` "
+            "check your company. `map` and `camp` open when the road or current scene supports them. "
+            "`save`, `load`, `saves`, `settings`, and `quit` manage the run. `~` and `helpconsole` are optional console shortcuts.",
+            "You begin alone, but companions start joining once the road opens. `party` shows the active lineup and anyone waiting at camp. "
+            "`sheet` lets you inspect any company member in detail. `equipment` changes who is wearing what. "
+            "`camp` is where you review the wider roster and swap which companions travel with you.",
+        )
+        self.opening_tutorial_continue_batch(
+            "Most non-combat tests are ability checks through a skill. The bracket on a choice shows the skill being tested.",
+            "A check rolls a d20, adds your skill bonus, and compares the total to a Difficulty Class.",
+            "Ability scores, proficiency, gear, and conditions can shift the result. Success changes what you secure; failure changes the angle or the cost.",
+        )
+        self.opening_tutorial_continue_batch(
+            "Combat gives you a menu of actions your character can use right now.",
+            "Hit points track how much punishment you can still take. Defense makes you harder to hit. "
+            "Some classes also carry bonus actions, spells, or once-per-rest features, and the combat menu only shows the ones your character can use.",
+            "Healing potions appear in combat when you have them.",
+        )
+        self.opening_tutorial_continue_batch(
+            "Journal notes, clues, and rewards collect automatically as the run moves.",
+            "After combat, surviving allies who fell to 0 hit points can be dragged back up once danger passes. "
+            "Camp, rests, class features, and consumables keep the company moving between fights.",
+            "That is the core loop: read the scene, choose an angle, roll when the road pushes back, and type `help` whenever you want the command list again.",
+        )
+        self.add_journal("You finished Greywake's frontier primer before the road turned serious.")
+        self.finish_opening_tutorial(skipped=False)
+
     def scene_background_prologue(self) -> None:
         assert self.state is not None
+        if self.state.flags.get("opening_tutorial_pending") and not self.state.flags.get("opening_tutorial_seen"):
+            self.state.current_scene = "opening_tutorial"
+            return
         background = self.state.player.background
         handlers = {
             "Soldier": self.prologue_soldier,
@@ -1592,6 +1673,7 @@ class StoryIntroMixin:
         if not self.state.flags.get("neverwinter_contract_house_seen"):
             self.state.flags["neverwinter_contract_house_seen"] = True
             self.banner("Oren Vale's Contract House")
+            self.introduce_character("Oren Vale")
             self.say(
                 "Half inn, half contracting room, the house sits off the river road where teamsters, wardens, and quiet fixers can all pretend they are only here for stew. "
                 "No one raises their voice unless they mean to buy the room with it.",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import hashlib
 import json
 from pathlib import Path
 import random
@@ -103,6 +104,7 @@ class GameBase:
         3: "III",
     }
     SCENE_LABELS = {
+        "opening_tutorial": "Frontier Primer",
         "background_prologue": "Prologue",
         "wayside_luck_shrine": "Wayside Luck Shrine",
         "greywake_triage_yard": "Greywake Yard",
@@ -135,6 +137,7 @@ class GameBase:
         "act3_ninth_ledger_aftermath": "Ledger Aftermath",
     }
     SCENE_OBJECTIVES = {
+        "opening_tutorial": "Take the optional frontier primer or skip straight into your origin.",
         "background_prologue": "Finish your origin story and answer the road's first test.",
         "wayside_luck_shrine": "Meet Elira Lanternward and steady the first wounded travelers.",
         "greywake_triage_yard": "Stabilize Greywake Yard before the road pressure breaks open.",
@@ -182,6 +185,8 @@ class GameBase:
     STORY_SKILL_MODIFIER_KEY = "story_skill_modifiers"
     LIARS_BLESSING_MODIFIER_ID = "liars_blessing"
     LIARS_CURSE_MODIFIER_ID = "liars_curse"
+    STORY_CHECK_OPTION_FLAG_PREFIX = "story_check_option_attempt::"
+    STORY_CHECK_OPTION_TAGS = frozenset(skill.upper() for skill in SKILL_TO_ABILITY)
     PUBLIC_CHARACTER_NAMES = {
         "Elira Dawnmantle": "Elira Lanternward",
         "Barthen": "Hadrik",
@@ -327,6 +332,7 @@ class GameBase:
         self._compact_hud_last_scene_key: tuple[int, str] | None = None
         self._compact_hud_requested = False
         self._latest_narration_lines: list[str] = []
+        self._pending_story_check_option: tuple[str, str] | None = None
         self._pending_scaled_check_reward = False
         self._pending_act1_dungeon_map_refresh = False
         self._pending_act1_dungeon_movement_text = ""
@@ -364,6 +370,7 @@ class GameBase:
         self._in_combat = False
         self._at_title_screen = False
         self._scene_handlers = {
+            "opening_tutorial": self.scene_opening_tutorial,
             "background_prologue": self.scene_background_prologue,
             "wayside_luck_shrine": self.scene_wayside_luck_shrine,
             "greywake_triage_yard": self.scene_greywake_triage_yard,
@@ -618,6 +625,46 @@ class GameBase:
 
     def choice_text(self, option: str) -> str:
         return re.sub(r"^\[[^\]]+\]\s*", "", option).strip()
+
+    def option_tag(self, option: str) -> str | None:
+        match = re.match(r"^\[([^\]]+)\]\s*", strip_ansi(option))
+        if match is None:
+            return None
+        return match.group(1).strip().upper()
+
+    def option_is_story_skill_check(self, option: str) -> bool:
+        tag = self.option_tag(option)
+        if not tag:
+            return False
+        parts = [part.strip() for part in tag.split("/")]
+        return bool(parts) and all(part in self.STORY_CHECK_OPTION_TAGS for part in parts)
+
+    def story_check_choice_attempt_flag(self, prompt: str, option: str) -> str:
+        scene_key = self.state.current_scene if self.state is not None else "unknown"
+        payload = f"{scene_key}\n{strip_ansi(prompt).strip()}\n{strip_ansi(option).strip()}"
+        digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+        return f"{self.STORY_CHECK_OPTION_FLAG_PREFIX}{digest}"
+
+    def story_check_choice_attempted(self, prompt: str, option: str) -> bool:
+        if self.state is None or not self.option_is_story_skill_check(option):
+            return False
+        return bool(self.state.flags.get(self.story_check_choice_attempt_flag(prompt, option)))
+
+    def queue_story_check_choice_attempt(self, prompt: str, option: str) -> None:
+        if self.option_is_story_skill_check(option):
+            self._pending_story_check_option = (prompt, option)
+        else:
+            self._pending_story_check_option = None
+
+    def clear_pending_story_check_choice_attempt(self) -> None:
+        self._pending_story_check_option = None
+
+    def commit_pending_story_check_choice_attempt(self) -> None:
+        if self.state is None or self._pending_story_check_option is None:
+            return
+        prompt, option = self._pending_story_check_option
+        self.state.flags[self.story_check_choice_attempt_flag(prompt, option)] = True
+        self._pending_story_check_option = None
 
     def read_input(self, prompt: str) -> str:
         self._animation_skip_latched = False
