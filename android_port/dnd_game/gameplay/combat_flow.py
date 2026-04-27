@@ -1149,6 +1149,13 @@ class CombatFlowMixin:
                 if self.use_blood_price(actor, target):
                     turn_state.bonus_action_available = False
                 continue
+            if action == "Mark Target":
+                target = self.choose_target(conscious_enemies, prompt="Choose a target to mark.", allow_back=True)
+                if target is None:
+                    continue
+                if self.use_rogue_mark(actor, target):
+                    turn_state.bonus_action_available = False
+                continue
             if action == "Tool Read":
                 target = self.choose_target(conscious_enemies, prompt="Choose a target for Tool Read.", allow_back=True)
                 if target is None:
@@ -1421,6 +1428,7 @@ class CombatFlowMixin:
             "Drink The Hurt",
             "Red Mark",
             "Blood Price",
+            "Mark Target",
             "Tool Read",
             "Feint",
             "Skirmish",
@@ -2596,6 +2604,8 @@ class CombatFlowMixin:
                 options.append("Red Mark")
             if "blood_price" in actor.features and actor.resources.get("blood_debt", 0) > 0:
                 options.append("Blood Price")
+            if "rogue_mark" in actor.features:
+                options.append("Mark Target")
             if "tool_read" in actor.features:
                 options.append("Tool Read")
             if "rogue_feint" in actor.features:

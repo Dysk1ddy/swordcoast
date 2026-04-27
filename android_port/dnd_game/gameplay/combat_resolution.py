@@ -28,7 +28,7 @@ STANCE_LABELS = {
 }
 STANCE_SUMMARIES = {
     "neutral": "No stance modifiers.",
-    "guard": "+20% Defense, +1 Avoidance, +2 Stability, -2 Accuracy.",
+    "guard": "+20% Defense, +2 Stability, -2 Accuracy.",
     "brace": "+10% Defense, +4 Stability, -1 Avoidance, -1 Accuracy.",
     "mobile": "+2 Avoidance, +2 retreat checks, -5% Defense, -1 Stability.",
     "aggressive": "+2 Accuracy, +2 weapon damage, -10% Defense, -1 Avoidance.",
@@ -106,6 +106,17 @@ class CombatResolutionMixin:
             f"but has {current_magic_points(caster)}."
         )
         return False
+
+    def record_opening_tutorial_combat_event(self, event_key: str, actor=None, target=None) -> None:
+        tutorial_tracker = getattr(self, "record_opening_tutorial_event", None)
+        if not callable(tutorial_tracker):
+            return
+        tutorial_tracker(
+            event_key,
+            actor_name=getattr(actor, "name", ""),
+            target_name=getattr(target, "name", ""),
+            class_name=getattr(actor, "class_name", ""),
+        )
 
     def equipped_weapon_item(self, actor):
         return ITEMS.get(actor.equipment_slots.get("main_hand", "")) if getattr(actor, "equipment_slots", None) else None
@@ -826,6 +837,7 @@ class CombatResolutionMixin:
             f"Pattern Read: {self.style_name(target)} shows {ability_label(ability, include_code=True)} "
             f"{save_bonus:+d}, Defense {defense}%, Avoidance {avoidance:+d}{ward_text}{charge_text}."
         )
+        self.record_opening_tutorial_combat_event("combat_pattern_read", actor=actor, target=target)
         return True
 
     def use_ground(self, actor) -> bool:
@@ -834,6 +846,7 @@ class CombatResolutionMixin:
             return False
         self.apply_status(actor, "grounded_channel", 2, source=f"{actor.name}'s grounding breath")
         self.say(f"{self.style_name(actor)} grounds the channel and steadies the next pattern.")
+        self.record_opening_tutorial_combat_event("combat_ground", actor=actor)
         return True
 
     def mage_minor_channel_save_ability(self, actor, target) -> str:
@@ -851,6 +864,7 @@ class CombatResolutionMixin:
         channel = spell_label("minor_channel")
         if not self.spend_mp_for_spell(actor, "minor_channel", "Minor Channel"):
             return False
+        self.record_opening_tutorial_combat_event("combat_minor_channel", actor=actor, target=target)
         try:
             ability = self.mage_minor_channel_save_ability(actor, target)
             dc = self.mage_channel_dc(actor)
@@ -1536,8 +1550,9 @@ class CombatResolutionMixin:
     def use_guard_stance(self, actor) -> None:
         self.set_combat_stance(actor, "guard", announce=False)
         self.say(
-            f"{self.style_name(actor)} sets a guarded lane: +20% Defense, +1 Avoidance, +2 Stability, and -2 Accuracy while the stance holds."
+            f"{self.style_name(actor)} sets a guarded lane: +20% Defense, +2 Stability, and -2 Accuracy while the stance holds."
         )
+        self.record_opening_tutorial_combat_event("combat_guard_stance", actor=actor)
 
     def can_raise_shield(self, actor) -> bool:
         return bool(getattr(actor, "shield", False)) and not self.has_status(actor, "raised_shield")
@@ -1553,10 +1568,23 @@ class CombatResolutionMixin:
         stability = self.effective_stability(target)
         armor_break = self.total_armor_break_percent(target)
         defense_band = "high" if defense >= 35 else "low" if defense <= 10 else "moderate"
-        avoidance_band = "high" if avoidance >= 4 else "low" if avoidance <= 0 else "moderate"
+        if avoidance >= 5:
+            avoidance_band = "exceptional"
+        elif avoidance >= 4:
+            avoidance_band = "high"
+        elif avoidance >= 3:
+            avoidance_band = "dedicated"
+        elif avoidance >= 2:
+            avoidance_band = "skirmisher"
+        elif avoidance >= 1:
+            avoidance_band = "agile"
+        elif avoidance <= -1:
+            avoidance_band = "exposed"
+        else:
+            avoidance_band = "trained"
         stability_band = "high" if stability >= 4 else "low" if stability <= 0 else "moderate"
         answer = "Armor Break or save pressure"
-        if avoidance_band == "high" and defense_band != "high":
+        if avoidance >= 3 and defense_band != "high":
             answer = "accuracy pressure, marks, or forced saves"
         elif defense_band == "low":
             answer = "plain weapon wounds"
@@ -1568,6 +1596,7 @@ class CombatResolutionMixin:
             f"{avoidance_band} Avoidance ({avoidance:+d}), and {stability_band} Stability ({stability:+d}){break_text}. "
             f"Best answer: {answer}."
         )
+        self.record_opening_tutorial_combat_event("combat_weapon_read", actor=actor, target=target)
 
     def use_warrior_rally(self, actor, target) -> bool:
         if not self.spend_class_resource(actor, "grit"):
@@ -1579,6 +1608,7 @@ class CombatResolutionMixin:
         else:
             self.apply_status(target, "guarded", 1, source=f"{actor.name}'s Rally")
             self.say(f"{self.style_name(actor)} steadies {self.style_name(target)} with a hard battlefield call.")
+        self.record_opening_tutorial_combat_event("combat_warrior_rally", actor=actor, target=target)
         return True
 
     def fixate_target(self, actor, target, *, duration: int = 1) -> None:
@@ -2356,6 +2386,18 @@ class CombatResolutionMixin:
 
     def target_is_marked_by(self, actor, target, *, mark_key: str = "rogue_mark") -> bool:
         return target.bond_flags.get(f"{mark_key}_by") == actor.name
+
+    def use_rogue_mark(self, actor, target) -> bool:
+        if "rogue_mark" not in getattr(actor, "features", []):
+            self.say(f"{self.style_name(actor)} has no Mark Work training.")
+            return False
+        if not self.can_make_hostile_action(actor):
+            self.say(f"{self.style_name(actor)} cannot mark an enemy for harm while Charmed.")
+            return False
+        self.mark_class_target(actor, target, duration=2)
+        self.say(f"{self.style_name(actor)} marks {self.style_name(target)}'s open line for the next clean strike.")
+        self.record_opening_tutorial_combat_event("combat_rogue_mark", actor=actor, target=target)
+        return True
 
     def use_tool_read(self, actor, target) -> bool:
         if "tool_read" not in getattr(actor, "features", []):
@@ -3387,6 +3429,7 @@ class CombatResolutionMixin:
         if not self.can_make_hostile_action(actor):
             self.say(f"{self.style_name(actor)} can't force the issue while Charmed.")
             return
+        self.record_opening_tutorial_combat_event("combat_warrior_shove", actor=actor, target=target)
         target_number = self.stability_target_number(target)
         total_modifier = (
                 actor.ability_mod("STR")
@@ -3547,6 +3590,7 @@ class CombatResolutionMixin:
                 )
                 weapon_damage += sneak.total
                 self.say(f"Veilstrike adds {self.style_damage(sneak.total)} damage.")
+                self.record_opening_tutorial_combat_event("combat_veilstrike", actor=attacker, target=target)
             martial_bonus = None
             if attacker.archetype == "rukhar" and any(enemy.is_conscious() and enemy is not attacker for enemy in enemies):
                 martial_bonus = self.roll_with_animation_context(

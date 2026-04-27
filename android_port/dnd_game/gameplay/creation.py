@@ -28,6 +28,9 @@ from ..ui.colors import rich_style_name
 from ..ui.rich_render import Group, Panel, Table, box
 
 
+BACK_OPTION = "Back"
+
+
 class CharacterCreationMixin:
     def rich_creation_enabled(self) -> bool:
         return (
@@ -43,52 +46,123 @@ class CharacterCreationMixin:
         play_music_for_context = getattr(self, "play_music_for_context", None)
         if callable(play_music_for_context):
             play_music_for_context("main_menu")
-        self.banner("Character Creation")
-        mode = self.choose(
-            "Choose how you want to start.",
-            [
-                "Preset Character",
-                "Custom Character",
-            ],
-            allow_meta=False,
-        )
-        if mode == 1:
-            character = self.choose_preset_character()
-        else:
-            character = self.create_custom_character()
-        self.preview_character(character)
-        if not self.confirm("Begin the adventure with this character?"):
+        while True:
+            self.banner("Character Creation")
+            mode = self.choose(
+                "Choose how you want to start.",
+                [
+                    "Preset Character",
+                    "Custom Character",
+                ],
+                allow_meta=False,
+            )
+            if mode == 1:
+                character = self.choose_preset_character()
+            else:
+                character = self.create_custom_character()
+            if character is None:
+                continue
+            self.preview_character(character)
+            if self.confirm("Begin the adventure with this character?"):
+                self.begin_adventure(character)
+                return
             self.say("Let's rebuild them from the start.")
-            return self.start_new_game()
 
-        self.begin_adventure(character)
-
-    def create_custom_character(self) -> Character:
-        name = self.ask_text("Name your adventurer")
-        race = self.choose_named_option("Choose a people", RACES)
-        class_name = self.choose_named_option("Choose a calling", CLASSES)
-        background = self.choose_named_option("Choose a background", BACKGROUNDS)
-        base_scores = self.choose_ability_scores()
-        class_skills = self.choose_class_skills(race, class_name, background)
+    def create_custom_character(self) -> Character | None:
+        name = ""
+        race = ""
+        class_name = ""
+        background = ""
+        base_scores: dict[str, int] = {}
+        class_skills: list[str] = []
         expertise: list[str] = []
-        if class_name == "Rogue":
-            expertise = self.choose_expertise(race, background, class_skills)
-        character = build_character(
-            name=name,
-            race=race,
-            class_name=class_name,
-            background=background,
-            base_ability_scores=base_scores,
-            class_skill_choices=class_skills,
-            expertise_choices=expertise,
-            inventory={"Healing Potion": 1},
-        )
-        return character
+        step = 0
+        while True:
+            if step == 0:
+                selected_name = self.ask_text_with_back("Name your adventurer")
+                if selected_name is None:
+                    return None
+                name = selected_name
+                step = 1
+                continue
+            if step == 1:
+                selected_race = self.choose_named_option("Choose a people", RACES, allow_back=True)
+                if selected_race is None:
+                    step = 0
+                    continue
+                race = selected_race
+                step = 2
+                continue
+            if step == 2:
+                selected_class = self.choose_named_option("Choose a calling", CLASSES, allow_back=True)
+                if selected_class is None:
+                    step = 1
+                    continue
+                class_name = selected_class
+                step = 3
+                continue
+            if step == 3:
+                selected_background = self.choose_named_option("Choose a background", BACKGROUNDS, allow_back=True)
+                if selected_background is None:
+                    step = 2
+                    continue
+                background = selected_background
+                step = 4
+                continue
+            if step == 4:
+                selected_scores = self.choose_ability_scores(allow_back=True)
+                if selected_scores is None:
+                    step = 3
+                    continue
+                base_scores = selected_scores
+                step = 5
+                continue
+            if step == 5:
+                selected_skills = self.choose_class_skills(race, class_name, background, allow_back=True)
+                if selected_skills is None:
+                    step = 4
+                    continue
+                class_skills = selected_skills
+                step = 6
+                continue
+            if class_name == "Rogue":
+                selected_expertise = self.choose_expertise(race, background, class_skills, allow_back=True)
+                if selected_expertise is None:
+                    step = 5
+                    continue
+                expertise = selected_expertise
+            else:
+                expertise = []
+            return build_character(
+                name=name,
+                race=race,
+                class_name=class_name,
+                background=background,
+                base_ability_scores=base_scores,
+                class_skill_choices=class_skills,
+                expertise_choices=expertise,
+                inventory={"Healing Potion": 1},
+            )
 
-    def choose_preset_character(self) -> Character:
+    def ask_text_with_back(self, prompt: str) -> str | None:
+        while True:
+            self.output_fn("")
+            value = self.read_input(f"{prompt} (or {BACK_OPTION}): ").strip()
+            if self.handle_meta_command(value):
+                continue
+            if value.lower() == BACK_OPTION.lower():
+                return None
+            if value:
+                return value
+            self.say("Please enter a value.")
+
+    def choose_preset_character(self) -> Character | None:
         class_names = list(PRESET_CHARACTERS)
         while True:
-            choice = self.choose("Choose a preset calling.", [class_option_label(name) for name in class_names], allow_meta=False)
+            options = [class_option_label(name) for name in class_names] + [BACK_OPTION]
+            choice = self.choose("Choose a preset calling.", options, allow_meta=False)
+            if choice == len(options):
+                return None
             selected_class = class_names[choice - 1]
             self.describe_preset_character(selected_class)
             if self.confirm("Lock that preset in?"):
@@ -216,7 +290,7 @@ class CharacterCreationMixin:
         self.add_journal(start_note or f"Your {character.background.lower()} path pulls you toward Greywake and the Emberway road to Iron Hollow.")
         self.add_journal("Word reaches you that Mira Thann is quietly gathering capable hands in Greywake against Ashen Brand pressure around Iron Hollow.")
 
-    def choose_named_option(self, title: str, options: dict[str, dict[str, object]]) -> str:
+    def choose_named_option(self, title: str, options: dict[str, dict[str, object]], *, allow_back: bool = False) -> str | None:
         names = list(options)
         while True:
             if options is RACES or options is CLASSES or options is BACKGROUNDS:
@@ -228,7 +302,10 @@ class CharacterCreationMixin:
                     labels = list(names)
             else:
                 labels = [f"{name}: {options[name]['description']}" for name in names]
-            choice = self.choose(title, labels, allow_meta=False)
+            menu_options = labels + ([BACK_OPTION] if allow_back else [])
+            choice = self.choose(title, menu_options, allow_meta=False)
+            if allow_back and choice == len(menu_options):
+                return None
             selected = names[choice - 1]
             self.describe_selection(selected, options[selected], category=title)
             if self.confirm("Lock that in?"):
@@ -264,58 +341,91 @@ class CharacterCreationMixin:
             return
         self.say(f"{name} selected. {details['description']}")
 
-    def choose_ability_scores(self) -> dict[str, int]:
-        method = self.choose(
-            "Choose how to assign your ability scores.",
-            [
+    def choose_ability_scores(self, *, allow_back: bool = False) -> dict[str, int] | None:
+        while True:
+            method_options = [
                 "Standard array (15, 14, 13, 12, 10, 8)",
                 "Point buy (27 points, scores from 8 to 15 before people bonuses)",
-            ],
-            allow_meta=False,
-        )
-        if method == 1:
-            remaining = list(STANDARD_ARRAY)
-            scores: dict[str, int] = {}
-            for ability in ABILITY_ORDER:
-                index = self.choose(
-                    f"Assign a value to {ability_label(ability, include_code=True)}. Remaining scores: {', '.join(str(value) for value in remaining)}",
-                    [str(value) for value in remaining],
-                    allow_meta=False,
-                )
-                scores[ability] = remaining.pop(index - 1)
+            ] + ([BACK_OPTION] if allow_back else [])
+            method = self.choose(
+                "Choose how to assign your ability scores.",
+                method_options,
+                allow_meta=False,
+            )
+            if allow_back and method == len(method_options):
+                return None
+            if method == 1:
+                scores = self.choose_standard_array_scores(allow_back=allow_back)
+                if scores is None:
+                    continue
+                return scores
+            scores = self.choose_point_buy_scores(allow_back=allow_back)
+            if scores is None:
+                continue
             return scores
 
-        return self.choose_point_buy_scores()
+    def choose_standard_array_scores(self, *, allow_back: bool = False) -> dict[str, int] | None:
+        remaining = list(STANDARD_ARRAY)
+        picks: list[tuple[str, int]] = []
+        while len(picks) < len(ABILITY_ORDER):
+            ability = ABILITY_ORDER[len(picks)]
+            options = [str(value) for value in remaining] + ([BACK_OPTION] if allow_back else [])
+            index = self.choose(
+                f"Assign a value to {ability_label(ability, include_code=True)}. Remaining scores: {', '.join(str(value) for value in remaining)}",
+                options,
+                allow_meta=False,
+            )
+            if allow_back and index == len(options):
+                if not picks:
+                    return None
+                _previous_ability, previous_value = picks.pop()
+                remaining.append(previous_value)
+                remaining.sort(key=STANDARD_ARRAY.index)
+                continue
+            picks.append((ability, remaining.pop(index - 1)))
+        return dict(picks)
 
-    def choose_class_skills(self, race: str, class_name: str, background: str) -> list[str]:
+    def choose_class_skills(self, race: str, class_name: str, background: str, *, allow_back: bool = False) -> list[str] | None:
         available = list(CLASSES[class_name]["skill_choices"])
         already_known = set(BACKGROUNDS[background]["skills"]) | set(RACES[race]["skills"])
         pool = [skill for skill in available if skill not in already_known]
         if len(pool) < CLASSES[class_name]["skill_picks"]:
             pool = available
         chosen: list[str] = []
-        for _ in range(CLASSES[class_name]["skill_picks"]):
+        while len(chosen) < CLASSES[class_name]["skill_picks"]:
+            skill_options = [skill for skill in pool if skill not in chosen]
+            labels = [skill_option_label(skill) for skill in skill_options] + ([BACK_OPTION] if allow_back else [])
             choice = self.choose(
                 f"Pick a {class_label(class_name)} skill.",
-                [skill_option_label(skill) for skill in pool if skill not in chosen],
+                labels,
                 allow_meta=False,
             )
-            options = [skill for skill in pool if skill not in chosen]
-            chosen.append(options[choice - 1])
+            if allow_back and choice == len(labels):
+                if not chosen:
+                    return None
+                chosen.pop()
+                continue
+            chosen.append(skill_options[choice - 1])
         return chosen
 
-    def choose_expertise(self, race: str, background: str, class_skills: list[str]) -> list[str]:
+    def choose_expertise(self, race: str, background: str, class_skills: list[str], *, allow_back: bool = False) -> list[str] | None:
         base_skills = set(BACKGROUNDS[background]["skills"]) | set(RACES[race]["skills"]) | set(class_skills)
         pool = sorted(base_skills)
         chosen: list[str] = []
-        for _ in range(2):
+        while len(chosen) < 2:
+            expertise_options = [skill for skill in pool if skill not in chosen]
+            labels = [skill_option_label(skill) for skill in expertise_options] + ([BACK_OPTION] if allow_back else [])
             choice = self.choose(
                 "Choose a skill for Rogue deep practice.",
-                [skill_option_label(skill) for skill in pool if skill not in chosen],
+                labels,
                 allow_meta=False,
             )
-            options = [skill for skill in pool if skill not in chosen]
-            chosen.append(options[choice - 1])
+            if allow_back and choice == len(labels):
+                if not chosen:
+                    return None
+                chosen.pop()
+                continue
+            chosen.append(expertise_options[choice - 1])
         return chosen
 
     def preview_character(self, character: Character) -> None:

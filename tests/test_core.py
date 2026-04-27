@@ -29,7 +29,7 @@ from dnd_game.content import (
     create_tolan_ironshield,
     point_buy_total,
 )
-from dnd_game.dice import roll, roll_d20
+from dnd_game.dice import D20Outcome, roll, roll_d20
 from dnd_game.game import Encounter, TextDnDGame
 from dnd_game.gameplay.combat_flow import TurnState
 from dnd_game.gameplay.magic_points import current_magic_points, magic_point_cost, magic_point_summary
@@ -9010,6 +9010,31 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(game.state.player.ability_scores["STR"], 16)
         self.assertEqual(game.state.player.ability_scores["CHA"], 9)
 
+    def test_custom_character_creation_can_back_to_previous_choice(self) -> None:
+        answers = iter(
+            [
+                "Aric",
+                "1", "1",  # Human + confirm
+                "4",  # back from calling choice
+                "2", "1",  # Dwarf + confirm
+                "2", "1",  # Mage + confirm
+                "1", "1",  # background + confirm
+                "1",  # standard array
+                "1", "1", "1", "1", "1", "1",
+                "1", "1", "1",  # Mage skills
+            ]
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(443))
+
+        character = game.create_custom_character()
+
+        self.assertIsNotNone(character)
+        self.assertEqual(character.race, "Dwarf")
+        self.assertEqual(character.class_name, "Mage")
+        rendered = self.plain_output(log)
+        self.assertIn("4. Back", rendered)
+
     def test_preset_character_creation_flow(self) -> None:
         answers = iter(
             [
@@ -9035,6 +9060,28 @@ class CoreTests(unittest.TestCase):
         self.assertIn(PRESET_CHARACTERS["Warrior"]["name"], rendered)
         self.assertIn("Preset abilities:", rendered)
         self.assertIn("Starting point:", rendered)
+
+    def test_preset_character_creation_can_back_to_start_mode(self) -> None:
+        answers = iter(
+            [
+                "1",  # preset character
+                "4",  # back from preset calling
+                "1",  # preset character again
+                "2",  # Mage preset
+                "1",  # lock preset
+                "1",  # begin adventure
+            ]
+        )
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(444))
+
+        game.start_new_game()
+
+        self.assertIsNotNone(game.state)
+        self.assertEqual(game.state.player.class_name, "Mage")
+        rendered = self.plain_output(log)
+        self.assertIn("4. Back", rendered)
+        self.assertIn("Choose how you want to start.", rendered)
 
     @unittest.skipUnless(RICH_AVAILABLE, "Rich rendering is optional")
     def test_describe_preset_character_uses_rich_rendering_when_available(self) -> None:
@@ -9149,15 +9196,19 @@ class CoreTests(unittest.TestCase):
                     return self.option_index_containing(stripped, "Run the companions drill")
                 if not game.state.flags.get("opening_tutorial_lesson_equipment_complete"):
                     return self.option_index_containing(stripped, "Run the equipment drill")
+                if not game.state.flags.get("opening_tutorial_lesson_combat_complete"):
+                    return self.option_index_containing(stripped, "Run the class combat drill")
                 if not game.state.flags.get("opening_tutorial_lesson_trading_complete"):
                     return self.option_index_containing(stripped, "Run the trading drill")
                 if not game.state.flags.get("opening_tutorial_lesson_resting_complete"):
                     return self.option_index_containing(stripped, "Run the resting drill")
-                return self.option_index_containing(stripped, "Finish the primer")
+                return self.option_index_containing(stripped, "start your prologue")
             if prompt == "Step into the camp lane or return to the primer board.":
                 return self.option_index_containing(stripped, "Open the camp drill")
             if prompt == "Step to the gear table or return to the primer board.":
                 return self.option_index_containing(stripped, "Open the gear table")
+            if prompt == "Step to the sparring rail or return to the primer board.":
+                return self.option_index_containing(stripped, "Open the class combat drill")
             if prompt == "Step to the trade desk or return to the primer board.":
                 return self.option_index_containing(stripped, "Open the trade desk")
             if prompt == "Step to the recovery tents or return to the primer board.":
@@ -9221,10 +9272,27 @@ class CoreTests(unittest.TestCase):
                 if not game.state.flags.get("opening_tutorial_resting_long_rest_taken"):
                     return self.option_index_containing(stripped, "Take a long rest")
                 return self.option_index_containing(stripped, "Back")
+            if prompt in {"Choose a target to read.", "Choose a target to shove."}:
+                return 1
+            if prompt == "Choose an ally to Rally.":
+                return 1
             raise AssertionError(f"Unexpected tutorial menu prompt: {prompt!r}")
+
+        def tutorial_combat_option(prompt: str, options: list[str], **kwargs) -> str:
+            stripped = self.guard_opening_tutorial_prompt(steps, "combat", prompt, options, limit=20)
+            if not game.state.flags.get("opening_tutorial_combat_warrior_read") and "Weapon Read" in stripped:
+                return options[stripped.index("Weapon Read")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_guard") and "Take Guard Stance" in stripped:
+                return options[stripped.index("Take Guard Stance")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_shove") and "Shove" in stripped:
+                return options[stripped.index("Shove")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_rally") and "Warrior Rally" in stripped:
+                return options[stripped.index("Warrior Rally")]
+            return options[stripped.index("End Turn")]
 
         game.scenario_choice = tutorial_choice  # type: ignore[method-assign]
         game.choose = tutorial_menu  # type: ignore[method-assign]
+        game.choose_grouped_combat_option = tutorial_combat_option  # type: ignore[method-assign]
 
         game.scene_opening_tutorial()
 
@@ -9254,12 +9322,14 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Greywake hangs a chalk board", rendered)
         self.assertIn("[Ready] Companions", rendered)
         self.assertIn("[Ready] Equipment", rendered)
+        self.assertIn("[Ready] Class Combat", rendered)
         self.assertIn("[Ready] Trading", rendered)
         self.assertIn("[Ready] Resting", rendered)
         self.assertIn("Tolan Ironshield", rendered)
         self.assertIn("Kaelis Starling", rendered)
         self.assertIn("That is the company rhythm", rendered)
         self.assertIn("Gear lives in the shared inventory", rendered)
+        self.assertIn("That is the Warrior rhythm", rendered)
         self.assertIn("Trade runs through the same shared inventory", rendered)
         self.assertIn("Short rests steady a hurt company", rendered)
 
@@ -9363,6 +9433,135 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Manage equipment for Tolan Ironshield.", choose_prompts)
         rendered = self.plain_output(log)
         self.assertGreaterEqual(rendered.count("fit the Shield to your off hand"), 2)
+
+    def test_opening_tutorial_combat_lesson_tracks_warrior_actions_without_state_leakage(self) -> None:
+        log: list[str] = []
+        game = self.build_opening_tutorial_game(seed=44451, output_fn=log.append)
+        snapshot = self.opening_tutorial_state_snapshot(game)
+        steps = {"scenario": 0, "choose": 0, "combat": 0}
+
+        def lesson_choice(prompt: str, options: list[str], **kwargs) -> int:
+            stripped = self.guard_opening_tutorial_prompt(steps, "scenario", prompt, options, limit=10)
+            if prompt == "Step to the sparring rail or return to the primer board.":
+                return self.option_index_containing(stripped, "Open the class combat drill")
+            raise AssertionError(f"Unexpected combat prompt: {prompt!r}")
+
+        def lesson_menu(prompt: str, options: list[str], **kwargs) -> int:
+            stripped = self.guard_opening_tutorial_prompt(steps, "choose", prompt, options, limit=10)
+            if prompt in {"Choose a target to read.", "Choose a target to shove."}:
+                return 1
+            if prompt == "Choose an ally to Rally.":
+                return 1
+            raise AssertionError(f"Unexpected combat menu prompt: {prompt!r} {stripped!r}")
+
+        def combat_option(prompt: str, options: list[str], **kwargs) -> str:
+            stripped = self.guard_opening_tutorial_prompt(steps, "combat", prompt, options, limit=12)
+            if not game.state.flags.get("opening_tutorial_combat_warrior_read") and "Weapon Read" in stripped:
+                return options[stripped.index("Weapon Read")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_guard") and "Take Guard Stance" in stripped:
+                return options[stripped.index("Take Guard Stance")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_shove") and "Shove" in stripped:
+                return options[stripped.index("Shove")]
+            if not game.state.flags.get("opening_tutorial_combat_warrior_rally") and "Warrior Rally" in stripped:
+                return options[stripped.index("Warrior Rally")]
+            return options[stripped.index("End Turn")]
+
+        game.scenario_choice = lesson_choice  # type: ignore[method-assign]
+        game.choose = lesson_menu  # type: ignore[method-assign]
+        game.choose_grouped_combat_option = combat_option  # type: ignore[method-assign]
+
+        self.assertTrue(game.run_opening_tutorial_combat_lesson())
+
+        self.assertTrue(game.state.flags["opening_tutorial_lesson_combat_complete"])
+        self.assertFalse(game.state.flags.get("opening_tutorial_combat_lesson_active"))
+        self.assert_opening_tutorial_state_restored(game, snapshot)
+        rendered = self.plain_output(log)
+        self.assertIn("Weapon Read", rendered)
+        self.assertIn("Take Guard Stance", rendered)
+        self.assertIn("Warrior Rally", rendered)
+        self.assertIn("That is the Warrior rhythm", rendered)
+
+    def test_opening_tutorial_combat_lesson_uses_mage_and_rogue_tracks(self) -> None:
+        cases = [
+            (
+                "Mage",
+                {"STR": 8, "DEX": 14, "CON": 13, "INT": 16, "WIS": 12, "CHA": 10},
+                ["Arcana", "Insight", "Investigation"],
+                ["Pattern Read", "Ground", "Minor Channel"],
+                "That is the Mage rhythm",
+            ),
+            (
+                "Rogue",
+                {"STR": 10, "DEX": 16, "CON": 13, "INT": 12, "WIS": 10, "CHA": 12},
+                ["Stealth", "Sleight of Hand", "Perception", "Acrobatics"],
+                ["Mark Target", "Strike with"],
+                "That is the Rogue rhythm",
+            ),
+        ]
+
+        for class_name, scores, skills, ordered_actions, completion_text in cases:
+            with self.subTest(class_name=class_name):
+                player = build_character(
+                    name="Vale",
+                    race="Human",
+                    class_name=class_name,
+                    background="Soldier",
+                    base_ability_scores=scores,
+                    class_skill_choices=skills,
+                )
+                log: list[str] = []
+                game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(44452))
+                game.state = GameState(player=player, current_scene="opening_tutorial")
+                game.ensure_state_integrity()
+                snapshot = self.opening_tutorial_state_snapshot(game)
+                steps = {"scenario": 0, "choose": 0, "combat": 0}
+                pending_actions = list(ordered_actions)
+
+                def lesson_choice(prompt: str, options: list[str], **kwargs) -> int:
+                    stripped = self.guard_opening_tutorial_prompt(steps, "scenario", prompt, options, limit=10)
+                    if prompt == "Step to the sparring rail or return to the primer board.":
+                        return self.option_index_containing(stripped, "Open the class combat drill")
+                    raise AssertionError(f"Unexpected {class_name} combat prompt: {prompt!r}")
+
+                def lesson_menu(prompt: str, options: list[str], **kwargs) -> int:
+                    stripped = self.guard_opening_tutorial_prompt(steps, "choose", prompt, options, limit=10)
+                    if prompt in {
+                        "Choose a target for Pattern Read.",
+                        "Choose a target for Minor Channel.",
+                        "Choose a target to mark.",
+                        "Choose a target for your attack.",
+                    }:
+                        return 1
+                    raise AssertionError(f"Unexpected {class_name} combat menu prompt: {prompt!r} {stripped!r}")
+
+                def combat_option(prompt: str, options: list[str], **kwargs) -> str:
+                    stripped = self.guard_opening_tutorial_prompt(steps, "combat", prompt, options, limit=12)
+                    if class_name == "Rogue":
+                        if not game.state.flags.get("opening_tutorial_combat_rogue_mark"):
+                            return next(option for option, plain in zip(options, stripped) if "Mark Target" in plain)
+                        if not game.state.flags.get("opening_tutorial_combat_rogue_veilstrike"):
+                            return next(option for option, plain in zip(options, stripped) if "Strike with" in plain)
+                        return options[stripped.index("End Turn")]
+                    while pending_actions:
+                        action = pending_actions[0]
+                        for index, option in enumerate(stripped):
+                            if action in option:
+                                pending_actions.pop(0)
+                                return options[index]
+                        break
+                    return options[stripped.index("End Turn")]
+
+                game.scenario_choice = lesson_choice  # type: ignore[method-assign]
+                game.choose = lesson_menu  # type: ignore[method-assign]
+                game.choose_grouped_combat_option = combat_option  # type: ignore[method-assign]
+                game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=20, rolls=[20], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+
+                self.assertTrue(game.run_opening_tutorial_combat_lesson())
+
+                self.assertTrue(game.state.flags["opening_tutorial_lesson_combat_complete"])
+                self.assert_opening_tutorial_state_restored(game, snapshot)
+                rendered = self.plain_output(log)
+                self.assertIn(completion_text, rendered)
 
     def test_opening_tutorial_trading_lesson_tracks_sale_and_purchase_without_state_leakage(self) -> None:
         log: list[str] = []
@@ -10567,17 +10766,22 @@ class CoreTests(unittest.TestCase):
         ally.current_hp = max(1, ally.current_hp - 5)
         enemy = create_enemy("bandit")
 
-        self_answers = iter(["3", "1", "1"])
+        self_answers = iter(["1"])
         self_game = TextDnDGame(input_fn=lambda _: next(self_answers), output_fn=lambda _: None, rng=random.Random(8152))
         self_game.state = GameState(player=player, companions=[ally], current_scene="road_ambush", inventory={"potion_healing": 1})
         player.current_hp = max(1, player.current_hp - 4)
         player_before = player.current_hp
         self_game.perform_weapon_attack = lambda attacker, target, heroes, enemies, dodging: setattr(target, "current_hp", target.current_hp - 1)
+        self_game.choose_grouped_combat_option = lambda prompt, options, **kwargs: (
+            next(option for option in options if "Potion of Healing" in strip_ansi(option))
+            if player.current_hp < player.max_hp
+            else next(option for option in options if "Strike with" in strip_ansi(option))
+        )  # type: ignore[method-assign]
         self_game.player_turn(player, [player, ally], [enemy], Encounter(title="Test", description="", enemies=[enemy], allow_flee=False), set())
         self.assertGreater(player.current_hp, player_before)
         self.assertLess(enemy.current_hp, enemy.max_hp)
 
-        feed_answers = iter(["5", "1", "2"])
+        feed_answers = iter(["1", "2"])
         feed_game = TextDnDGame(input_fn=lambda _: next(feed_answers), output_fn=lambda _: None, rng=random.Random(8153))
         feed_player = build_character(
             name="Velkor",
@@ -10593,6 +10797,11 @@ class CoreTests(unittest.TestCase):
         ally_before = feed_ally.current_hp
         feed_enemy = create_enemy("bandit")
         feed_game.state = GameState(player=feed_player, companions=[feed_ally], current_scene="road_ambush", inventory={"potion_healing": 1})
+        feed_game.choose_grouped_combat_option = lambda prompt, options, **kwargs: (
+            next(option for option in options if "Use an Item" in strip_ansi(option))
+            if any("Use an Item" in strip_ansi(option) for option in options)
+            else next(option for option in options if "End Turn" in strip_ansi(option))
+        )  # type: ignore[method-assign]
         feed_game.player_turn(feed_player, [feed_player, feed_ally], [feed_enemy], Encounter(title="Test", description="", enemies=[feed_enemy], allow_flee=False), set())
         self.assertGreater(feed_ally.current_hp, ally_before)
         self.assertEqual(feed_enemy.current_hp, feed_enemy.max_hp)

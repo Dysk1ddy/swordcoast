@@ -15,17 +15,19 @@ from .encounter import Encounter
 
 
 class StoryIntroMixin:
-    OPENING_TUTORIAL_LESSON_ORDER = ("companions", "equipment", "trading", "resting")
+    OPENING_TUTORIAL_LESSON_ORDER = ("companions", "equipment", "combat", "trading", "resting")
     OPENING_TUTORIAL_ACTIVE_LESSONS = OPENING_TUTORIAL_LESSON_ORDER
     OPENING_TUTORIAL_LESSON_TITLES = {
         "companions": "Companions",
         "equipment": "Equipment",
+        "combat": "Class Combat",
         "trading": "Trading",
         "resting": "Resting",
     }
     OPENING_TUTORIAL_LESSON_SUMMARIES = {
         "companions": "Review the party, send one road hand to camp, and call another into the line.",
         "equipment": "Fit a shield and a spare blade so the line understands who carries what.",
+        "combat": "Use your class buttons against a sparring dummy and read what the combat menu is telling you.",
         "trading": "Sell one spare shield and buy fresh bread from the quartermaster's counter.",
         "resting": "Take one short rest, then a long rest, and see what each one actually restores.",
     }
@@ -142,6 +144,33 @@ class StoryIntroMixin:
                 self.state.flags["opening_tutorial_resting_short_rest_taken"] = True
             elif event_key == "long_rest":
                 self.state.flags["opening_tutorial_resting_long_rest_taken"] = True
+        if self.state.flags.get("opening_tutorial_combat_lesson_active"):
+            if details.get("actor_name") != self.state.player.name:
+                return
+            class_name = self.state.player.class_name
+            if class_name == "Warrior":
+                combat_flags = {
+                    "combat_weapon_read": "opening_tutorial_combat_warrior_read",
+                    "combat_guard_stance": "opening_tutorial_combat_warrior_guard",
+                    "combat_warrior_shove": "opening_tutorial_combat_warrior_shove",
+                    "combat_warrior_rally": "opening_tutorial_combat_warrior_rally",
+                }
+            elif class_name == "Mage":
+                combat_flags = {
+                    "combat_pattern_read": "opening_tutorial_combat_mage_pattern_read",
+                    "combat_ground": "opening_tutorial_combat_mage_ground",
+                    "combat_minor_channel": "opening_tutorial_combat_mage_channel",
+                }
+            elif class_name == "Rogue":
+                combat_flags = {
+                    "combat_rogue_mark": "opening_tutorial_combat_rogue_mark",
+                    "combat_veilstrike": "opening_tutorial_combat_rogue_veilstrike",
+                }
+            else:
+                combat_flags = {"combat_weapon_strike": "opening_tutorial_combat_basic_strike"}
+            flag = combat_flags.get(event_key)
+            if flag:
+                self.state.flags[flag] = True
 
     def record_opening_tutorial_companion_event(self, event_key: str, *, companion_name: str | None = None) -> None:
         self.record_opening_tutorial_event(event_key, companion_name=companion_name)
@@ -359,6 +388,194 @@ class StoryIntroMixin:
             ),
         )
 
+    def setup_opening_tutorial_combat_lesson(self) -> None:
+        assert self.state is not None
+        self.state.current_scene = "opening_tutorial"
+        self.state.companions = []
+        self.state.camp_companions = []
+        self.recruit_companion(create_tolan_ironshield())
+        self.state.journal.clear()
+        self.state.player.current_hp = self.state.player.max_hp
+        self.state.player.temp_hp = 0
+        self.state.player.conditions.clear()
+        if self.state.player.max_resources.get("mp", 0):
+            self.state.player.resources["mp"] = self.state.player.max_resources["mp"]
+        self.state.flags["opening_tutorial_combat_lesson_active"] = True
+        self.state.flags["opening_tutorial_combat_round"] = 0
+        for flag, _text in self.opening_tutorial_combat_task_specs():
+            self.state.flags[flag] = False
+        self._opening_tutorial_combat_target = None
+
+    def opening_tutorial_combat_task_specs(self) -> list[tuple[str, str]]:
+        assert self.state is not None
+        class_name = self.state.player.class_name
+        if class_name == "Warrior":
+            return [
+                ("opening_tutorial_combat_warrior_read", "Use Weapon Read on the sparring dummy."),
+                ("opening_tutorial_combat_warrior_guard", "Take Guard Stance and watch the defensive tradeoff."),
+                ("opening_tutorial_combat_warrior_shove", "Shove the dummy so Stability becomes the target."),
+                ("opening_tutorial_combat_warrior_rally", "Spend 1 Grit with Warrior Rally on yourself or Tolan."),
+            ]
+        if class_name == "Mage":
+            return [
+                ("opening_tutorial_combat_mage_pattern_read", "Use Pattern Read on the wired dummy."),
+                ("opening_tutorial_combat_mage_ground", "Use Ground before the next channel."),
+                ("opening_tutorial_combat_mage_channel", "Cast Minor Channel and spend MP against the read lane."),
+            ]
+        if class_name == "Rogue":
+            return [
+                ("opening_tutorial_combat_rogue_mark", "Use Mark Target on the dummy's loose red strap."),
+                ("opening_tutorial_combat_rogue_veilstrike", "Strike the marked dummy and trigger Veilstrike."),
+            ]
+        return [("opening_tutorial_combat_basic_strike", "Strike the sparring dummy once.")]
+
+    def opening_tutorial_combat_intro_text(self) -> str:
+        assert self.state is not None
+        class_name = self.state.player.class_name
+        if class_name == "Warrior":
+            return (
+                "The sparring rail has split shields stacked like firewood and a straw dummy braced on a muddy post. "
+                "The lane steward points at your stance first, then at the dummy's feet."
+            )
+        if class_name == "Mage":
+            return (
+                "Copper wire loops around the straw dummy's ribs, buzzing softly whenever the yard wind crosses it. "
+                "A cracked glass bead hangs at the center so your pattern has something to answer."
+            )
+        if class_name == "Rogue":
+            return (
+                "A red strap hangs loose across the dummy's ribs, close enough to cut and bright enough to remember. "
+                "Tolan stands to one side so the opening feels like a fight instead of knife practice."
+            )
+        return (
+            "The sparring rail keeps one straw dummy under a patched canvas hood. "
+            "Someone has chalked fresh hit marks across its chest."
+        )
+
+    def opening_tutorial_combat_instruction_text(self) -> str:
+        assert self.state is not None
+        class_name = self.state.player.class_name
+        if class_name == "Warrior":
+            return "Task board: use Weapon Read, take Guard Stance, Shove the dummy, then spend Grit with Warrior Rally."
+        if class_name == "Mage":
+            return "Task board: use Pattern Read, use Ground, then cast Minor Channel while you still have MP."
+        if class_name == "Rogue":
+            return "Task board: use Mark Target, then Strike with your weapon while the mark is up so Veilstrike fires."
+        return "Task board: strike the dummy once and read the combat menu before you leave the rail."
+
+    def opening_tutorial_combat_reminder_text(self) -> str:
+        assert self.state is not None
+        class_name = self.state.player.class_name
+        if class_name == "Warrior":
+            return "The lane steward taps the shield rail. Read, guard, shove, and rally before you leave the mud."
+        if class_name == "Mage":
+            return "The copper bead still hums. Read the pattern, ground yourself, and send one channel through it."
+        if class_name == "Rogue":
+            return "The red strap is still hanging there. Mark it, then cut into the opening."
+        return "The chalk marks are still waiting. Take one clean swing before you leave."
+
+    def opening_tutorial_combat_completion_text(self) -> str:
+        assert self.state is not None
+        class_name = self.state.player.class_name
+        if class_name == "Warrior":
+            return "That is the Warrior rhythm: read the target, hold the lane, break footing, and spend Grit when the line needs a hard call."
+        if class_name == "Mage":
+            return "That is the Mage rhythm: read the weak lane, ground the channel, and spend MP where the pattern gives way."
+        if class_name == "Rogue":
+            return "That is the Rogue rhythm: mark the opening, strike when the attention breaks, and let Veilstrike turn timing into damage."
+        return "That is the combat rhythm: read the menu, choose the move, and watch the target numbers answer."
+
+    def opening_tutorial_combat_task_lines(self) -> list[str]:
+        assert self.state is not None
+        lines: list[str] = []
+        for flag, text in self.opening_tutorial_combat_task_specs():
+            marker = "[x]" if self.state.flags.get(flag) else "[ ]"
+            lines.append(f"{marker} {text}")
+        return lines
+
+    def opening_tutorial_combat_lesson_succeeded(self) -> bool:
+        assert self.state is not None
+        return all(bool(self.state.flags.get(flag)) for flag, _text in self.opening_tutorial_combat_task_specs())
+
+    def opening_tutorial_combat_target(self):
+        target = getattr(self, "_opening_tutorial_combat_target", None)
+        if target is not None and target.is_conscious():
+            return target
+        target = create_enemy("bandit", name="Split-Rail Dummy")
+        target.max_hp = max(target.max_hp, 60)
+        target.current_hp = target.max_hp
+        target.xp_value = 0
+        target.gold_value = 0
+        target.tags = ["enemy", "training"]
+        target.weapon.damage = "1d1"
+        self._opening_tutorial_combat_target = target
+        return target
+
+    def run_opening_tutorial_combat_turn(self) -> None:
+        assert self.state is not None
+        actor = self.state.player
+        target = self.opening_tutorial_combat_target()
+        if target.current_hp < max(1, target.max_hp // 4):
+            target.current_hp = target.max_hp
+        heroes = self.state.party_members()
+        enemies = [target]
+        encounter = Encounter(
+            title="Frontier Primer: Class Combat",
+            description="The sparring rail gives you room to use the live combat menu without an enemy turn.",
+            enemies=enemies,
+            allow_flee=False,
+            allow_parley=False,
+            allow_post_combat_random_encounter=False,
+        )
+        previous_in_combat = getattr(self, "_in_combat", False)
+        previous_active_encounter = getattr(self, "_active_encounter", None)
+        previous_active_heroes = getattr(self, "_active_combat_heroes", None)
+        previous_active_enemies = getattr(self, "_active_combat_enemies", None)
+        previous_active_dodging = getattr(self, "_active_dodging_names", frozenset())
+        previous_active_round = getattr(self, "_active_round_number", None)
+        try:
+            self._in_combat = True
+            self._active_encounter = encounter
+            self._active_combat_heroes = heroes
+            self._active_combat_enemies = enemies
+            self._active_dodging_names = set()
+            self.state.flags["opening_tutorial_combat_round"] = int(
+                self.state.flags.get("opening_tutorial_combat_round", 0) or 0
+            ) + 1
+            self._active_round_number = int(self.state.flags["opening_tutorial_combat_round"])
+            self.prepare_class_resources_for_combat(actor)
+            if actor.max_resources.get("mp", 0) and actor.resources.get("mp", 0) <= 0:
+                actor.resources["mp"] = actor.max_resources["mp"]
+            self.player_turn(actor, heroes, enemies, encounter, set())
+        finally:
+            self._active_encounter = previous_active_encounter
+            self._active_combat_heroes = previous_active_heroes
+            self._active_combat_enemies = previous_active_enemies
+            self._active_dodging_names = previous_active_dodging
+            self._active_round_number = previous_active_round
+            self._in_combat = previous_in_combat
+
+    def run_opening_tutorial_combat_lesson(self) -> bool:
+        try:
+            return self.run_opening_tutorial_lesson_in_sandbox(
+                "combat",
+                setup_lesson=self.setup_opening_tutorial_combat_lesson,
+                run_lesson=lambda: self.run_opening_tutorial_task_lesson(
+                    title=f"Frontier Primer: {self.state.player.public_class} Combat",
+                    intro_text=self.opening_tutorial_combat_intro_text(),
+                    instruction_text=self.opening_tutorial_combat_instruction_text(),
+                    task_lines_fn=self.opening_tutorial_combat_task_lines,
+                    success_fn=self.opening_tutorial_combat_lesson_succeeded,
+                    action_prompt="Step to the sparring rail or return to the primer board.",
+                    action_text="Open the class combat drill.",
+                    action_fn=self.run_opening_tutorial_combat_turn,
+                    reminder_text=self.opening_tutorial_combat_reminder_text(),
+                ),
+                completion_text=self.opening_tutorial_combat_completion_text(),
+            )
+        finally:
+            self._opening_tutorial_combat_target = None
+
     def setup_opening_tutorial_trading_lesson(self) -> None:
         assert self.state is not None
         self.state.current_scene = "opening_tutorial"
@@ -505,6 +722,7 @@ class StoryIntroMixin:
         runners = {
             "companions": self.run_opening_tutorial_companions_lesson,
             "equipment": self.run_opening_tutorial_equipment_lesson,
+            "combat": self.run_opening_tutorial_combat_lesson,
             "trading": self.run_opening_tutorial_trading_lesson,
             "resting": self.run_opening_tutorial_resting_lesson,
         }
@@ -2413,7 +2631,7 @@ class StoryIntroMixin:
                 self.reward_party(xp=10, gold=4, reason="turning Liar's Blessing into a card-table passphrase")
                 self.speaker(
                     "Vessa Marr",
-                    "Rain-marked? Gods, no. That phrase would get you robbed in three districts. The real buyers ask whether the load is blue before they ask whether it is legal.",
+                    "Rain-marked? Gods, no. That phrase would get you robbed in three districts. Careful buyers ask whether the load is blue before they ask whether it is legal.",
                 )
             elif selection_key == "smoke":
                 self.state.flags["greywake_vessa_smoke_asked"] = True

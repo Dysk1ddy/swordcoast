@@ -97,13 +97,11 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
         "combat_only": True,
         "ac_bonus": 1,
         "defense_bonus_percent": 5,
-        "avoidance_bonus": 1,
     },
     "guard_stance": {
         "name": "Guard Stance",
         "combat_only": True,
         "defense_bonus_percent": 20,
-        "avoidance_bonus": 1,
         "stability_bonus": 2,
         "attack_penalty": 2,
     },
@@ -111,7 +109,6 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
         "name": "Guard Stance",
         "combat_only": True,
         "defense_bonus_percent": 20,
-        "avoidance_bonus": 1,
         "stability_bonus": 2,
         "attack_penalty": 2,
     },
@@ -243,7 +240,6 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
     "false_target": {
         "name": "False Target",
         "combat_only": True,
-        "avoidance_bonus": 1,
         "incoming_attack_penalty": 2,
     },
     "shadow_lane": {
@@ -258,7 +254,6 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
     "smoke_jar": {
         "name": "Smoke Jar",
         "combat_only": True,
-        "avoidance_bonus": 1,
         "incoming_attack_penalty": 1,
         "flee_bonus": 1,
     },
