@@ -26,14 +26,14 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 2. Greywake setup, briefing, contract-house social hub, and optional Mira-assigned road companion
 3. Emberway ambush and Tolan recruitment point, then a cleared-road travel choice with optional side branches into `Liar's Circle`, `False Roadwarden Checkpoint`, and `False Tollstones` before Iron Hollow
 4. Iron Hollow arrival, inn / shrine / shop / steward loops, orchard / exchange hubs, and a possible early `Cinderfall` reveal on a strong `Insight` read
-   - Edermath Orchard can also reveal Daran's old adventurer's cache: a `Stealth` DC 12 route to recover `edermath_cache_compass`, or a watcher encounter on failure.
+   - Orchard Wall can also reveal Daran's old adventurer's cache: a `Stealth` DC 12 route to recover `edermath_cache_compass`, or a watcher encounter on failure.
 5. Blackglass Well route:
    dig-ring fight -> salt cart or supply trench branch -> Vaelith Marr miniboss
 6. Red Mesa Hold route:
    outer shelf fight -> drover hollow or shrine ledge branch -> Brughor Skullcleaver miniboss
 7. Optional `Cinderfall Ruins` route if the hidden relay is uncovered:
    collapsed gate -> ash chapel or broken storehouse -> ember relay node
-8. Stonehill war-room fixed event once both major side routes are cleared
+8. Ashlamp war-room fixed event once both major side routes are cleared
 9. Ashfall Watch route:
    gate fight -> prisoner yard / signal event -> lower barracks fight -> Rukhar miniboss
 10. Lantern vigil fixed event back in Iron Hollow
@@ -47,7 +47,7 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 
 ## Drafted Future Inserts
 
-- `information/Story/HIGH_ROAD_LIARS_CIRCLE_PUZZLE_DRAFT.md`: implemented post-ambush High Road wilderness branch built around four lying statues, with `Liar's Blessing` or `Liar's Curse` social-skill consequences.
+- `information/Story/HIGH_ROAD_LIARS_CIRCLE_PUZZLE_DRAFT.md`: implemented post-ambush Emberway wilderness branch built around four lying statues, with `Liar's Blessing` or `Liar's Curse` social-skill consequences.
 - `information/Story/ACT1_PRE_NEVERWINTER_ELIRA_DRAFT.md`: legacy draft for the implemented Elira opening insert; keep only as historical implementation context.
 - `information/Story/MIRA_NEVERWINTER_DIALOGUE_DRAFT.md`: legacy draft for expanded Mira Thann briefing dialogue; keep only as historical implementation context.
 - `information/Story/COMPANION_CAMP_BANTER_DRAFT.md`: implemented companion-to-companion camp banter registry, Act 1 and Act 2 branching dialogue, gameplay and relationship consequences, and Act 3 secret-architect guardrails for keeping the second villain hidden until the planned midpoint reveal.
@@ -56,11 +56,11 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 
 | Companion | Race / Class | Summary | Recruitment point | Relationship bonuses |
 | --- | --- | --- | --- | --- |
-| Kaelis Starling | Astral Elf Ranger | scout and ambush reader | optional contract companion in Greywake before the road | Great: `+1 Perception`, `+1 initiative`; Exceptional: `+1 attack` |
-| Rhogar Valeguard | Forged Paladin | oathsworn caravan guardian | optional contract companion in Greywake before the road | Great: `+1 damage`; Exceptional: `+1 AC` |
-| Tolan Ironshield | Dwarf Fighter | shield-wall caravan veteran | joins after Roadside Ambush or later from the inn | Great: `+1 AC`; Exceptional: `+1 CON saves` |
-| Bryn Underbough | Halfling Rogue | trail scout and rumor-reader | recruited at Stonehill Inn on Persuasion success | Great: `+1 Stealth`, `+1 initiative`; Exceptional: `+1 Perception` |
-| Elira Dawnmantle | Human Cleric | shrine healer and faith anchor | first met at Wayside Luck Shrine, recruitable there or at Greywake before the second shared combat; if missed, recruited at Iron Hollow's shrine | Great: `+1 healing`; Exceptional: `+1 WIS saves` |
+| Kaelis Starling | Astral Elf Rogue / Assassin | scout and ambush reader | optional contract companion in Greywake before the road | Great: `+1 Perception`, `+1 initiative`; Exceptional: `+1 attack` |
+| Rhogar Valeguard | Forged Warrior / Bloodreaver | oathsworn caravan guardian | optional contract companion in Greywake before the road | Great: `+1 damage`; Exceptional: `+1 AC` |
+| Tolan Ironshield | Dwarf Warrior / Juggernaut | shield-wall caravan veteran | joins after Roadside Ambush or later from the inn | Great: `+1 AC`; Exceptional: `+1 CON saves` |
+| Bryn Underbough | Halfling Rogue | trail scout and rumor-reader | recruited at Ashlamp Inn on Persuasion success | Great: `+1 Stealth`, `+1 initiative`; Exceptional: `+1 Perception` |
+| Elira Lanternward | Human Mage / Aethermancer | shrine healer and faith anchor | first met at Wayside Lantern Shrine, recruitable there or at Greywake before the second shared combat; if missed, recruited at Iron Hollow's shrine | Great: `+1 healing`; Exceptional: `+1 WIS saves` |
 
 ### Scene support hooks
 
@@ -104,9 +104,9 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 | `ash_brand_enforcer` | Ashen Brand Enforcer | 2 | 18 | 13 | Hooked Falchion `1d8+1` | 100 | 14 | punishes buffed or marked heroes and can strip `Blessed` |
 | `ember_channeler` | Ember Channeler | 2 | 15 | 12 | Ember Brand `1d6+1` | 100 | 12 | support caster that applies `Marked` for team focus fire |
 | `carrion_stalker` | Carrion Stalker | 2 | 17 | 14 | Serrated Talons `1d6+2` | 100 | 0 | stealth predator that opens Invisible and applies `Bleeding` |
-| `skeletal_sentry` | Skeletal Sentry | 1 | 13 | 12 | Rusty Spear `1d6` | 50 | 2 | undead site defender used around Old Owl Well and the manor |
-| `orc_raider` | Orc Raider | 1 | 16 | 14 | Battleaxe `1d8+1` | 75 | 10 | hill raider used at Wyvern Tor and sometimes Ashfall |
-| `orc_bloodchief` | Orc Bloodchief | 2 | 33 | 15 | Great Axe `1d12+1` | 150 | 30 | named Wyvern Tor miniboss template with self-buff war cry |
+| `skeletal_sentry` | Skeletal Sentry | 1 | 13 | 12 | Rusty Spear `1d6` | 50 | 2 | undead site defender used around Blackglass Well and the manor |
+| `orc_raider` | Orc Raider | 1 | 16 | 14 | Battleaxe `1d8+1` | 75 | 10 | hill raider used at Red Mesa Hold and sometimes Ashfall |
+| `orc_bloodchief` | Orc Bloodchief | 2 | 33 | 15 | Great Axe `1d12+1` | 150 | 30 | named Red Mesa Hold miniboss template with self-buff war cry |
 | `ogre_brute` | Ogre Brute | 2 | 38 | 11 | Maul Club `2d8` | 125 | 18 | heavy hitter used in hill and boss-support fights |
 | `gravecaller` | Gravecaller | 2 | 26 | 13 | Gravehook Dagger `1d6` | 125 | 24 | caster-style undead handler with fear and ash-blind control |
 | `nothic` | Nothic | 2 | 29 | 14 | Hooked Claws `2d4` | 150 | 22 | manor horror with Weird Insight style control |
@@ -186,18 +186,19 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 
 | Quest id | Title | Giver | Location | Completion flag | Reward |
 | --- | --- | --- | --- | --- | --- |
-| `secure_miners_road` | Stop the Watchtower Raids | Tessa Harrow | Steward's Hall | `ashfall_watch_cleared` | `45 XP`, `25 gp` |
-| `restore_barthen_supplies` | Keep the Shelves Full | Barthen | Barthen's Provisions | `ashfall_watch_cleared` | `30 XP`, `12 gp`, `bread_round x2`, `camp_stew_jar x1` |
-| `reopen_lionshield_trade` | Reopen the Trade Lane | Linene Graywind | Lionshield Coster | `ashfall_watch_cleared` | `35 XP`, `18 gp`, `potion_healing x1`, `antitoxin_vial x1` |
-| `marked_keg_investigation` | The Marked Keg | Mara Stonehill | Stonehill Inn | `marked_keg_resolved` | `70 XP`, `24 gp`, `innkeeper_credit_token x1` |
-| `songs_for_the_missing` | Songs for the Missing | Sella Quill | Stonehill Inn | `songs_for_missing_jerek_detail`, `songs_for_missing_tam_detail`, `songs_for_missing_nera_detail` | `65 XP`, `18 gp`, `sella_ballad_token x1` |
-| `quiet_table_sharp_knives` | Quiet Table, Sharp Knives | Nera Doss | Stonehill Inn | `quiet_table_knives_resolved` | `80 XP`, `28 gp`, `blackseal_taster_pin x1` |
-| `find_dain_harl` | Bring Back Dain's Name | Jerek Harl | Stonehill Inn | `dain_harl_truth_found` | `85 XP`, `26 gp`, `harl_road_knot x1` |
+| `trace_blackwake_cell` | Embers Before the Road | Mira Thann | Blackwake Crossing | `blackwake_completed` | `90 XP`, `35 gp`, `miras_blackwake_seal x1`, `scroll_ember_ward x1` |
+| `secure_miners_road` | Stop the Watchtower Raids | Steward Tessa Harrow | Steward's Hall | `ashfall_watch_cleared` | `100 XP`, `50 gp`, `roadwarden_cloak x1`, `travel_biscuits x4` |
+| `restore_barthen_supplies` | Keep the Shelves Full | Hadrik | Hadrik's Provisions | `ashfall_watch_cleared` | `75 XP`, `35 gp`, `barthen_resupply_token x1`, `bread_round x4`, `camp_stew_jar x2` |
+| `reopen_lionshield_trade` | Reopen the Trade Lane | Linene Ironward | Ironbound Trading Post | `ashfall_watch_cleared` | `85 XP`, `45 gp`, `lionshield_quartermaster_badge x1`, `potion_healing x2`, `antitoxin_vial x2` |
+| `marked_keg_investigation` | The Marked Keg | Mara Ashlamp | Ashlamp Inn | `marked_keg_resolved` | `70 XP`, `24 gp`, `innkeeper_credit_token x1` |
+| `songs_for_the_missing` | Songs for the Missing | Sella Quill | Ashlamp Inn | `songs_for_missing_jerek_detail`, `songs_for_missing_tam_detail`, `songs_for_missing_nera_detail` | `65 XP`, `18 gp`, `sella_ballad_token x1` |
+| `quiet_table_sharp_knives` | Quiet Table, Sharp Knives | Nera Doss | Ashlamp Inn | `quiet_table_knives_resolved` | `80 XP`, `28 gp`, `blackseal_taster_pin x1` |
+| `find_dain_harl` | Bring Back Dain's Name | Jerek Harl | Ashlamp Inn | `dain_harl_truth_found` | `85 XP`, `26 gp`, `harl_road_knot x1` |
 | `false_manifest_circuit` | False Manifest Circuit | Sabra Kestrel | Oren Vale's Contract House | `false_manifest_oren_detail`, `false_manifest_vessa_detail`, `false_manifest_garren_detail` | `75 XP`, `24 gp`, `kestrel_ledger_clasp x1` |
-| `silence_old_owl_well` | Silence Old Owl Well | Halia Thornton | Miner's Exchange | `old_owl_well_cleared` | `50 XP`, `24 gp`, `scroll_clarity x1` |
-| `break_wyvern_tor_raiders` | Break the Wyvern Tor Raiders | Daran Edermath | Edermath Orchard | `wyvern_tor_cleared` | `50 XP`, `20 gp`, `greater_healing_draught x1` |
-| `bryn_loose_ends` | Loose Ends | Bryn Underbough | personal / road chain | `bryn_loose_ends_resolved` | no listed item reward; resolves by ledger choice |
-| `elira_faith_under_ash` | Faith Under Ash | Elira Dawnmantle | personal / Ashfall field scene | `elira_faith_under_ash_resolved` | no listed item reward; resolves by mercy or execution choice |
+| `silence_old_owl_well` | Silence Blackglass Well | Halia Vey | Delvers' Exchange | `old_owl_well_cleared` | `100 XP`, `45 gp`, `gravequiet_amulet x1`, `scroll_clarity x1`, `blessed_salve x1` |
+| `break_wyvern_tor_raiders` | Break the Red Mesa Raiders | Daran Orchard | Orchard Wall | `wyvern_tor_cleared` | `100 XP`, `40 gp`, `edermath_scout_buckle x1`, `greater_healing_draught x1` |
+| `bryn_loose_ends` | Loose Ends | Bryn Underbough | personal / road chain | `bryn_loose_ends_resolved` | `80 XP`, `25 gp`, `bryns_cache_keyring x1`, `dust_of_disappearance x1` |
+| `elira_faith_under_ash` | Faith Under Ash | Elira Lanternward | personal / Ashfall field scene | `elira_faith_under_ash_resolved` | `80 XP`, `20 gp`, `dawnmantle_mercy_charm x1`, `blessed_salve x1` |
 
 ### Quest state logic
 
@@ -218,13 +219,13 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - reduced by clearing enemy outer sites and can be driven to `0` by `Cinderfall` sabotage
 - `act1_survivors_saved`
   - default `0`
-  - raised through rescue branches such as Old Owl, Wyvern Tor, and Cinderfall
+  - raised through rescue branches such as Blackglass, Red Mesa Hold, and Cinderfall
 
 ### Hidden route unlocks
 
-- `Phandalin` arrival `Insight` success can reveal `Cinderfall Ruins`
-- `Old Owl Well` supply trench notes can reveal `Cinderfall Ruins`
-- `Wyvern Tor` rescued-drover follow-up can reveal `Cinderfall Ruins`
+- `Iron Hollow` arrival `Insight` success can reveal `Cinderfall Ruins`
+- `Blackglass Well` supply trench notes can reveal `Cinderfall Ruins`
+- `Red Mesa Hold` rescued-drover follow-up can reveal `Cinderfall Ruins`
 
 ### Ashfall consequences
 
@@ -238,16 +239,16 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
 ### Ending tiers
 
 - `clean_victory`: low fear, low Ashen strength, enough survivors saved, and no major strained companion fallout
-- `costly_victory`: the middle state when Phandalin wins but carries visible damage or tension
+- `costly_victory`: the middle state when Iron Hollow wins but carries visible damage or tension
 - `fractured_victory`: high fear, high remaining enemy pressure, or a strained late-game moral path with too few rescues
 - The game records `act2_starting_pressure` from these outcomes so Act 2 can open under different levels of strain
 
 ## Early Story Recruitment And Encounter Notes
 
-### Pre-Neverwinter Elira and Greywake sequence
+### Pre-Greywake Elira and Greywake sequence
 
 - Background prologues now converge at `Wayside Luck Shrine` before Mira Thann's briefing.
-- Elira Dawnmantle is introduced as the first companion candidate.
+- Elira Lanternward is introduced as the first companion candidate.
 - First Elira recruitment chance:
   - Wayside Luck Shrine after helping with poison, prayer, road marks, or triage flow.
   - Helping Elira makes recruitment automatic or much easier.
@@ -262,9 +263,9 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - Ashen Brand cutters try to steal or burn an outcome-marked manifest.
   - Preserving the manifest can set `system_profile_seeded` and `varyn_route_pattern_seen`.
   - If Elira is recruited, she can bless the player before the fight.
-  - If Elira is not recruited, she protects the wounded line and later appears at Phandalin's Shrine of Tymora.
+  - If Elira is not recruited, she protects the wounded line and later appears at Iron Hollow's Lantern Shrine.
 
-### Neverwinter briefing
+### Greywake briefing
 
 - The player can choose:
   - Kaelis Starling
@@ -280,10 +281,10 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - Sabra Kestrel grants `False Manifest Circuit`
   - Vessa Marr runs the card table and smoke-side rumor line
   - Garren Flint exposes how copied roadwarden cadence keeps getting obeyed
-- `False Manifest Circuit` is a Neverwinter inn quest built from Oren, Vessa, and Garren's separate details, then turned back in to Sabra
-- Completing Sabra's quest unlocks an upstairs private-room scene that turns contract-house politics into Blackwake and High Road intelligence
+- `False Manifest Circuit` is a Greywake inn quest built from Oren, Vessa, and Garren's separate details, then turned back in to Sabra
+- Completing Sabra's quest unlocks an upstairs private-room scene that turns contract-house politics into Blackwake and Emberway intelligence
 - Oren/Sabra/Garren proof can also collapse the `False Roadwarden Checkpoint` before Blackwake, making the contract-house thread pay off on the road itself
-- That private-room intel can be spent at Blackwake to corner Sereth Vane directly, then echoed through Mira's Neverwinter report if Oren, Sabra, Vessa, and Garren become public witnesses
+- That private-room intel can be spent at Blackwake to corner Sereth Vane directly, then echoed through Mira's Greywake report if Oren, Sabra, Vessa, and Garren become public witnesses
 - `Ash In The Ale` can break out in the room if the player mishandles Vessa's table or pushes Garren too hard
 
 ### Roadside Ambush
@@ -301,41 +302,41 @@ The summary sections at the top reflect the expanded Act 1 route and should be t
   - extra reward: `25 XP`, `15 gp`
   - Tolan can be recruited immediately or left waiting at the inn
 - Post-ambush side branches:
-  - after the second wave, the cleared High Road scene reopens instead of auto-entering Phandalin
+  - after the second wave, the cleared Emberway scene reopens instead of auto-entering Iron Hollow
   - unlocked side branches use plain action labels rather than redundant `[PUZZLE]`, `[PARLEY]`, or `[SOCIAL]` tags
   - side-branch returns travel to `phandalin_hub` without recording the side detour as the next backtrack target
-  - Phandalin backtracking skips resolved High Road side-detour nodes and points back to the main High Road route
+  - Iron Hollow backtracking skips resolved Emberway side-detour nodes and points back to the main Emberway route
   - `Liar's Circle`: a four-statue logic puzzle that grants `Liar's Blessing` and `200 XP`, or applies `Liar's Curse`
   - `False Roadwarden Checkpoint`: a non-combat social stop with Deception, Insight, Persuasion, Intimidation, or Oren/Sabra/Garren proof
   - `False Tollstones`: a broken milemarker operation that changes if the player has `Liar's Blessing`
 
-### Stonehill Inn
+### Ashlamp Inn
 
 - Bryn can be recruited with Persuasion DC `12`
 - If Tolan was sent to recover instead of recruited on the road, he can be picked up here
 - New regulars now anchor the inn scene:
-  - Mara Stonehill, who runs the common room and grants `The Marked Keg`
+  - Mara Ashlamp, who runs the common room and grants `The Marked Keg`
   - Jerek Harl, whose grief and anger now anchor `Bring Back Dain's Name`
   - Sella Quill, a singer who grants `Songs for the Missing`
   - Old Tam Veller, a ruin-minded prospector who still remembers honest route details
   - Nera Doss, a courier whose split lip leads into `Quiet Table, Sharp Knives`
-- The Stonehill inn now supports:
+- The Ashlamp Inn now supports:
   - an inn sabotage investigation around a chalk-marked keg
-  - Jerek's missing-brother route quest, which ties Stonehill grief directly to Ashfall Watch
+  - Jerek's missing-brother route quest, which ties Ashlamp grief directly to Ashfall Watch
   - a memory-ballad quest built from Jerek, Tam, and Nera's true details
   - a quiet-table whisper scheme that can roll into a skill-resolved barfight
   - an upstairs quiet-room reward scene that decodes stolen courier intel for later Ashfall and Emberhall use
   - a memorial follow-up where Sella's song changes once Dain Harl's fate is brought home
   - `Liar's Blessing` options in the keg, quiet-table, and quiet-room scenes
-- Stonehill's inn rewards now echo into Act 2:
+- Ashlamp's inn rewards now echo into Act 2:
   - `Harl Road-Knot` opens a special route-reading option at Stonehollow Dig
   - the quiet-room courier intel opens a special order-seizure option at Black Lake and is named during the claims council
 
 ### Shrine
 
-- If Elira was not recruited at Wayside or Greywake, she appears at Phandalin's Shrine of Tymora.
+- If Elira was not recruited at Wayside or Greywake, she appears at Iron Hollow's Lantern Shrine.
 - Early failed recruitment attempts do not lock her out.
-- If `elira_phandalin_fallback_pending` is set, asking her to join in Phandalin recruits her without another skill gate.
+- If `elira_phandalin_fallback_pending` is set, asking her to join in Iron Hollow recruits her without another skill gate.
 - If the player has no early Elira fallback and has not helped her, the normal recruitment check remains Persuasion DC `8`.
 
 ## Post-Combat Random Encounter Chains

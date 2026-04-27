@@ -5,6 +5,13 @@ from ..data.story.dialogue_inputs import DIALOGUE_INPUTS
 
 
 class DialogueInputMixin:
+    DIALOGUE_TOPIC_ALIASES = {
+        "act2_hub_agatha": "act2_hub_hushfen",
+    }
+
+    def canonical_dialogue_topic_key(self, topic_key: str) -> str:
+        return self.DIALOGUE_TOPIC_ALIASES.get(str(topic_key), str(topic_key))
+
     def dialogue_input_sequence(self, value: object) -> tuple[object, ...]:
         if value is None:
             return ()
@@ -119,6 +126,7 @@ class DialogueInputMixin:
 
     def available_dialogue_inputs(self, topic_key: str, *, scene_key: str | None = None) -> list[dict[str, object]]:
         assert self.state is not None
+        topic_key = self.canonical_dialogue_topic_key(topic_key)
         resolved_scene_key = scene_key if scene_key is not None else self.state.current_scene
         available = [
             entry

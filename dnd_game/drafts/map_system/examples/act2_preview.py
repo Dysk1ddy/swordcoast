@@ -10,7 +10,7 @@ def main() -> None:
         current_room_id="relay_gate",
         flags={
             "act2_started",
-            "agatha_truth_secured",
+            "hushfen_truth_secured",
             "woodland_survey_cleared",
             "stonehollow_dig_cleared",
             "claims_meet_held",
@@ -34,7 +34,7 @@ def main() -> None:
         visited_nodes={
             "phandalin_claims_council",
             "act2_expedition_hub",
-            "conyberry_agatha",
+            "hushfen_pale_circuit",
             "neverwinter_wood_survey_camp",
             "stonehollow_dig",
             "act2_midpoint_convergence",
@@ -52,7 +52,7 @@ def main() -> None:
         blueprint=ACT2_ENEMY_DRIVEN_MAP,
         state=state,
         dungeon=dungeon,
-        player_name="Wave Echo Company",
+        player_name="Resonant Vaults Company",
         hp_text="61/78",
         gold=216,
         quest_text="Sever the Quiet Choir",

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from .schema import QuestDefinition, QuestReward
 
@@ -15,7 +15,7 @@ ACT_2_QUESTS: dict[str, QuestDefinition] = {
         ),
         objective="Secure the Meridian Compact waymap fragments and bring the findings back to the Delvers' Exchange.",
         turn_in="Return to Halia Vey at the Delvers' Exchange.",
-        completion_flags=("agatha_truth_secured", "wave_echo_reached"),
+        completion_flags=("hushfen_truth_secured", "wave_echo_reached"),
         reward=QuestReward(
             xp=140,
             gold=75,
@@ -33,8 +33,8 @@ ACT_2_QUESTS: dict[str, QuestDefinition] = {
             "shape of next season's leverage."
         ),
     ),
-    "seek_agathas_truth": QuestDefinition(
-        quest_id="seek_agathas_truth",
+    "seek_pale_witness_truth": QuestDefinition(
+        quest_id="seek_pale_witness_truth",
         title="Ask the Pale Witness What Was Buried",
         giver="Elira Lanternward",
         location="Hushfen Road",
@@ -43,12 +43,12 @@ ACT_2_QUESTS: dict[str, QuestDefinition] = {
         ),
         objective="Reach the Pale Circuit, learn what was buried, and return with a cleaner truth.",
         turn_in="Return to Elira Lanternward once the Hushfen lead is settled.",
-        completion_flags=("agatha_truth_secured",),
+        completion_flags=("hushfen_truth_secured",),
         reward=QuestReward(
             xp=130,
             gold=40,
-            items={"agathas_truth_lantern": 1, "scroll_quell_the_deep": 1},
-            flags={"quest_reward_agathas_clear_truth": True},
+            items={"pale_witness_lantern": 1, "scroll_quell_the_deep": 1},
+            flags={"quest_reward_pale_witness_clear_truth": True},
             act2_metrics={"act2_whisper_pressure": -1},
         ),
         accepted_text=(

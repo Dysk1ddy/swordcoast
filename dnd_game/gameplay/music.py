@@ -57,7 +57,7 @@ DUNGEON_SCENE_KEYS: tuple[str, ...] = (
     "ashfall_watch",
     "tresendar_manor",
     "emberhall_cellars",
-    "conyberry_agatha",
+    "hushfen_pale_circuit",
     "neverwinter_wood_survey_camp",
     "stonehollow_dig",
     "glasswater_intake",

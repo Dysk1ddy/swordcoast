@@ -34,13 +34,13 @@ The final section also includes a design appendix with proposed future enemies w
 | `ash_brand_enforcer` | Ashen Brand Enforcer | Act 1 | anti-momentum bruiser that punishes buffed heroes |
 | `ember_channeler` | Ember Channeler | Act 1 | support caster that paints focus-fire targets |
 | `carrion_stalker` | Carrion Stalker | Act 1 | stealth predator used in Cinderfall and relay ambushes |
-| `skeletal_sentry` | Skeletal Sentry | Act 1 | Old Owl Well and manor undead guards |
-| `worg` | Ashfang Beast | Act 1 | Wyvern Tor and Ashfall support beast |
-| `orc_raider` | Red Mesa Raider | Act 1 | Wyvern Tor and Ashfall muscle |
-| `orc_bloodchief` | Mesa Warlord | Act 1 | Wyvern Tor miniboss base |
-| `ogre_brute` | Hollow Giant | Act 1 | Wyvern Tor heavy support |
-| `gravecaller` | Gravecaller | Act 1 | Old Owl Well miniboss base |
-| `nothic` | Cistern Eye | Act 1 | Tresendar cistern horror |
+| `skeletal_sentry` | Skeletal Sentry | Act 1 | Blackglass Well and manor undead guards |
+| `worg` | Ashfang Beast | Act 1 | Red Mesa Hold and Ashfall support beast |
+| `orc_raider` | Red Mesa Raider | Act 1 | Red Mesa Hold and Ashfall muscle |
+| `orc_bloodchief` | Mesa Warlord | Act 1 | Red Mesa Hold miniboss base |
+| `ogre_brute` | Hollow Giant | Act 1 | Red Mesa Hold heavy support |
+| `gravecaller` | Gravecaller | Act 1 | Blackglass Well miniboss base |
+| `nothic` | Cistern Eye | Act 1 | Duskmere cistern horror |
 | `rukhar` | Rukhar Cinderfang | Act 1 | Ashfall Watch miniboss |
 | `varyn` | Varyn Sable | Act 1 | Emberhall final boss |
 | `expedition_reaver` | Rival Expedition Reaver | Act 2 | expedition-rival muscle |
@@ -73,7 +73,7 @@ The final section also includes a design appendix with proposed future enemies w
 - Encounter locations:
   - Forced or potential: `Camp at First Light` (Outlander prologue)
   - Forced or potential: `Wayside Pursuit` (Hermit prologue)
-  - Forced: `Roadside Ambush` on the High Road
+  - Forced: `Roadside Ambush` on the Emberway
   - Potential: `Abandoned Cottage` -> `Cottage Squatters` or `Cellar Door Rush`
   - Potential: `Ruined Wayhouse` -> `Wayhouse Scavengers`, `Wayhouse Holdouts`, or `Trapdoor Drop`
 - Named variants seen in content:
@@ -116,11 +116,11 @@ The final section also includes a design appendix with proposed future enemies w
   - Forced or potential: `South Barracks Breakout` (Soldier prologue) as `Ashen Brand Runner`
   - Forced or potential: `Blacklake Warehouse` (Criminal prologue) as `Ashen Brand Collector`
   - Forced or potential: `Market Corner` (Charlatan prologue) as `Ashen Brand Fixer`
-  - Forced: `Old Owl Well Dig Ring` as `Ashen Brand Fixer`
+  - Forced: `Blackglass Well Dig Ring` as `Ashen Brand Fixer`
   - Forced: `Ashfall Gate`
   - Forced: `Ashfall Lower Barracks`
   - Forced or potential: `Miniboss: Rukhar Cinderfang` support enemy
-  - Forced: `Tresendar Cellars` as `Ashen Brand Collector`
+  - Forced: `Duskmere Cellars` as `Ashen Brand Collector`
   - Forced: `Emberhall Antechamber` as `Ashen Brand Fixer` / `Ashen Brand Guard`
   - Potential random fights:
     - `Chest Scavengers`
@@ -152,7 +152,7 @@ The final section also includes a design appendix with proposed future enemies w
   - Potential: `Chest Scavengers` on parties of 3 or more
   - Forced or potential: `Miniboss: Vaelith Marr` as `Ashen Brand Marksman` on large parties
   - Forced: `Ashfall Gate`
-  - Forced: `Tresendar Cellars` as `Archive Cutout`
+  - Forced: `Duskmere Cellars` as `Archive Cutout`
   - Forced: `Emberhall Antechamber` as `Cellar Sniper`
   - Potential random fights:
     - `Panicked Holdouts`
@@ -228,9 +228,9 @@ The final section also includes a design appendix with proposed future enemies w
   - `mace_common` 14%
   - `soldiers_amulet_common` 6%
 - Encounter locations:
-  - Forced: `Old Owl Well Dig Ring`
+  - Forced: `Blackglass Well Dig Ring`
   - Potential: `Miniboss: Vaelith Marr`
-  - Forced: `Tresendar Cellars`
+  - Forced: `Duskmere Cellars`
   - Potential: `The Cistern Eye`
 
 ### Ashfang Beast
@@ -246,7 +246,7 @@ The final section also includes a design appendix with proposed future enemies w
   - `travel_biscuits` 35%
   - `spiced_sausage` 25%
 - Encounter locations:
-  - Forced: `Wyvern Tor Shelf Fight`
+  - Forced: `Red Mesa Hold Shelf Fight`
   - Potential: `Ashfall Gate` on larger parties
 
 ### Red Mesa Raider
@@ -256,7 +256,7 @@ The final section also includes a design appendix with proposed future enemies w
 - Tags and traits: `enemy`, `humanoid`, `parley`, feature `aggressive`
 - Runtime behavior:
   - No dedicated active AI branch beyond basic attacks
-  - Serves as the tougher melee line in Wyvern Tor / Ashfall
+  - Serves as the tougher melee line in Red Mesa Hold / Ashfall
 - Item drops:
   - `potion_healing` 30%
   - `battleaxe_common` 25%
@@ -264,7 +264,7 @@ The final section also includes a design appendix with proposed future enemies w
   - `salt_pork` 45%
   - `travel_biscuits` 35%
 - Encounter locations:
-  - Forced: `Wyvern Tor Shelf Fight`
+  - Forced: `Red Mesa Hold Shelf Fight`
   - Potential: `Miniboss: Brughor Skullcleaver`
   - Potential: `Ashfall Lower Barracks`
   - Potential: `Miniboss: Rukhar Cinderfang`
@@ -779,14 +779,14 @@ They are intentionally stronger than the existing Act 1 filler pool. Early Act 2
 ### Main Story Forced Fights
 
 - `Roadside Ambush`: goblin + wolf
-- `Old Owl Well Dig Ring`: skeletal_sentry + bandit, plus extra skeletal_sentry on larger parties
+- `Blackglass Well Dig Ring`: skeletal_sentry + bandit, plus extra skeletal_sentry on larger parties
 - `Miniboss: Vaelith Marr`: gravecaller, plus optional skeletal_sentry / bandit_archer support
-- `Wyvern Tor Shelf Fight`: orc_raider + worg, plus extra orc_raider on larger parties
+- `Red Mesa Hold Shelf Fight`: orc_raider + worg, plus extra orc_raider on larger parties
 - `Miniboss: Brughor Skullcleaver`: orc_bloodchief, plus optional ogre_brute / orc_raider support
 - `Ashfall Gate`: bandit + bandit_archer, plus optional worg
 - `Ashfall Lower Barracks`: bandit + bandit_archer, plus optional bandit / orc_raider
 - `Miniboss: Rukhar Cinderfang`: rukhar, plus optional bandit / orc_raider support
-- `Tresendar Cellars`: bandit + bandit_archer, plus optional skeletal_sentry
+- `Duskmere Cellars`: bandit + bandit_archer, plus optional skeletal_sentry
 - `The Cistern Eye`: nothic, plus optional skeletal_sentry
 - `Emberhall Antechamber`: bandit + bandit_archer, plus optional bandit
 - `Boss: Varyn Sable`: varyn, plus bandit and bandit_archer support
@@ -834,7 +834,7 @@ They are intentionally stronger than the existing Act 1 filler pool. Early Act 2
 - Several major scenes also grant scripted environmental rewards that are not part of enemy drop tables:
   - Vaelith area: `scroll_lesser_restoration`
   - Brughor area: `greater_healing_draught`
-  - Tresendar cistern area: `scroll_arcane_refresh`
+  - Duskmere cistern area: `scroll_arcane_refresh`
   - Emberhall clerk event: `antitoxin_vial`
 
 ## Design Expansion: 25 New Enemy Concepts

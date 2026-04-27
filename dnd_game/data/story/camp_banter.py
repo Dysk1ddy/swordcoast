@@ -362,7 +362,7 @@ CAMP_BANTERS: list[dict[str, object]] = [
         "id": "camp_banter_elira_kaelis_silence",
         "title": "What Silence Means",
         "participants": ["elira_dawnmantle", "kaelis_starling"],
-        "requires_any_flags": ["old_owl_well_cleared", "greywake_triage_yard_seen", "agatha_truth_secured"],
+        "requires_any_flags": ["old_owl_well_cleared", "greywake_triage_yard_seen", "hushfen_truth_secured"],
         "priority": 74,
         "intro": "The camp goes quiet enough for Kaelis to notice. Elira notices him noticing.",
         "lines": [
@@ -389,7 +389,7 @@ CAMP_BANTERS: list[dict[str, object]] = [
                 "journal": "Elira and Kaelis began treating silence as evidence instead of comfort.",
             },
             {
-                "requires_flags": ["agatha_truth_secured"],
+                "requires_flags": ["hushfen_truth_secured"],
                 "metric_deltas": {"act2_whisper_pressure": -1},
             },
         ],

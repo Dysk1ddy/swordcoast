@@ -123,7 +123,7 @@ class GameBase:
         "act1_complete": "Iron Hollow",
         "act2_claims_council": "Ashlamp Claims Council",
         "act2_expedition_hub": "Act II Expedition Hub",
-        "conyberry_agatha": "Hushfen and the Pale Circuit",
+        "hushfen_pale_circuit": "Hushfen and the Pale Circuit",
         "neverwinter_wood_survey_camp": "Greywake Wood",
         "stonehollow_dig": "Stonehollow Dig",
         "siltlock_counting_house": "Siltlock Counting House",
@@ -160,7 +160,7 @@ class GameBase:
         "act1_complete": "Close out Act I and prepare for the next march.",
         "act2_claims_council": "Hold the claims council together and set the expedition's direction.",
         "act2_expedition_hub": "Pick the next Act II lead and keep the expedition moving.",
-        "conyberry_agatha": "Learn what Hushfen's dead still remember.",
+        "hushfen_pale_circuit": "Learn what Hushfen's dead still remember.",
         "neverwinter_wood_survey_camp": "Secure the survey route through the woods.",
         "stonehollow_dig": "Stabilize Stonehollow and recover the missing team.",
         "siltlock_counting_house": "Audit Siltlock's water permits, ration tags, and warning bell.",
@@ -174,6 +174,9 @@ class GameBase:
         "act2_scaffold_complete": "Bring the truth back out of the Resonant Vaults.",
         "act3_ninth_ledger_opens": "Expose the route that Varyn did not design.",
         "act3_ninth_ledger_aftermath": "Track revealed Ledger pressure and unrecorded choices.",
+    }
+    LEGACY_SCENE_ALIASES = {
+        "conyberry_agatha": "hushfen_pale_circuit",
     }
     HUD_QUEST_FOCUSED_SCENES = {
         "phandalin_hub",
@@ -422,7 +425,7 @@ class GameBase:
             "act1_complete": self.scene_act1_complete,
             "act2_claims_council": self.scene_act2_claims_council,
             "act2_expedition_hub": self.scene_act2_expedition_hub,
-            "conyberry_agatha": self.scene_conyberry_agatha,
+            "hushfen_pale_circuit": self.scene_hushfen_pale_circuit,
             "neverwinter_wood_survey_camp": self.scene_neverwinter_wood_survey_camp,
             "stonehollow_dig": self.scene_stonehollow_dig,
             "siltlock_counting_house": self.scene_siltlock_counting_house,
@@ -622,6 +625,7 @@ class GameBase:
             while self.state is not None:
                 try:
                     self._at_title_screen = False
+                    self.normalize_legacy_scene_key()
                     handler = self._scene_handlers.get(self.state.current_scene)
                     if handler is None:
                         self.say(f"Unknown scene '{self.state.current_scene}'. Returning to the title screen.")
@@ -1743,6 +1747,7 @@ class GameBase:
     def ensure_state_integrity(self) -> None:
         if self.state is None:
             return
+        self.normalize_legacy_scene_key()
         self.state.inventory = canonicalize_item_mapping(self.state.inventory)
         self.state.short_rests_remaining = max(0, self.state.short_rests_remaining)
         ensure_quest_log = getattr(self, "ensure_quest_log", None)
@@ -2704,7 +2709,7 @@ class GameBase:
         act2_scenes = {
             "act2_claims_council",
             "act2_expedition_hub",
-            "conyberry_agatha",
+            "hushfen_pale_circuit",
             "neverwinter_wood_survey_camp",
             "stonehollow_dig",
             "act2_midpoint_convergence",
@@ -2723,7 +2728,7 @@ class GameBase:
             return False
         if not self.active_console_state_available():
             return False
-        scene_id = tokens[1]
+        scene_id = self.LEGACY_SCENE_ALIASES.get(tokens[1], tokens[1])
         if scene_id not in self._scene_handlers:
             self.say(f"Unknown scene id: {scene_id}.")
             return False
@@ -2735,6 +2740,11 @@ class GameBase:
             refresh_scene_music()
         self.say(f"Console jumps to scene `{scene_id}`.")
         return True
+
+    def normalize_legacy_scene_key(self) -> None:
+        if self.state is None:
+            return
+        self.state.current_scene = self.LEGACY_SCENE_ALIASES.get(self.state.current_scene, self.state.current_scene)
 
     def parse_console_bool(self, token: str) -> bool | None:
         lowered = token.strip().lower()

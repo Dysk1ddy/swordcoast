@@ -60,6 +60,12 @@ ACT1_MAP_FLAG_NAMES = _collect_blueprint_flag_names(ACT1_HYBRID_MAP)
 ACT2_MAP_FLAG_NAMES = _collect_blueprint_flag_names(ACT2_ENEMY_DRIVEN_MAP)
 ACT1_SCENE_TO_NODE_ID = {node.scene_key: node_id for node_id, node in ACT1_HYBRID_MAP.nodes.items()}
 ACT2_SCENE_TO_NODE_ID = {node.scene_key: node_id for node_id, node in ACT2_ENEMY_DRIVEN_MAP.nodes.items()}
+ACT2_LEGACY_NODE_ALIASES = {
+    "conyberry_agatha": "hushfen_pale_circuit",
+}
+ACT2_LEGACY_DUNGEON_ALIASES = {
+    "agathas_circuit": "pale_circuit",
+}
 ACT1_HIGH_ROAD_SIDE_BRANCH_NODE_IDS = {"liars_circle", "false_checkpoint", "false_tollstones"}
 DUNGEON_DIRECTION_ORDER = {
     "NORTH": 0,
@@ -353,6 +359,8 @@ class MapSystemMixin:
             self._act1_map_cache_state_owner_id = owner_id
             self._clear_map_view_cache()
         self._ensure_map_state_payload()
+        if self.state.current_act >= 2 or self.state.flags.get("act2_started") or self.ACT2_MAP_STATE_KEY in self.state.flags:
+            self._ensure_act2_map_state_payload()
         self._sync_map_state_with_scene()
 
     def compact_hud_scene_key(self) -> tuple[int, str] | None:
@@ -430,6 +438,7 @@ class MapSystemMixin:
             "node_history": self._string_history(raw.get("node_history")),
             "room_history": self._string_history(raw.get("room_history")),
         }
+        self._normalize_act2_node_aliases(payload)
         self.state.flags[self.ACT2_MAP_STATE_KEY] = payload
 
     def _act2_map_state_payload(self) -> dict[str, Any]:
@@ -465,6 +474,19 @@ class MapSystemMixin:
         else:
             values = []
         return [value for value in values if isinstance(value, str)]
+
+    def _normalize_act2_node_aliases(self, payload: dict[str, Any]) -> None:
+        current_node_id = payload.get("current_node_id")
+        if isinstance(current_node_id, str):
+            payload["current_node_id"] = ACT2_LEGACY_NODE_ALIASES.get(current_node_id, current_node_id)
+        current_dungeon_id = payload.get("current_dungeon_id")
+        if isinstance(current_dungeon_id, str):
+            payload["current_dungeon_id"] = ACT2_LEGACY_DUNGEON_ALIASES.get(current_dungeon_id, current_dungeon_id)
+        for key in ("visited_nodes", "node_history"):
+            values = payload.get(key)
+            if not isinstance(values, list):
+                continue
+            payload[key] = [ACT2_LEGACY_NODE_ALIASES.get(value, value) for value in values]
 
     def _map_view_cache(self) -> dict[str, Any]:
         cache = getattr(self, "_act1_map_view_cache", None)
@@ -5243,7 +5265,7 @@ class MapSystemMixin:
             )
             self.state.flags["black_lake_seen"] = True
         self._black_lake_apply_south_adit_payoff()
-        self._black_lake_apply_conyberry_payoff()
+        self._black_lake_apply_hushfen_payoff()
         choice = self.scenario_choice(
             "What do you read first on the crossing?",
             [
@@ -5300,12 +5322,12 @@ class MapSystemMixin:
             "the Choir's South Adit reserve line reaches Blackglass before the survivors can break its rhythm",
         )
 
-    def _black_lake_apply_conyberry_payoff(self) -> None:
+    def _black_lake_apply_hushfen_payoff(self) -> None:
         assert self.state is not None
-        if not self.state.flags.get("conyberry_chapel_relit"):
+        if not self.state.flags.get("hushfen_chapel_relit"):
             return
-        if not self.state.flags.get("black_lake_conyberry_lamp_guidance"):
-            self.state.flags["black_lake_conyberry_lamp_guidance"] = True
+        if not self.state.flags.get("black_lake_hushfen_lamp_guidance"):
+            self.state.flags["black_lake_hushfen_lamp_guidance"] = True
             self.state.flags["black_lake_shrine_route_marked"] = True
             self.say(
                 "The lamp discipline you restored at Hushfen catches at the Blackglass shrine before the water can make it sound like only drowning prayers belong here."
@@ -5313,10 +5335,10 @@ class MapSystemMixin:
             self.add_clue(
                 "Hushfen's relit Chapel of Lamps gives the Blackglass shrine a clean line to answer before the Meridian Forge can drown it in Choir rhythm."
             )
-        if self.state.flags.get("conyberry_chapel_pressure_payoff_applied"):
+        if self.state.flags.get("hushfen_chapel_pressure_payoff_applied"):
             return
-        self.state.flags["conyberry_chapel_pressure_payoff_applied"] = True
-        self.state.flags["black_lake_conyberry_pressure_payoff"] = True
+        self.state.flags["hushfen_chapel_pressure_payoff_applied"] = True
+        self.state.flags["black_lake_hushfen_pressure_payoff"] = True
         self.act2_shift_metric(
             "act2_whisper_pressure",
             -1,
@@ -5328,7 +5350,7 @@ class MapSystemMixin:
         self.say(
             "Stone saints lean half-submerged in black water while old lamp niches hold only cold mineral sheen. The shrine is not dead, but it is listening for who claims it next."
         )
-        dc = 13 if self.state.flags.get("black_lake_shrine_route_marked") or self.state.flags.get("agatha_truth_clear") else 14
+        dc = 13 if self.state.flags.get("black_lake_shrine_route_marked") or self.state.flags.get("pale_witness_truth_clear") else 14
         choice = self.scenario_choice(
             "How do you reclaim the drowned shrine?",
             [
@@ -6087,7 +6109,7 @@ class MapSystemMixin:
             "An old Meridian Compact anvil sits inside the Meridian Forge's newer desecration like a discipline the chamber still cannot quite kill. Heat moves through it in patient lines instead of hungry bursts."
         )
         dc = 15
-        if self.state.flags.get("agatha_truth_clear"):
+        if self.state.flags.get("pale_witness_truth_clear"):
             dc -= 1
         if self.state.flags.get("nim_countermeasure_notes"):
             dc -= 1
@@ -6204,18 +6226,18 @@ class MapSystemMixin:
                     "Irielle Ashwake",
                     "This is the part the Choir never lets witnesses describe twice. Trust the second thought, not the first one it gives you.",
                 )
-        conyberry_sigil_copied = bool(self.state.flags.get("conyberry_sigil_copied"))
-        if conyberry_sigil_copied:
+        hushfen_sigil_copied = bool(self.state.flags.get("hushfen_sigil_copied"))
+        if hushfen_sigil_copied:
             self.say(
                 "The copied Hushfen sigil makes one strand of the lens painfully legible: the Choir is still teaching old service-wards to obey without looking conquered."
             )
-            if not self.state.flags.get("forge_conyberry_sigil_risk_applied"):
-                self.state.flags["forge_conyberry_sigil_risk_applied"] = True
-                if self.state.flags.get("agatha_warning_bound"):
-                    self.state.flags["forge_conyberry_sigil_bound_safely"] = True
+            if not self.state.flags.get("forge_hushfen_sigil_risk_applied"):
+                self.state.flags["forge_hushfen_sigil_risk_applied"] = True
+                if self.state.flags.get("pale_witness_warning_bound"):
+                    self.state.flags["forge_hushfen_sigil_bound_safely"] = True
                     self.say("Because the Pale Witness's warning was bound before it left Hushfen, the copied mark stays a key instead of becoming an open wound.")
                 else:
-                    self.state.flags["forge_conyberry_sigil_moral_risk"] = True
+                    self.state.flags["forge_hushfen_sigil_moral_risk"] = True
                     self.act2_shift_metric(
                         "act2_whisper_pressure",
                         1,
@@ -6239,7 +6261,7 @@ class MapSystemMixin:
             dc -= 1
         if self.state.flags.get("forge_anvil_tuned"):
             dc -= 1
-        if conyberry_sigil_copied:
+        if hushfen_sigil_copied:
             dc -= 1
         if knows_caldra_method:
             dc -= 1
@@ -6307,8 +6329,8 @@ class MapSystemMixin:
                 self.state.flags["forge_ritual_line_broken"] = True
             if self.state.flags.get("forge_shard_channels_disrupted"):
                 self.state.flags["forge_shard_line_broken"] = True
-            if conyberry_sigil_copied:
-                self.state.flags["forge_lens_conyberry_sigil_used"] = True
+            if hushfen_sigil_copied:
+                self.state.flags["forge_lens_hushfen_sigil_used"] = True
                 self.add_journal("You used Hushfen's copied sigil to read one of the Meridian Forge lens's obedience seams before Caldra could hide it.")
             if self.state.flags.get("forge_lens_caldra_method_named"):
                 self.add_clue("Caldra's correction method treats red ash ledger edits as ritual instructions: records change the category, then the Forge pressures reality to obey it.")
@@ -6408,7 +6430,7 @@ class MapSystemMixin:
         )
         if choice == 1:
             dc = 15
-            if self.state.flags.get("agatha_truth_clear"):
+            if self.state.flags.get("pale_witness_truth_clear"):
                 dc -= 1
             if self.state.flags.get("nim_countermeasure_notes"):
                 dc -= 1

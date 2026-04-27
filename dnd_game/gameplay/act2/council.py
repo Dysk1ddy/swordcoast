@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 
 class StoryAct2CouncilMixin:
@@ -85,8 +85,8 @@ class StoryAct2CouncilMixin:
             )
         if not self.has_quest("recover_pact_waymap"):
             self.grant_quest("recover_pact_waymap")
-        if not self.has_quest("seek_agathas_truth"):
-            self.grant_quest("seek_agathas_truth")
+        if not self.has_quest("seek_pale_witness_truth"):
+            self.grant_quest("seek_pale_witness_truth")
         if not self.has_quest("hold_the_claims_meet"):
             self.grant_quest("hold_the_claims_meet")
         sponsor_choice = self.scenario_choice(
@@ -211,11 +211,11 @@ class StoryAct2CouncilMixin:
             self.say(late_route_recap)
         while True:
             options: list[tuple[str, str]] = []
-            if not self.state.flags.get("agatha_truth_secured"):
+            if not self.state.flags.get("hushfen_truth_secured"):
                 label = "Follow Elira's Hushfen lead and seek the Pale Witness's truth."
                 if self.state.flags.get(self.ACT2_SABOTAGE_RESOLVED_FLAG):
                     label = "Recover Hushfen late and see what delaying the Pale Witness's warning cost."
-                options.append(("agatha", self.action_option(label)))
+                options.append(("hushfen", self.action_option(label)))
             if not self.state.flags.get("woodland_survey_cleared"):
                 label = "Break the sabotage line at Greywake Survey Camp."
                 if self.state.flags.get(self.ACT2_SABOTAGE_RESOLVED_FLAG):
@@ -296,9 +296,9 @@ class StoryAct2CouncilMixin:
                 echo_selection=True,
             )
             selection_key, _ = options[choice - 1]
-            if selection_key == "agatha":
-                self.run_dialogue_input("act2_hub_agatha")
-                self.travel_to_act2_node("conyberry_agatha")
+            if selection_key == "hushfen":
+                self.run_dialogue_input("act2_hub_hushfen")
+                self.travel_to_act2_node("hushfen_pale_circuit")
                 return
             if selection_key == "wood":
                 self.run_dialogue_input("act2_hub_wood")
@@ -377,24 +377,26 @@ class StoryAct2CouncilMixin:
             self.show_party()
 
     def act2_turn_in_dialogue(self, quest_id: str) -> None:
+        if callable(getattr(self, "canonical_quest_id", None)):
+            quest_id = self.canonical_quest_id(quest_id)
         if quest_id == "recover_pact_waymap":
             self.speaker(
                 "Halia Vey",
                 "Now that is a route worth arguing over. Good. A claim with a real map behind it survives longer than a claim with only shouting.",
             )
-        elif quest_id == "seek_agathas_truth":
+        elif quest_id == "seek_pale_witness_truth":
             self.speaker(
                 "Elira Lanternward",
                 "Then Hushfen's dead were not left speaking into the dark. Tell me the warning cleanly, and I will make sure it is carried gently.",
             )
-            if self.state is not None and self.state.flags.get("agatha_claim_cover_suspected"):
+            if self.state is not None and self.state.flags.get("hushfen_claim_cover_suspected"):
                 sponsor = str(self.state.flags.get("act2_sponsor", "council"))
                 if sponsor == "exchange":
                     self.speaker(
                         "Halia Vey",
                         "Claim marks on dead ground are not piety. They are bookkeeping with incense on it. Give me the hand that wrote them and I can make half this room stop smiling.",
                     )
-                    if not self.state.flags.get("agatha_claim_cover_council_reaction_recorded"):
+                    if not self.state.flags.get("hushfen_claim_cover_council_reaction_recorded"):
                         self.act2_shift_metric(
                             "act2_route_control",
                             1,
@@ -405,7 +407,7 @@ class StoryAct2CouncilMixin:
                         "Linene Ironward",
                         "If someone used graves as cover for route claims, I want names on my desk before another crew leaves with a false map and a brave speech.",
                     )
-                    if not self.state.flags.get("agatha_claim_cover_council_reaction_recorded"):
+                    if not self.state.flags.get("hushfen_claim_cover_council_reaction_recorded"):
                         self.act2_shift_metric(
                             "act2_town_stability",
                             1,
@@ -416,13 +418,13 @@ class StoryAct2CouncilMixin:
                         "Town Council",
                         "Then the Hushfen warning belongs in evidence. The next claim read in this room gets read against the dead as well as the ledgers.",
                     )
-                    if not self.state.flags.get("agatha_claim_cover_council_reaction_recorded"):
+                    if not self.state.flags.get("hushfen_claim_cover_council_reaction_recorded"):
                         self.act2_shift_metric(
                             "act2_whisper_pressure",
                             -1,
                             "naming Hushfen's claim-cover trick keeps the Choir from hiding practical corruption inside sacred dread",
                         )
-                self.state.flags["agatha_claim_cover_council_reaction_recorded"] = True
+                self.state.flags["hushfen_claim_cover_council_reaction_recorded"] = True
         elif quest_id == "rescue_stonehollow_scholars":
             self.speaker(
                 "Linene Ironward",
@@ -454,7 +456,7 @@ class StoryAct2CouncilMixin:
         self.refresh_quest_statuses(announce=False)
         ready_quest_ids = [
             "recover_pact_waymap",
-            "seek_agathas_truth",
+            "seek_pale_witness_truth",
             "rescue_stonehollow_scholars",
             "cut_woodland_saboteurs",
             "hold_the_claims_meet",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..data.quests import QUESTS, QUEST_ORDER, QuestDefinition, QuestLogEntry
+from ..data.quests import QUESTS, QUEST_ORDER, QuestDefinition, QuestLogEntry, resolve_quest_id
 from ..data.story.public_terms import marks_label
 from ..items import get_item
 from ..ui.colors import rich_style_name
@@ -8,6 +8,12 @@ from ..ui.rich_render import Panel, Table, box
 
 
 class QuestMixin:
+    QUEST_STATUS_PRECEDENCE = {
+        "active": 1,
+        "ready_to_turn_in": 2,
+        "completed": 3,
+    }
+
     def render_new_quest_panel(self, definition: QuestDefinition) -> bool:
         if not (
             callable(getattr(self, "should_use_rich_ui", None))
@@ -43,13 +49,37 @@ class QuestMixin:
         if self.state is None:
             return
         self.state.quests = dict(self.state.quests)
+        self.normalize_quest_log_ids()
         self.refresh_quest_statuses(announce=False)
 
+    def canonical_quest_id(self, quest_id: str) -> str:
+        return resolve_quest_id(quest_id) or quest_id
+
+    def normalize_quest_log_ids(self) -> None:
+        if self.state is None:
+            return
+        normalized: dict[str, QuestLogEntry] = {}
+        for raw_quest_id, entry in list(self.state.quests.items()):
+            quest_id = self.canonical_quest_id(str(raw_quest_id))
+            entry.quest_id = quest_id
+            existing = normalized.get(quest_id)
+            if existing is None:
+                normalized[quest_id] = entry
+                continue
+            if self.QUEST_STATUS_PRECEDENCE.get(entry.status, 0) > self.QUEST_STATUS_PRECEDENCE.get(existing.status, 0):
+                existing.status = entry.status
+            for note in entry.notes:
+                if note not in existing.notes:
+                    existing.notes.append(note)
+        self.state.quests = normalized
+
     def get_quest_definition(self, quest_id: str) -> QuestDefinition:
+        quest_id = self.canonical_quest_id(quest_id)
         return QUESTS[quest_id]
 
     def get_quest_entry(self, quest_id: str) -> QuestLogEntry | None:
         assert self.state is not None
+        quest_id = self.canonical_quest_id(quest_id)
         return self.state.quests.get(quest_id)
 
     def has_quest(self, quest_id: str) -> bool:
@@ -70,17 +100,20 @@ class QuestMixin:
     def append_quest_note(self, quest_id: str, note: str) -> None:
         if not note:
             return
+        quest_id = self.canonical_quest_id(quest_id)
         entry = self.get_quest_entry(quest_id)
         if entry is not None and note not in entry.notes:
             entry.notes.append(note)
 
     def quest_objective_met(self, quest_id: str) -> bool:
         assert self.state is not None
+        quest_id = self.canonical_quest_id(quest_id)
         definition = self.get_quest_definition(quest_id)
         return all(bool(self.state.flags.get(flag)) for flag in definition.completion_flags)
 
     def refresh_quest_statuses(self, *, announce: bool = True) -> None:
         assert self.state is not None
+        self.normalize_quest_log_ids()
         for quest_id in QUEST_ORDER:
             entry = self.state.quests.get(quest_id)
             if entry is None or entry.status == "completed":
@@ -98,6 +131,7 @@ class QuestMixin:
                 entry.status = "active"
 
     def quest_reward_summary(self, quest_id: str) -> str:
+        quest_id = self.canonical_quest_id(quest_id)
         definition = self.get_quest_definition(quest_id)
         parts: list[str] = []
         if definition.reward.xp:
@@ -158,6 +192,7 @@ class QuestMixin:
 
     def grant_quest(self, quest_id: str, *, note: str = "") -> bool:
         assert self.state is not None
+        quest_id = self.canonical_quest_id(quest_id)
         existing = self.state.quests.get(quest_id)
         if existing is not None:
             self.append_quest_note(quest_id, note)
@@ -177,6 +212,7 @@ class QuestMixin:
 
     def turn_in_quest(self, quest_id: str, *, giver: str) -> bool:
         assert self.state is not None
+        quest_id = self.canonical_quest_id(quest_id)
         self.refresh_quest_statuses(announce=False)
         entry = self.state.quests.get(quest_id)
         if entry is None or entry.status != "ready_to_turn_in":

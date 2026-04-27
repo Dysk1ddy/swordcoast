@@ -44,7 +44,7 @@ class StoryWriterPromptTests(unittest.TestCase):
             summary.write_text("summary", encoding="utf-8")
             act2.write_text("act2", encoding="utf-8")
 
-            paths = default_context_paths(root, "conyberry_agatha")
+            paths = default_context_paths(root, "hushfen_pale_circuit")
 
             self.assertEqual(paths, (summary.resolve(), act2.resolve()))
 
@@ -64,10 +64,10 @@ class StoryWriterPromptTests(unittest.TestCase):
         request = StoryWriterRequest(
             brief="Tighten the scene.",
             mode="revision",
-            title="Agatha opener",
-            scene_key="conyberry_agatha",
-            speakers=("Agatha", "Bryn Underbough"),
-            tone_notes="Keep Agatha restrained and eerie.",
+            title="Pale Witness opener",
+            scene_key="hushfen_pale_circuit",
+            speakers=("Pale Witness", "Bryn Underbough"),
+            tone_notes="Keep the Pale Witness restrained and eerie.",
             model="gpt-5.4",
         )
         document = StoryContextDocument(
@@ -80,8 +80,8 @@ class StoryWriterPromptTests(unittest.TestCase):
         payload = build_story_writer_input(request, [document], root=Path.cwd())
 
         self.assertIn("Mode: revision", payload)
-        self.assertIn("Scene key: conyberry_agatha", payload)
-        self.assertIn("Speakers: Agatha, Bryn Underbough", payload)
+        self.assertIn("Scene key: hushfen_pale_circuit", payload)
+        self.assertIn("Speakers: Pale Witness, Bryn Underbough", payload)
         self.assertIn("--- BEGIN CONTEXT:", payload)
         self.assertIn("Act II summary", payload)
 

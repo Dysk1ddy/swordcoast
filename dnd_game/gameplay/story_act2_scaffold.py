@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from ..content import create_enemy, create_irielle_ashwake, create_nim_ardentglass
 from .encounter import Encounter
@@ -12,14 +12,63 @@ class StoryAct2ScaffoldMixin:
         ("phandelver_claims_council_seen", "iron_hollow_claims_council_seen"),
         ("phandalin_sabotage_resolved", "iron_hollow_sabotage_resolved"),
         ("act3_phandalin_state", "act3_iron_hollow_state"),
+        ("agatha_truth_secured", "hushfen_truth_secured"),
+        ("agatha_truth_clear", "pale_witness_truth_clear"),
+        ("agatha_circuit_defiled", "hushfen_circuit_defiled"),
+        ("agatha_claim_cover_suspected", "hushfen_claim_cover_suspected"),
+        ("agatha_claim_cover_council_reaction_recorded", "hushfen_claim_cover_council_reaction_recorded"),
+        ("agatha_public_warning_known", "pale_witness_public_warning_known"),
+        ("agatha_warning_shared_publicly", "pale_witness_warning_shared_publicly"),
+        ("agatha_warning_restricted", "pale_witness_warning_restricted"),
+        ("agatha_warning_bound", "pale_witness_warning_bound"),
+        ("agatha_bound_leverage", "pale_witness_bound_leverage"),
+        ("agatha_pact_restraint_known", "pale_witness_pact_restraint_known"),
+        ("agatha_circuit_entered", "pale_circuit_entered"),
+        ("agatha_old_vow_named", "pale_circuit_old_vow_named"),
+        ("agatha_waystone_heard", "pale_circuit_waystone_heard"),
+        ("agatha_sigil_scrubbed", "pale_circuit_sigil_scrubbed"),
+        ("quest_reward_agathas_clear_truth", "quest_reward_pale_witness_clear_truth"),
+        ("dialogue_input_elira_hub_agatha_seen", "dialogue_input_elira_hub_hushfen_seen"),
+        ("conyberry_circuit_strain", "hushfen_circuit_strain"),
+        ("conyberry_pilgrims_steadied", "hushfen_pilgrims_steadied"),
+        ("conyberry_clean_witness_taken", "hushfen_clean_witness_taken"),
+        ("conyberry_whisper_track_named", "hushfen_whisper_track_named"),
+        ("conyberry_first_site", "hushfen_first_site"),
+        ("conyberry_cairn_ward_read", "hushfen_cairn_ward_read"),
+        ("conyberry_cairn_grave_read", "hushfen_cairn_grave_read"),
+        ("conyberry_cairn_trail_read", "hushfen_cairn_trail_read"),
+        ("conyberry_chapel_seen", "hushfen_chapel_seen"),
+        ("conyberry_chapel_relit", "hushfen_chapel_relit"),
+        ("conyberry_field_lantern_taken", "hushfen_field_lantern_taken"),
+        ("conyberry_chapel_quarantined", "hushfen_chapel_quarantined"),
+        ("conyberry_grave_seen", "hushfen_grave_seen"),
+        ("conyberry_grave_history_read", "hushfen_grave_history_read"),
+        ("conyberry_dead_named", "hushfen_dead_named"),
+        ("conyberry_claim_marks_found", "hushfen_claim_marks_found"),
+        ("conyberry_sigil_seen", "hushfen_sigil_seen"),
+        ("conyberry_sigil_broken", "hushfen_sigil_broken"),
+        ("conyberry_sigil_copied", "hushfen_sigil_copied"),
+        ("conyberry_watcher_baited", "hushfen_watcher_baited"),
+        ("conyberry_watcher_seen", "hushfen_watcher_seen"),
+        ("conyberry_second_site", "hushfen_second_site"),
+        ("conyberry_two_sites_answered", "hushfen_two_sites_answered"),
+        ("conyberry_warning_exit_choice", "hushfen_warning_exit_choice"),
+        ("conyberry_chapel_pressure_payoff_applied", "hushfen_chapel_pressure_payoff_applied"),
+        ("conyberry_chapel_sabotage_payoff", "hushfen_chapel_sabotage_payoff"),
+        ("black_lake_conyberry_lamp_guidance", "black_lake_hushfen_lamp_guidance"),
+        ("black_lake_conyberry_pressure_payoff", "black_lake_hushfen_pressure_payoff"),
+        ("forge_conyberry_sigil_risk_applied", "forge_hushfen_sigil_risk_applied"),
+        ("forge_conyberry_sigil_bound_safely", "forge_hushfen_sigil_bound_safely"),
+        ("forge_conyberry_sigil_moral_risk", "forge_hushfen_sigil_moral_risk"),
+        ("forge_lens_conyberry_sigil_used", "forge_lens_hushfen_sigil_used"),
     )
     ACT2_BRANCH_FLAGS = (
-        "agatha_truth_secured",
+        "hushfen_truth_secured",
         "stonehollow_dig_cleared",
         "woodland_survey_cleared",
     )
     ACT2_BRANCH_LABELS = {
-        "agatha_truth_secured": "Hushfen and the Pale Circuit",
+        "hushfen_truth_secured": "Hushfen and the Pale Circuit",
         "stonehollow_dig_cleared": "Stonehollow Dig",
         "woodland_survey_cleared": "Greywake survey line",
     }
@@ -137,6 +186,11 @@ class StoryAct2ScaffoldMixin:
             if canonical_flag not in self.state.flags and legacy_flag in self.state.flags:
                 self.state.flags[canonical_flag] = self.state.flags[legacy_flag]
             self.state.flags.pop(legacy_flag, None)
+        flag_aliases = dict(self.ACT2_LEGACY_FLAG_ALIASES)
+        for key in ("act2_neglected_lead",):
+            value = self.state.flags.get(key)
+            if isinstance(value, str) and value in flag_aliases:
+                self.state.flags[key] = flag_aliases[value]
 
     def act2_award_milestone_gear(self, reward_flag: str, item_id: str, *, source: str) -> None:
         assert self.state is not None
@@ -631,8 +685,8 @@ class StoryAct2ScaffoldMixin:
             self.add_journal(
                 f"The party let {self.ACT2_BRANCH_LABELS[neglected]} drift while Iron Hollow braced for sabotage. The consequences landed before the lead could be recovered."
             )
-            if neglected == "agatha_truth_secured":
-                self.state.flags["agatha_circuit_defiled"] = True
+            if neglected == "hushfen_truth_secured":
+                self.state.flags["hushfen_circuit_defiled"] = True
                 self.say(
                     "Without the Pale Witness's warning in hand, the Quiet Choir gets another night to work unchallenged around Hushfen. The town walks into the midpoint with less truth than it needed."
                 )
@@ -958,16 +1012,16 @@ class StoryAct2ScaffoldMixin:
             enemies.append(self.act2_pick_enemy(("false_map_skirmisher", "memory_taker_adept", "cult_lookout")))
         if len(self.state.party_members()) >= 4:
             enemies.append(self.act2_pick_enemy(("cult_lookout", "false_map_skirmisher", "expedition_reaver")))
-        if neglected == "agatha_truth_secured":
+        if neglected == "hushfen_truth_secured":
             self.apply_status(
                 self.state.player,
                 "reeling",
                 1,
                 source="walking blind into the riot without the Pale Witness's full warning",
             )
-        if self.state.flags.get("conyberry_chapel_relit") and not self.state.flags.get("conyberry_chapel_pressure_payoff_applied"):
-            self.state.flags["conyberry_chapel_pressure_payoff_applied"] = True
-            self.state.flags["conyberry_chapel_sabotage_payoff"] = True
+        if self.state.flags.get("hushfen_chapel_relit") and not self.state.flags.get("hushfen_chapel_pressure_payoff_applied"):
+            self.state.flags["hushfen_chapel_pressure_payoff_applied"] = True
+            self.state.flags["hushfen_chapel_sabotage_payoff"] = True
             self.say(
                 "Pilgrims from Hushfen arrive with lamp discipline instead of rumor. The first fires of sabotage still start, but fewer frightened people turn them into a chorus."
             )
@@ -1509,7 +1563,7 @@ class StoryAct2ScaffoldMixin:
             self.say("Irielle's counter-cadence lands first and steals part of the forge's certainty before steel ever crosses it.")
         if choice == 1:
             dc = 15
-            if self.state.flags.get("agatha_truth_clear"):
+            if self.state.flags.get("pale_witness_truth_clear"):
                 dc -= 1
             if self.state.flags.get("nim_countermeasure_notes"):
                 dc -= 1

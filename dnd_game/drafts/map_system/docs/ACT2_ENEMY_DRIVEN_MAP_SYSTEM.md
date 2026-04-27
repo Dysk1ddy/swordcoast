@@ -100,7 +100,7 @@ Branch purpose:
 
 Opening condition:
 
-- Opens after any one early lead: `agatha_truth_secured`, `woodland_survey_cleared`, or `stonehollow_dig_cleared`.
+- Opens after any one early lead: `hushfen_truth_secured`, `woodland_survey_cleared`, or `stonehollow_dig_cleared`.
 - Stays optional through sabotage night so the player can use it as early prevention or late damage control.
 - Closes after `caldra_defeated` because the evidence belongs in Act 2's town-pressure economy.
 - Suggested reveal flag: `siltlock_counting_house_known`.

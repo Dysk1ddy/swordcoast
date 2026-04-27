@@ -132,7 +132,7 @@ class Act2SmokeTests(unittest.TestCase):
             output_lines=log,
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "woodland_survey_cleared": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 3,
@@ -287,7 +287,7 @@ class Act2SmokeTests(unittest.TestCase):
             current_scene="glasswater_intake",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
@@ -342,7 +342,7 @@ class Act2SmokeTests(unittest.TestCase):
             current_scene="siltlock_counting_house",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "act2_sponsor": "exchange",
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
@@ -403,10 +403,10 @@ class Act2SmokeTests(unittest.TestCase):
         self.assertEqual(game.state.flags["caldra_corrected_ledgers_seen_count"], 1)
         self.assertEqual(game.state.flags["act2_caldra_traces_seen"], 2)
 
-    def test_conyberry_agatha_smoke_route_reaches_hub_with_clean_warning(self) -> None:
+    def test_hushfen_pale_circuit_smoke_route_reaches_hub_with_clean_warning(self) -> None:
         game = self.make_game(
             seed=940042,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             flags={
                 "act2_started": True,
                 "act2_town_stability": 3,
@@ -434,28 +434,28 @@ class Act2SmokeTests(unittest.TestCase):
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
 
         assert game.state is not None
         self.assertEqual(game.state.current_scene, "act2_expedition_hub")
-        self.assertTrue(game.state.flags["conyberry_pilgrims_steadied"])
-        self.assertTrue(game.state.flags["conyberry_cairn_ward_read"])
-        self.assertTrue(game.state.flags["conyberry_chapel_relit"])
-        self.assertTrue(game.state.flags["conyberry_dead_named"])
-        self.assertEqual(game.state.flags["conyberry_second_site"], "grave")
-        self.assertEqual(game.state.flags["conyberry_warning_exit_choice"], "public")
-        self.assertTrue(game.state.flags["agatha_truth_secured"])
-        self.assertTrue(game.state.flags["agatha_truth_clear"])
+        self.assertTrue(game.state.flags["hushfen_pilgrims_steadied"])
+        self.assertTrue(game.state.flags["hushfen_cairn_ward_read"])
+        self.assertTrue(game.state.flags["hushfen_chapel_relit"])
+        self.assertTrue(game.state.flags["hushfen_dead_named"])
+        self.assertEqual(game.state.flags["hushfen_second_site"], "grave")
+        self.assertEqual(game.state.flags["hushfen_warning_exit_choice"], "public")
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertTrue(game.state.flags["pale_witness_truth_clear"])
 
-    def test_conyberry_agatha_delayed_smoke_route_reaches_hub_with_bruised_warning(self) -> None:
+    def test_hushfen_pale_circuit_delayed_smoke_route_reaches_hub_with_bruised_warning(self) -> None:
         game = self.make_game(
             seed=940043,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             flags={
                 "act2_started": True,
                 "iron_hollow_sabotage_resolved": True,
-                "act2_neglected_lead": "agatha_truth_secured",
-                "agatha_circuit_defiled": True,
+                "act2_neglected_lead": "hushfen_truth_secured",
+                "hushfen_circuit_defiled": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
@@ -481,21 +481,21 @@ class Act2SmokeTests(unittest.TestCase):
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
 
         assert game.state is not None
         self.assertEqual(game.state.current_scene, "act2_expedition_hub")
-        self.assertTrue(game.state.flags["agatha_truth_secured"])
-        self.assertFalse(game.state.flags["agatha_truth_clear"])
-        self.assertTrue(game.state.flags["agatha_warning_bound"])
-        self.assertEqual(game.state.flags["conyberry_second_site"], "chapel")
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertFalse(game.state.flags["pale_witness_truth_clear"])
+        self.assertTrue(game.state.flags["pale_witness_warning_bound"])
+        self.assertEqual(game.state.flags["hushfen_second_site"], "chapel")
 
-    def test_conyberry_route_consequences_smoke_carries_from_sabotage_to_black_lake(self) -> None:
+    def test_hushfen_route_consequences_smoke_carries_from_sabotage_to_black_lake(self) -> None:
         log: list[str] = []
         encounters: list[Encounter] = []
         game = self.make_game(
             seed=940044,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             output_lines=log,
             flags={
                 "act2_started": True,
@@ -531,7 +531,7 @@ class Act2SmokeTests(unittest.TestCase):
             return 1
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
         game.state.current_scene = "act2_midpoint_convergence"
         game.scene_act2_midpoint_convergence()
         game.state.flags["wave_echo_outer_cleared"] = True
@@ -541,12 +541,12 @@ class Act2SmokeTests(unittest.TestCase):
 
         assert game.state is not None
         rendered = self.plain_output(log)
-        self.assertTrue(game.state.flags["conyberry_chapel_relit"])
-        self.assertTrue(game.state.flags["conyberry_chapel_sabotage_payoff"])
-        self.assertTrue(game.state.flags["black_lake_conyberry_lamp_guidance"])
+        self.assertTrue(game.state.flags["hushfen_chapel_relit"])
+        self.assertTrue(game.state.flags["hushfen_chapel_sabotage_payoff"])
+        self.assertTrue(game.state.flags["black_lake_hushfen_lamp_guidance"])
         self.assertTrue(game.state.flags["black_lake_shrine_route_marked"])
-        self.assertTrue(game.state.flags["conyberry_chapel_pressure_payoff_applied"])
-        self.assertNotIn("black_lake_conyberry_pressure_payoff", game.state.flags)
+        self.assertTrue(game.state.flags["hushfen_chapel_pressure_payoff_applied"])
+        self.assertNotIn("black_lake_hushfen_pressure_payoff", game.state.flags)
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 0)
         self.assertEqual(encounters[0].title, "Midpoint: Sabotage Night")
         self.assertIn("Pilgrims from Hushfen arrive with lamp discipline", rendered)
@@ -558,7 +558,7 @@ class Act2SmokeTests(unittest.TestCase):
             current_scene="act2_midpoint_convergence",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "stonehollow_dig_cleared": True,
                 "woodland_survey_cleared": True,
                 "act2_town_stability": 3,
@@ -586,7 +586,7 @@ class Act2SmokeTests(unittest.TestCase):
             output_lines=log,
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "woodland_survey_cleared": True,
                 "stonehollow_dig_cleared": True,
                 "iron_hollow_sabotage_resolved": True,

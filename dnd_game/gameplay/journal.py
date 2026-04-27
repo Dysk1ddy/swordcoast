@@ -423,7 +423,7 @@ class JournalMixin:
             lines.append(f"Delayed Act II lead: {branch_labels[delayed_lead]} ({status}).")
         for flag, label in (
             ("blackwake_resolution", "Blackwake resolution"),
-            ("conyberry_warning_exit_choice", "Pale Witness warning"),
+            ("hushfen_warning_exit_choice", "Pale Witness warning"),
             ("act2_sponsor", "Expedition sponsor"),
             ("act3_route_choice", "Ninth Ledger route"),
         ):

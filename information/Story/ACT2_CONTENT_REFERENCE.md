@@ -40,10 +40,10 @@ Act 2 opens with Act 1 choices already pressing on the opening metrics and later
 | Act 1 carryover | Typical source | Act 2 consequence |
 | --- | --- | --- |
 | `act1_victory_tier`, `act2_starting_pressure` | Act 1 ending state after Varyn falls | changes how strained Iron Hollow feels at the start of the expedition and how much immediate pressure the claims war opens under |
-| `steward_vow_made`, `phandalin_council_seen` | choosing to speak for the town and help shape its defenses | raises starting `Town Stability`; the town enters the claims war with more nerve |
-| `elira_helped` and whether Elira joined | shrine aid and recruitment | lowers starting `Whisper Pressure`; Agatha and Black Lake scenes become more grounded in mercy instead of panic |
-| `miners_exchange_dispute_resolved`, `miners_exchange_ledgers_checked` | Act 1 Miner's Exchange path | raises starting `Route Control`; Halia is easier to justify as a sponsor, but the player also sees her more clearly |
-| `act2_edermath_cache_routework` | recovering Daran Edermath's old adventurer's cache at the orchard | raises starting `Route Control`; Act 2 status text can cite the quiet orchard-to-highland control line |
+| `steward_vow_made`, `iron_hollow_claims_council_seen` | choosing to speak for the town and help shape its defenses | raises starting `Town Stability`; the town enters the claims war with more nerve |
+| `elira_helped` and whether Elira joined | shrine aid and recruitment | lowers starting `Whisper Pressure`; Pale Witness and Black Lake scenes become more grounded in mercy instead of panic |
+| `miners_exchange_dispute_resolved`, `miners_exchange_ledgers_checked` | Act 1 Delvers' Exchange path | raises starting `Route Control`; Halia is easier to justify as a sponsor, but the player also sees her more clearly |
+| `act2_edermath_cache_routework` | recovering Daran Orchard's old adventurer's cache at the orchard | raises starting `Route Control`; Act 2 status text can cite the quiet orchard-to-highland control line |
 | `early_companion_recruited` | Kaelis or Rhogar in Greywake | Kaelis improves route logic; Rhogar improves civic steadiness |
 | `neverwinter_contract_house_political_callback` | spending contract-house intel in Blackwake or Mira's Greywake follow-up report | raises starting `Route Control`; Oren, Sabra, Vessa, and Garren create city-side witness pressure against copied road authority |
 | `bryn_ledger_sold` vs `bryn_ledger_burned` | `Loose Ends` personal quest | selling the ledger pushes more pressure and distrust into the expedition opening; burning it makes the town start cleaner but poorer |
@@ -66,7 +66,7 @@ Act 2 opens with Act 1 choices already pressing on the opening metrics and later
   - High values mean the act ends with more obvious contamination feeding Act 3.
 - `Sponsor Choice`
   - `Halia / Exchange`: faster routework, more leverage, more greed, higher risk of feeding the wrong parts of the race
-  - `Linene / Lionshield`: steadier logistics, cleaner discipline, more defensible claims posture
+  - `Linene / Ironbound`: steadier logistics, cleaner discipline, more defensible claims posture
   - `Elira + Daran / Wardens`: slower but morally firmer expedition, lower whisper seepage, stronger human consequences
 - `Delayed Lead Rule`
   - Once the player advances to sabotage night with one early lead unresolved, that lead is marked as delayed.
@@ -174,8 +174,8 @@ Act 2 opens with Act 1 choices already pressing on the opening metrics and later
 
 | Companion | Race / Class | Summary | Recruitment point | Relationship bonuses |
 | --- | --- | --- | --- | --- |
-| Nim Ardentglass | Unrecorded Wizard | Pact cartographer and practical ruin scholar | joins after a rescue or breakthrough around `Stonehollow Dig` or the first early-route convergence | Great: `+1 Arcana`, `+1 Investigation`; Exceptional: `+1 spell attack` |
-| Irielle Ashwake | Fire-Blooded Warlock | escaped cult augur trying to stay ahead of the whispers that marked her | freed during `South Adit` around the late-act 70 percent mark | Great: `+1 spell damage`, `+1 Insight`; Exceptional: `+1 WIS saves` |
+| Nim Ardentglass | Unrecorded Mage / Arcanist | Meridian Compact cartographer and practical ruin scholar | joins after a rescue or breakthrough around `Stonehollow Dig` or the first early-route convergence | Great: `+1 Arcana`, `+1 Investigation`; Exceptional: `+1 spell attack` |
+| Irielle Ashwake | Fire-Blooded Mage / Elementalist | escaped cult augur trying to stay ahead of the whispers that marked her | freed during `South Adit` around the late-act 70 percent mark | Great: `+1 spell damage`, `+1 Insight`; Exceptional: `+1 WIS saves` |
 
 ### Scene support hooks
 
@@ -194,8 +194,8 @@ Act 2 should deepen the whole party through optional side tracks that pull perso
 | Kaelis Starling | `ashes_in_the_boughs` | Greywake Wood | old scout loyalties, guilt, and the cost of reading danger too well | preserve a hidden trail or burn it | better route speed vs stronger town security |
 | Rhogar Valeguard | `oath_beneath_stone` | sealed miners' chapel | oath, mercy, and whether duty means guarding relics or people first | anchor his oath in the town or the threshold | stronger civic stability vs lower whisper seepage |
 | Tolan Ironshield | `last_wagon_standing` | Broken Prospect road | caravan memory, survivor anger, and whether pragmatism is moral enough | salvage tainted structure or destroy profitable wrongness | better route control vs cleaner spiritual state |
-| Bryn Underbough | `false_ledgers` | Miner's Exchange / sponsor stores | smuggling instincts, bad old contacts, and choosing who gets trusted with the truth | quietly falsify bad ledgers or expose the scheme in public | better covert route leverage vs stronger civic trust |
-| Elira Dawnmantle | `lantern_of_tymora` | dead-testimony chapel ruins | faith under pressure, grief, and whether hope is luck or discipline | carry the warding lantern into the field or leave it in town | lower whisper pressure vs higher town stability |
+| Bryn Underbough | `false_ledgers` | Delvers' Exchange / sponsor stores | smuggling instincts, bad old contacts, and choosing who gets trusted with the truth | quietly falsify bad ledgers or expose the scheme in public | better covert route leverage vs stronger civic trust |
+| Elira Lanternward | `lantern_under_ash` | dead-testimony chapel ruins | faith under pressure, grief, and whether hope is luck or discipline | carry the warding lantern into the field or leave it in town | lower whisper pressure vs higher town stability |
 | Nim Ardentglass | `missing_theorem` | South Adit archive room | mentor legacy, academic pride, and whether knowledge is worth carrying out intact | preserve the dangerous theorem or burn its corrupted pages | stronger forge options vs safer Act 3 contamination profile |
 | Irielle Ashwake | `starved_signal` | Blackglass shrine | resisting the cult's hold and deciding whether dangerous knowledge should be destroyed or studied | teach the counter-cadence or bury it | stronger forge opening vs cleaner containment into Act 3 |
 
@@ -208,7 +208,7 @@ These items have been added to the catalog source so future encounter, quest, an
 | `miners_ration_tin` | Miner's Ration Tin | supply | denser expedition food than Act 1 road provisions | survey packs, dwarf camps, and mine lockers |
 | `mushroom_broth_flask` | Mushroom Broth Flask | supply | warm underground comfort item for camp flavor | ruined kitchens, watchfires, and miner stores |
 | `delvers_amber` | Delver's Amber | consumable | temp HP and anti-fear support for cave descents | Stonehollow and expedition caches |
-| `resonance_tonic` | Resonance Tonic | consumable | anti-reeling / MP support for ruin casters | Agatha lead rewards and arcane vaults |
+| `resonance_tonic` | Resonance Tonic | consumable | anti-reeling / MP support for ruin casters | Pale Witness lead rewards and arcane vaults |
 | `forge_blessing_elixir` | Forge-Blessing Elixir | consumable | late-act courage draught with blessed synergy | forge reliquaries and elite cult loot |
 | `thoughtward_draught` | Thoughtward Draught | consumable | anti-charm / anti-fear counterplay for whisper magic | ward caches and prisoner escape kits |
 | `scroll_echo_step` | Scroll of Echo Step | scroll | stealth / escape tool that rewards smart disengage play | scout tubes and hidden script lockers |
@@ -233,7 +233,7 @@ These enemies should carry the act's thematic load: cave pressure, expedition ri
 | `grimlock_tunneler` | Grimlock Tunneler | 2 | 20 | 14 | Hooked Blade `1d6+2` | 100 | 6 | tunnel ambusher that punishes disoriented targets |
 | `stirge_swarm` | Stirge Swarm | 2 | 17 | 14 | Proboscis `1d6` | 75 | 0 | fast nuisance fight for cramped approaches |
 | `ochre_slime` | Ochre Slime | 2 | 28 | 8 | Pseudopod `2d6` | 100 | 0 | slow acid body used in chokepoints and side chambers |
-| `animated_armor` | Pact Sentinel Armor | 2 | 26 | 16 | Gauntlet Slam `1d6+2` | 100 | 12 | old mine guardian animated by lingering forge magic |
+| `animated_armor` | Meridian Sentinel Armor | 2 | 26 | 16 | Gauntlet Slam `1d6+2` | 100 | 12 | old mine guardian animated by lingering forge magic |
 | `spectral_foreman` | Spectral Foreman | 3 | 31 | 14 | Phantom Pick `1d8+2` | 150 | 18 | dead shift boss used in haunted labor scenes |
 | `starblighted_miner` | Starblighted Miner | 3 | 29 | 13 | Rusted Pick `1d8+1` | 125 | 14 | miner twisted by shard exposure and whisper-static |
 | `caldra_voss` | Sister Caldra Voss | 4 | 42 | 15 | Shard Dagger `1d8+2` | 250 | 70 | final cult agent boss with charm, reeling, petrify hints, and rally tools |
@@ -265,7 +265,7 @@ These enemies should carry the act's thematic load: cave pressure, expedition ri
 - On hit, target takes `1d4` acid and gains Acid `2`
 - Splitting on slashing damage is good flavor if later runtime support appears, but is not required for first implementation
 
-### Pact Sentinel Armor
+### Meridian Sentinel Armor
 
 - Critical hits against it should feel ineffective even before dedicated adamantine-style runtime support exists
 - `lockstep_bash`: once, STR save DC `13` or target becomes Prone `1`
@@ -291,13 +291,13 @@ These enemies should carry the act's thematic load: cave pressure, expedition ri
 
 | Quest id | Title | Giver | Location | Trigger | Reward |
 | --- | --- | --- | --- | --- | --- |
-| `recover_pact_waymap` | Recover the Pact Waymap | Halia Thornton | Miner's Exchange | offered during the first claims council if the player presses the mine-history angle | `60 XP`, `28 gp`, `resonance_tonic x1` |
-| `seek_agathas_truth` | Ask the Banshee What Was Buried | Elira Dawnmantle | shrine / Conyberry route | offered after the player follows chapel or spiritual clues | `55 XP`, `scroll_quell_the_deep x1` |
-| `rescue_stonehollow_scholars` | Bring Back the Survey Team | Linene Graywind | Stonehollow Dig | offered if the player asks about missing hired specialists | `60 XP`, `22 gp`, `miners_ration_tin x2` |
-| `cut_woodland_saboteurs` | Break the Woodland Saboteurs | Daran Edermath | orchard / woodland route | offered if the player pushes the road-and-ranger angle | `60 XP`, `25 gp`, `delvers_amber x1` |
-| `hold_the_claims_meet` | Hold the Claims Meeting Together | Linene Graywind | Iron Hollow | triggers automatically once any two early leads are cleared | `50 XP`, `18 gp`, sponsor reputation flag |
-| `free_wave_echo_captives` | Free the South Adit Prisoners | Elira Dawnmantle | South Adit | offered when the resonance cells are discovered | `70 XP`, `30 gp`, `scroll_echo_step x1` |
-| `sever_quiet_choir` | Sever the Quiet Choir | town council | Resonant Vaults | becomes active once Caldra and the cult cell are positively identified | `100 XP`, `40 gp`, `forge_blessing_elixir x1` |
+| `recover_pact_waymap` | Recover the Compact Waymap | Halia Vey | Delvers' Exchange | offered during the first claims council if the player presses the mine-history angle | `140 XP`, `75 gp`, `pact_waymap_case x1`, `resonance_tonic x2` |
+| `seek_pale_witness_truth` | Ask the Pale Witness What Was Buried | Elira Lanternward | Hushfen Road | offered after the player follows chapel or spiritual clues | `130 XP`, `40 gp`, `pale_witness_lantern x1`, `scroll_quell_the_deep x1` |
+| `rescue_stonehollow_scholars` | Bring Back the Survey Team | Linene Ironward | Stonehollow Dig | offered if the player asks about missing hired specialists | `140 XP`, `70 gp`, `stonehollow_survey_lantern x1`, `miners_ration_tin x4` |
+| `cut_woodland_saboteurs` | Break the Woodland Saboteurs | Daran Orchard | Greywake Survey Line | offered if the player pushes the road-and-ranger angle | `140 XP`, `65 gp`, `woodland_wayfinder_boots x1`, `delvers_amber x2` |
+| `hold_the_claims_meet` | Hold the Claims Meeting Together | Linene Ironward | Iron Hollow | triggers automatically once any two early leads are cleared | `120 XP`, `75 gp`, `claims_accord_brooch x1` |
+| `free_wave_echo_captives` | Free the South Adit Prisoners | Elira Lanternward | South Adit | offered when the resonance cells are discovered | `160 XP`, `80 gp`, `freed_captive_prayer_beads x1`, `scroll_echo_step x1`, `scroll_lesser_restoration x1` |
+| `sever_quiet_choir` | Sever the Quiet Choir | Iron Hollow Council | Resonant Vaults | becomes active once Caldra and the cult cell are positively identified | `250 XP`, `150 gp`, `forgeheart_cinder x1`, `forge_blessing_elixir x2`, `scroll_forge_shelter x1` |
 
 ### Quest state logic
 
@@ -315,7 +315,7 @@ Implementation note for later: add an act-scope field such as `act_exclusive` or
 | --- | --- | --- | --- |
 | `silent_mule_train` | Silent Mule Train | investigation / animal handling / optional combat | abandoned ore mules dragging cut harness bells through the dark |
 | `lantern_in_the_wash` | Lantern in the Wash | investigation / loot | washed-out lantern, map tube, and one unsettling sign of cult traffic |
-| `hushed_pilgrims` | Hushed Pilgrims | social / protection | frightened travelers from Conyberry share warnings and rumors |
+| `hushed_pilgrims` | Hushed Pilgrims | social / protection | frightened travelers from Hushfen share warnings and rumors |
 | `buried_wheel_rut` | Buried Wheel Rut | survival / investigation | half-buried wagon track that can reveal the cult's supply line |
 | `collapsed_watchfire` | Collapsed Watchfire | rescue / optional combat | a ruined camp with one living survivor and something still nearby |
 | `chalked_warning_stone` | Chalked Warning Stone | lore / skill check | an old dwarven marker that can grant context, caution, or a hidden stash |
@@ -324,7 +324,7 @@ Implementation note for later: add an act-scope field such as `act_exclusive` or
 | `blackwater_crossing` | Blackwater Crossing | skill challenge / optional combat | a ford watched by nervous cult outriders |
 | `prospectors_last_joke` | Prospector's Last Joke | investigation / hazard | a fake treasure marker leading to ooze, collapse, or a real hidden tube |
 | `choir_under_hill` | Choir Under the Hill | scout / dread scene | chanting heard through stone can be ignored, trailed, or exploited |
-| `broken_sending_tube` | Broken Sending Tube | lore / loot | a Pact-age message cylinder with partial directions and names |
+| `broken_sending_tube` | Broken Sending Tube | lore / loot | a Meridian Compact-era message cylinder with partial directions and names |
 | `stone_taster` | Stone-Taster | non-combat creature / optional combat | a blind cave lizard can reveal a seam or panic into a fight |
 | `shardfall_gleam` | Shardfall Gleam | omen / skill check | a tiny crystal splinter offers loot and an early Act 3 shiver |
 | `dust_in_the_bedroll` | Dust in the Bedroll | camp sabotage / discovery | cult dust, broken sleep, and a chance to catch an infiltrator before dawn |
@@ -336,16 +336,16 @@ Implementation note for later: add an act-scope field such as `act_exclusive` or
 - `act2_route_control`
 - `act2_whisper_pressure`
 - `act2_sponsor`
-- `phandelver_claims_council_seen`
+- `iron_hollow_claims_council_seen`
 - `act2_neglected_lead`
 - `act2_midpoint_priority`
-- `agatha_truth_secured`
-- `agatha_truth_clear`
+- `hushfen_truth_secured`
+- `pale_witness_truth_clear`
 - `woodland_survey_cleared`
 - `stonehollow_dig_cleared`
 - `nim_recruited`
 - `claims_meet_held`
-- `phandalin_sabotage_resolved`
+- `iron_hollow_sabotage_resolved`
 - `broken_prospect_cleared`
 - `south_adit_cleared`
 - `act2_first_late_route`
@@ -358,7 +358,7 @@ Implementation note for later: add an act-scope field such as `act_exclusive` or
 - `black_lake_shrine_purified`
 - `black_lake_barracks_raided`
 - `caldra_defeated`
-- `act3_phandalin_state`
+- `act3_iron_hollow_state`
 - `act3_claims_balance`
 - `act3_whisper_state`
 - `act3_forge_route_state`

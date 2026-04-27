@@ -21,9 +21,9 @@ This file documents the current quest implementation for reading, balancing, deb
 | `dnd_game/data/quests/__init__.py` | Combines Act 1 and Act 2 quest maps into `QUESTS` and `QUEST_ORDER`. |
 | `dnd_game/gameplay/quests.py` | Runtime quest log, status refresh, quest grant, reward summary, and turn-in behavior. |
 | `dnd_game/models.py` | `GameState.quests` stores active save data. |
-| `dnd_game/gameplay/story_intro.py` | Neverwinter briefing scenes, Oren Vale's contract house hub, `False Manifest Circuit`, and the upstairs private-room reward scene. |
-| `dnd_game/gameplay/story_town_hub.py` | Steward Tessa Harrow flow, Stonehill inn NPC scenes, inn quest grant and turn-in flow, the upstairs quiet-room intel scene, and the Stonehill barfight resolution scene. |
-| `dnd_game/gameplay/story_town_services.py` | Barthen, Elira shrine, and Linene service scenes. |
+| `dnd_game/gameplay/story_intro.py` | Greywake briefing scenes, Oren Vale's contract house hub, `False Manifest Circuit`, and the upstairs private-room reward scene. |
+| `dnd_game/gameplay/story_town_hub.py` | Steward Tessa Harrow flow, Ashlamp Inn NPC scenes, inn quest grant and turn-in flow, the upstairs quiet-room intel scene, and the Ashlamp barfight resolution scene. |
+| `dnd_game/gameplay/story_town_services.py` | Hadrik, Elira shrine, and Linene service scenes. |
 | `dnd_game/gameplay/story_act1_expanded.py` | Halia and Daran Act 1 quest scenes. |
 | `dnd_game/gameplay/map_system.py` | Map-driven completion flags, Blackwake turn-in, Ashfall/Emberhall route consequence hooks, and companion personal quest resolution. |
 | `dnd_game/gameplay/story_act2_scaffold.py` | Act 2 quest grants, original-giver report flow, Act 2 metric rewards, and turn-in dialogue. |
@@ -125,7 +125,7 @@ Common grant locations:
 - Town NPC dialogue scenes grant town quests.
 - Companion trust checks grant personal quests.
 - Act 2 route scenes grant route-specific quests.
-- The Blackwake branch can grant `trace_blackwake_cell` during the Neverwinter departure fork.
+- The Blackwake branch can grant `trace_blackwake_cell` during the Greywake departure fork.
 
 ### Refresh
 
@@ -212,7 +212,7 @@ Maintenance rule: every quest reward item id must exist in `dnd_game/data/items/
 Current naming convention:
 
 - Use `quest_reward_...` for flags granted by quest reward turn-ins.
-- Keep names descriptive, for example `quest_reward_lionshield_logistics`.
+- Keep names descriptive, for example `quest_reward_ironbound_logistics`.
 - These flags are a clean hook for later story branches, discounts, route shortcuts, social leverage, and Act 3 handoff state.
 
 The reward UI labels strip prefixes such as `quest_reward_`, `act2_`, and `act3_` when printing a short unlock line.
@@ -221,10 +221,10 @@ The reward UI labels strip prefixes such as `quest_reward_`, `act2_`, and `act3_
 
 `reward.merchant_attitudes` applies attitude deltas through `adjust_merchant_attitude()`.
 
-Current merchant ids:
+Current legacy merchant ids:
 
-- `barthen_provisions`
-- `linene_graywind`
+- `barthen_provisions` backs Hadrik's Provisions.
+- `linene_graywind` backs Linene Ironward and the Ironbound Trading Post.
 
 Merchant attitude affects trade through `buy_price_multiplier()` and `sell_price_multiplier()`. Higher attitude means better prices.
 
@@ -246,23 +246,23 @@ Positive `act2_town_stability` and `act2_route_control` are beneficial. Negative
 | --- | --- | --- | --- | --- |
 | `trace_blackwake_cell` | Embers Before the Road | Mira Thann | `blackwake_completed` | 90 XP, 35 gp, `miras_blackwake_seal`, `scroll_ember_ward`, Blackwake watch backing flag. |
 | `secure_miners_road` | Stop the Watchtower Raids | Steward Tessa Harrow | `ashfall_watch_cleared` | 100 XP, 50 gp, `roadwarden_cloak`, supplies, miners-road-open flag. |
-| `restore_barthen_supplies` | Keep the Shelves Full | Barthen | `ashfall_watch_cleared` | 75 XP, 35 gp, `barthen_resupply_token`, food, Barthen attitude boost, resupply-credit flag. |
-| `reopen_lionshield_trade` | Reopen the Trade Lane | Linene Graywind | `ashfall_watch_cleared` | 85 XP, 45 gp, `lionshield_quartermaster_badge`, potions, Linene attitude boost, logistics flag. |
-| `marked_keg_investigation` | The Marked Keg | Mara Stonehill | `marked_keg_resolved` | 70 XP, 24 gp, `innkeeper_credit_token`, Stonehill common-room-welcome flag. |
+| `restore_barthen_supplies` | Keep the Shelves Full | Hadrik | `ashfall_watch_cleared` | 75 XP, 35 gp, `barthen_resupply_token`, food, Hadrik attitude boost, resupply-credit flag. |
+| `reopen_lionshield_trade` | Reopen the Trade Lane | Linene Ironward | `ashfall_watch_cleared` | 85 XP, 45 gp, `lionshield_quartermaster_badge`, potions, Linene attitude boost, logistics flag. |
+| `marked_keg_investigation` | The Marked Keg | Mara Ashlamp | `marked_keg_resolved` | 70 XP, 24 gp, `innkeeper_credit_token`, Ashlamp common-room-welcome flag. |
 | `songs_for_the_missing` | Songs for the Missing | Sella Quill | `songs_for_missing_jerek_detail`, `songs_for_missing_tam_detail`, `songs_for_missing_nera_detail` | 65 XP, 18 gp, `sella_ballad_token`, names-carried flag. |
 | `quiet_table_sharp_knives` | Quiet Table, Sharp Knives | Nera Doss | `quiet_table_knives_resolved` | 80 XP, 28 gp, `blackseal_taster_pin`, quiet-room-access flag. |
 | `find_dain_harl` | Bring Back Dain's Name | Jerek Harl | `dain_harl_truth_found` | 85 XP, 26 gp, `harl_road_knot`, Jerek road-knot flag. |
-| `false_manifest_circuit` | False Manifest Circuit | Sabra Kestrel | `false_manifest_oren_detail`, `false_manifest_vessa_detail`, `false_manifest_garren_detail` | 75 XP, 24 gp, `kestrel_ledger_clasp`, Neverwinter private-room access flag. |
-| `silence_old_owl_well` | Silence Old Owl Well | Halia Thornton | `old_owl_well_cleared` | 100 XP, 45 gp, `gravequiet_amulet`, scroll and salve, gravequiet contacts flag. |
-| `break_wyvern_tor_raiders` | Break the Wyvern Tor Raiders | Daran Edermath | `wyvern_tor_cleared` | 100 XP, 40 gp, `edermath_scout_buckle`, healing draught, scout-network flag. |
+| `false_manifest_circuit` | False Manifest Circuit | Sabra Kestrel | `false_manifest_oren_detail`, `false_manifest_vessa_detail`, `false_manifest_garren_detail` | 75 XP, 24 gp, `kestrel_ledger_clasp`, Greywake private-room access flag. |
+| `silence_old_owl_well` | Silence Blackglass Well | Halia Vey | `old_owl_well_cleared` | 100 XP, 45 gp, `gravequiet_amulet`, scroll and salve, gravequiet contacts flag. |
+| `break_wyvern_tor_raiders` | Break the Red Mesa Raiders | Daran Orchard | `wyvern_tor_cleared` | 100 XP, 40 gp, `edermath_scout_buckle`, healing draught, scout-network flag. |
 | `bryn_loose_ends` | Loose Ends | Bryn Underbough | `bryn_loose_ends_resolved` | 80 XP, 25 gp, `bryns_cache_keyring`, `dust_of_disappearance`, underworld-favor flag. |
-| `elira_faith_under_ash` | Faith Under Ash | Elira Dawnmantle | `elira_faith_under_ash_resolved` | 80 XP, 20 gp, `dawnmantle_mercy_charm`, `blessed_salve`, mercy-blessing flag. |
-| `recover_pact_waymap` | Recover the Pact Waymap | Halia Thornton | `agatha_truth_secured`, `wave_echo_reached` | 140 XP, 75 gp, `pact_waymap_case`, resonance tonics, route-control boost. |
-| `seek_agathas_truth` | Ask the Banshee What Was Buried | Elira Dawnmantle | `agatha_truth_secured` | 130 XP, 40 gp, `agathas_truth_lantern`, `scroll_quell_the_deep`, whisper-pressure reduction. |
-| `rescue_stonehollow_scholars` | Bring Back the Survey Team | Linene Graywind | `stonehollow_dig_cleared` | 140 XP, 70 gp, `stonehollow_survey_lantern`, rations, Linene attitude boost, town and route boosts. |
-| `cut_woodland_saboteurs` | Break the Woodland Saboteurs | Daran Edermath | `woodland_survey_cleared` | 140 XP, 65 gp, `woodland_wayfinder_boots`, `delvers_amber`, route-control boost. |
-| `hold_the_claims_meet` | Hold the Claims Meeting Together | Linene Graywind | `claims_meet_held`, `phandalin_sabotage_resolved` | 120 XP, 75 gp, `claims_accord_brooch`, Linene attitude boost, major town-stability boost. |
-| `free_wave_echo_captives` | Free the South Adit Prisoners | Elira Dawnmantle | `south_adit_cleared` | 160 XP, 80 gp, `freed_captive_prayer_beads`, scrolls, town boost and whisper reduction. |
+| `elira_faith_under_ash` | Faith Under Ash | Elira Lanternward | `elira_faith_under_ash_resolved` | 80 XP, 20 gp, `dawnmantle_mercy_charm`, `blessed_salve`, mercy-blessing flag. |
+| `recover_pact_waymap` | Recover the Compact Waymap | Halia Vey | `hushfen_truth_secured`, `wave_echo_reached` | 140 XP, 75 gp, `pact_waymap_case`, resonance tonics, route-control boost. |
+| `seek_pale_witness_truth` | Ask the Pale Witness What Was Buried | Elira Lanternward | `hushfen_truth_secured` | 130 XP, 40 gp, `pale_witness_lantern`, `scroll_quell_the_deep`, whisper-pressure reduction. |
+| `rescue_stonehollow_scholars` | Bring Back the Survey Team | Linene Ironward | `stonehollow_dig_cleared` | 140 XP, 70 gp, `stonehollow_survey_lantern`, rations, Linene attitude boost, town and route boosts. |
+| `cut_woodland_saboteurs` | Break the Woodland Saboteurs | Daran Orchard | `woodland_survey_cleared` | 140 XP, 65 gp, `woodland_wayfinder_boots`, `delvers_amber`, route-control boost. |
+| `hold_the_claims_meet` | Hold the Claims Meeting Together | Linene Ironward | `claims_meet_held`, `iron_hollow_sabotage_resolved` | 120 XP, 75 gp, `claims_accord_brooch`, Linene attitude boost, major town-stability boost. |
+| `free_wave_echo_captives` | Free the South Adit Prisoners | Elira Lanternward | `south_adit_cleared` | 160 XP, 80 gp, `freed_captive_prayer_beads`, scrolls, town boost and whisper reduction. |
 | `sever_quiet_choir` | Sever the Quiet Choir | Town Council | `caldra_defeated` | 250 XP, 150 gp, `forgeheart_cinder`, forge consumables, town and route boosts, major whisper reduction. |
 
 ## Act 1 Reward Carryover Into Act 2
@@ -292,14 +292,14 @@ Current turn-in scenes call `turn_in_quest()` with an explicit original giver.
 | --- | --- |
 | `trace_blackwake_cell` | Blackwake backtrack/report path in `map_system.py`, giver `Mira Thann`. |
 | `secure_miners_road` | Steward's Hall in `story_town_hub.py`, giver `Steward Tessa Harrow`. |
-| `restore_barthen_supplies` | Barthen's Provisions in `story_town_services.py`, giver `Barthen`. |
-| `reopen_lionshield_trade` | Lionshield Coster in `story_town_services.py`, giver `Linene Graywind`. |
-| `find_dain_harl` | Stonehill Inn in `story_town_hub.py`, giver `Jerek Harl`. |
+| `restore_barthen_supplies` | Hadrik's Provisions in `story_town_services.py`, giver `Hadrik`. |
+| `reopen_lionshield_trade` | Ironbound Trading Post in `story_town_services.py`, giver `Linene Ironward`. |
+| `find_dain_harl` | Ashlamp Inn in `story_town_hub.py`, giver `Jerek Harl`. |
 | `false_manifest_circuit` | Oren Vale's contract house in `story_intro.py`, giver `Sabra Kestrel`. |
-| `silence_old_owl_well` | Miner's Exchange in `story_act1_expanded.py`, giver `Halia Thornton`. |
-| `break_wyvern_tor_raiders` | Edermath Orchard in `story_act1_expanded.py`, giver `Daran Edermath`. |
+| `silence_old_owl_well` | Delvers' Exchange in `story_act1_expanded.py`, giver `Halia Vey`. |
+| `break_wyvern_tor_raiders` | Orchard Wall in `story_act1_expanded.py`, giver `Daran Orchard`. |
 | `bryn_loose_ends` | Bryn's personal quest resolution in `map_system.py`, giver `Bryn Underbough`. |
-| `elira_faith_under_ash` | Elira's personal quest resolution in `map_system.py`, giver `Elira Dawnmantle`. |
+| `elira_faith_under_ash` | Elira's personal quest resolution in `map_system.py`, giver `Elira Lanternward`. |
 | Act 2 route quests | `run_act2_council_turnins()` lists each ready quest by original giver and turns in only the selected report. |
 
 Act 2 uses the expedition hub as the practical report surface, but the UI is still framed as reporting to the original giver. It no longer bulk-completes all ready quests at once.
@@ -353,7 +353,7 @@ Current relevant tests include:
 
 ## Common Gotchas
 
-- `giver` matching is exact. If the definition says `Linene Graywind`, the call must pass `giver="Linene Graywind"`.
+- `giver` matching is exact. If the definition says `Linene Ironward`, the call must pass `giver="Linene Ironward"`.
 - A ready quest is not completed until `turn_in_quest()` succeeds.
 - Empty `completion_flags` means immediately ready after grant.
 - Completed quests do not reopen if flags later change.

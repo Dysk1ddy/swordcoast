@@ -14,7 +14,7 @@ STORY_WRITER_MODES = ("revision", "dialogue", "scene", "banter")
 ACT2_SCENE_KEYS = {
     "act2_claims_council",
     "act2_expedition_hub",
-    "conyberry_agatha",
+    "hushfen_pale_circuit",
     "neverwinter_wood_survey_camp",
     "stonehollow_dig",
     "glasswater_intake",

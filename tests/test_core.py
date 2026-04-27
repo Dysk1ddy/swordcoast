@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import io
 import json
@@ -2843,7 +2843,7 @@ class CoreTests(unittest.TestCase):
         requirement = Requirement(
             flag_count_requirements=(
                 FlagCountRequirement(
-                    flags=("agatha_truth_secured", "woodland_survey_cleared", "stonehollow_dig_cleared"),
+                    flags=("hushfen_truth_secured", "woodland_survey_cleared", "stonehollow_dig_cleared"),
                     minimum=2,
                 ),
             ),
@@ -2852,7 +2852,7 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(requirement_met(DraftMapState(current_node_id="act2_expedition_hub"), requirement))
         self.assertFalse(
             requirement_met(
-                DraftMapState(current_node_id="act2_expedition_hub", flags={"agatha_truth_secured"}),
+                DraftMapState(current_node_id="act2_expedition_hub", flags={"hushfen_truth_secured"}),
                 requirement,
             )
         )
@@ -2860,7 +2860,7 @@ class CoreTests(unittest.TestCase):
             requirement_met(
                 DraftMapState(
                     current_node_id="act2_expedition_hub",
-                    flags={"agatha_truth_secured", "woodland_survey_cleared"},
+                    flags={"hushfen_truth_secured", "woodland_survey_cleared"},
                 ),
                 requirement,
             )
@@ -2963,7 +2963,7 @@ class CoreTests(unittest.TestCase):
         )
         self.assertTrue(
             requirement_met(
-                DraftMapState(current_node_id="act2_expedition_hub", flags={"act2_started", "agatha_truth_secured"}),
+                DraftMapState(current_node_id="act2_expedition_hub", flags={"act2_started", "hushfen_truth_secured"}),
                 siltlock_node.requirement,
             )
         )
@@ -3007,7 +3007,7 @@ class CoreTests(unittest.TestCase):
             requirement_met(
                 DraftMapState(
                     current_node_id="siltlock_counting_house",
-                    flags={"act2_started", "agatha_truth_secured", "glasswater_permit_fraud_exposed"},
+                    flags={"act2_started", "hushfen_truth_secured", "glasswater_permit_fraud_exposed"},
                 ),
                 next(edge for edge in ACT2_ENEMY_DRIVEN_MAP.edges if edge.edge_id == "siltlock_to_glasswater").requirement,
             )
@@ -5040,7 +5040,7 @@ class CoreTests(unittest.TestCase):
             current_scene="act2_expedition_hub",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "woodland_survey_cleared": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 3,
@@ -5124,7 +5124,7 @@ class CoreTests(unittest.TestCase):
             current_scene="glasswater_intake",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
@@ -5340,7 +5340,108 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Good. A clean escape is still a kind of justice down here.", rendered)
         self.assertEqual([encounter.title for encounter in encounters], ["South Adit Wardens"])
 
-    def test_conyberry_clean_civic_route_with_elira_secures_clear_warning(self) -> None:
+    def test_hushfen_legacy_scene_and_flags_normalize(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(77021))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="conyberry_agatha",
+            flags={
+                "act2_started": True,
+                "act2_neglected_lead": "agatha_truth_secured",
+                "agatha_truth_secured": True,
+                "agatha_truth_clear": True,
+                "conyberry_chapel_relit": True,
+                "conyberry_warning_exit_choice": "trusted",
+                game.ACT2_MAP_STATE_KEY: {
+                    "current_node_id": "conyberry_agatha",
+                    "visited_nodes": ["act2_expedition_hub", "conyberry_agatha"],
+                    "node_history": ["conyberry_agatha"],
+                },
+            },
+        )
+
+        game.ensure_state_integrity()
+
+        assert game.state is not None
+        self.assertEqual(game.state.current_scene, "hushfen_pale_circuit")
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertTrue(game.state.flags["pale_witness_truth_clear"])
+        self.assertTrue(game.state.flags["hushfen_chapel_relit"])
+        self.assertEqual(game.state.flags["hushfen_warning_exit_choice"], "trusted")
+        self.assertEqual(game.state.flags["act2_neglected_lead"], "hushfen_truth_secured")
+        self.assertNotIn("agatha_truth_secured", game.state.flags)
+        self.assertNotIn("conyberry_chapel_relit", game.state.flags)
+        payload = game.state.flags[game.ACT2_MAP_STATE_KEY]
+        self.assertEqual(payload["current_node_id"], "hushfen_pale_circuit")
+        self.assertIn("hushfen_pale_circuit", payload["visited_nodes"])
+        self.assertNotIn("conyberry_agatha", payload["visited_nodes"])
+
+    def test_pale_witness_legacy_internal_ids_normalize(self) -> None:
+        player = build_character(
+            name="Vale",
+            race="Human",
+            class_name="Fighter",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(77022))
+        game.state = GameState(
+            player=player,
+            current_act=2,
+            current_scene="hushfen_pale_circuit",
+            flags={
+                "act2_started": True,
+                "hushfen_truth_secured": True,
+                "agatha_circuit_entered": True,
+                "agatha_old_vow_named": True,
+                "agatha_waystone_heard": True,
+                "agatha_sigil_scrubbed": True,
+                "quest_reward_agathas_clear_truth": True,
+                "dialogue_input_elira_hub_agatha_seen": True,
+                game.ACT2_MAP_STATE_KEY: {
+                    "current_node_id": "hushfen_pale_circuit",
+                    "current_dungeon_id": "agathas_circuit",
+                },
+            },
+            quests={
+                "seek_agathas_truth": QuestLogEntry(
+                    quest_id="seek_agathas_truth",
+                    status="ready_to_turn_in",
+                    notes=["Old save note."],
+                )
+            },
+            inventory={"agathas_truth_lantern": 1},
+        )
+
+        game.ensure_state_integrity()
+
+        assert game.state is not None
+        self.assertIn("seek_pale_witness_truth", game.state.quests)
+        self.assertNotIn("seek_agathas_truth", game.state.quests)
+        self.assertEqual(game.state.quests["seek_pale_witness_truth"].quest_id, "seek_pale_witness_truth")
+        self.assertEqual(game.state.inventory["pale_witness_lantern"], 1)
+        self.assertIs(ITEMS["agathas_truth_lantern"], ITEMS["pale_witness_lantern"])
+        self.assertTrue(game.state.flags["pale_circuit_entered"])
+        self.assertTrue(game.state.flags["pale_circuit_old_vow_named"])
+        self.assertTrue(game.state.flags["pale_circuit_waystone_heard"])
+        self.assertTrue(game.state.flags["pale_circuit_sigil_scrubbed"])
+        self.assertTrue(game.state.flags["quest_reward_pale_witness_clear_truth"])
+        self.assertTrue(game.state.flags["dialogue_input_elira_hub_hushfen_seen"])
+        self.assertNotIn("agatha_circuit_entered", game.state.flags)
+        payload = game.state.flags[game.ACT2_MAP_STATE_KEY]
+        self.assertEqual(payload["current_dungeon_id"], "pale_circuit")
+
+    def test_hushfen_clean_civic_route_with_elira_secures_clear_warning(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5355,7 +5456,7 @@ class CoreTests(unittest.TestCase):
             player=player,
             companions=[create_elira_dawnmantle()],
             current_act=2,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             flags={
                 "act2_started": True,
                 "act2_town_stability": 3,
@@ -5383,28 +5484,28 @@ class CoreTests(unittest.TestCase):
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
         self.assertEqual(game.state.current_scene, "act2_expedition_hub")
-        self.assertEqual(game.state.flags["conyberry_circuit_strain"], 0)
-        self.assertTrue(game.state.flags["conyberry_pilgrims_steadied"])
-        self.assertTrue(game.state.flags["conyberry_cairn_ward_read"])
-        self.assertTrue(game.state.flags["conyberry_chapel_relit"])
-        self.assertTrue(game.state.flags["conyberry_dead_named"])
-        self.assertEqual(game.state.flags["conyberry_second_site"], "grave")
-        self.assertEqual(game.state.flags["conyberry_warning_exit_choice"], "public")
-        self.assertTrue(game.state.flags["agatha_truth_secured"])
-        self.assertTrue(game.state.flags["agatha_truth_clear"])
-        self.assertTrue(game.state.flags["agatha_public_warning_known"])
-        self.assertTrue(game.state.flags["agatha_warning_shared_publicly"])
+        self.assertEqual(game.state.flags["hushfen_circuit_strain"], 0)
+        self.assertTrue(game.state.flags["hushfen_pilgrims_steadied"])
+        self.assertTrue(game.state.flags["hushfen_cairn_ward_read"])
+        self.assertTrue(game.state.flags["hushfen_chapel_relit"])
+        self.assertTrue(game.state.flags["hushfen_dead_named"])
+        self.assertEqual(game.state.flags["hushfen_second_site"], "grave")
+        self.assertEqual(game.state.flags["hushfen_warning_exit_choice"], "public")
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertTrue(game.state.flags["pale_witness_truth_clear"])
+        self.assertTrue(game.state.flags["pale_witness_public_warning_known"])
+        self.assertTrue(game.state.flags["pale_witness_warning_shared_publicly"])
         self.assertEqual(game.state.flags["act2_town_stability"], 4)
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 0)
         self.assertIn("This is not ornamental faith. This is maintenance made holy because strangers depended on it.", rendered)
         self.assertIn("Someone still remembered the lamps were for service, not display.", rendered)
 
-    def test_conyberry_sigil_copy_route_with_bryn_adds_route_logic_but_draws_rebuke(self) -> None:
+    def test_hushfen_sigil_copy_route_with_bryn_adds_route_logic_but_draws_rebuke(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5419,7 +5520,7 @@ class CoreTests(unittest.TestCase):
             player=player,
             companions=[create_bryn_underbough()],
             current_act=2,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             flags={
                 "act2_started": True,
                 "act2_town_stability": 3,
@@ -5447,29 +5548,29 @@ class CoreTests(unittest.TestCase):
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
         self.assertEqual(game.state.current_scene, "act2_expedition_hub")
-        self.assertEqual(game.state.flags["conyberry_first_site"], "sigil")
-        self.assertTrue(game.state.flags["conyberry_clean_witness_taken"])
-        self.assertTrue(game.state.flags["conyberry_cairn_trail_read"])
-        self.assertTrue(game.state.flags["conyberry_sigil_copied"])
-        self.assertTrue(game.state.flags["conyberry_claim_marks_found"])
-        self.assertTrue(game.state.flags["agatha_claim_cover_suspected"])
-        self.assertEqual(game.state.flags["conyberry_second_site"], "grave")
-        self.assertEqual(game.state.flags["conyberry_warning_exit_choice"], "trusted")
-        self.assertTrue(game.state.flags["agatha_truth_secured"])
-        self.assertTrue(game.state.flags["agatha_truth_clear"])
-        self.assertTrue(game.state.flags["agatha_public_warning_known"])
-        self.assertTrue(game.state.flags["agatha_warning_restricted"])
+        self.assertEqual(game.state.flags["hushfen_first_site"], "sigil")
+        self.assertTrue(game.state.flags["hushfen_clean_witness_taken"])
+        self.assertTrue(game.state.flags["hushfen_cairn_trail_read"])
+        self.assertTrue(game.state.flags["hushfen_sigil_copied"])
+        self.assertTrue(game.state.flags["hushfen_claim_marks_found"])
+        self.assertTrue(game.state.flags["hushfen_claim_cover_suspected"])
+        self.assertEqual(game.state.flags["hushfen_second_site"], "grave")
+        self.assertEqual(game.state.flags["hushfen_warning_exit_choice"], "trusted")
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertTrue(game.state.flags["pale_witness_truth_clear"])
+        self.assertTrue(game.state.flags["pale_witness_public_warning_known"])
+        self.assertTrue(game.state.flags["pale_witness_warning_restricted"])
         self.assertEqual(game.state.flags["act2_route_control"], 4)
-        self.assertEqual(game.state.flags["conyberry_circuit_strain"], 1)
+        self.assertEqual(game.state.flags["hushfen_circuit_strain"], 1)
         self.assertIn("The clever part is not the sigil. It is making the damage look like nobody practical could have been involved.", rendered)
         self.assertIn("You brought me theft with your reverence and expect me to separate the two.", rendered)
 
-    def test_conyberry_delayed_route_salvages_bruised_warning_without_blocking_progress(self) -> None:
+    def test_hushfen_delayed_route_salvages_bruised_warning_without_blocking_progress(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5484,12 +5585,12 @@ class CoreTests(unittest.TestCase):
             player=player,
             companions=[create_elira_dawnmantle()],
             current_act=2,
-            current_scene="conyberry_agatha",
+            current_scene="hushfen_pale_circuit",
             flags={
                 "act2_started": True,
                 "iron_hollow_sabotage_resolved": True,
-                "act2_neglected_lead": "agatha_truth_secured",
-                "agatha_circuit_defiled": True,
+                "act2_neglected_lead": "hushfen_truth_secured",
+                "hushfen_circuit_defiled": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
@@ -5515,19 +5616,19 @@ class CoreTests(unittest.TestCase):
             raise AssertionError(f"Unexpected prompt: {prompt!r}")
 
         game.scenario_choice = fake_scenario_choice  # type: ignore[method-assign]
-        game.scene_conyberry_agatha()
+        game.scene_hushfen_pale_circuit()
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
         self.assertEqual(game.state.current_scene, "act2_expedition_hub")
-        self.assertTrue(game.state.flags["agatha_truth_secured"])
-        self.assertFalse(game.state.flags["agatha_truth_clear"])
-        self.assertTrue(game.state.flags["agatha_pact_restraint_known"])
-        self.assertTrue(game.state.flags["agatha_warning_bound"])
-        self.assertEqual(game.state.flags["conyberry_first_site"], "sigil")
-        self.assertEqual(game.state.flags["conyberry_second_site"], "chapel")
-        self.assertTrue(game.state.flags["conyberry_sigil_broken"])
-        self.assertTrue(game.state.flags["conyberry_chapel_relit"])
+        self.assertTrue(game.state.flags["hushfen_truth_secured"])
+        self.assertFalse(game.state.flags["pale_witness_truth_clear"])
+        self.assertTrue(game.state.flags["pale_witness_pact_restraint_known"])
+        self.assertTrue(game.state.flags["pale_witness_warning_bound"])
+        self.assertEqual(game.state.flags["hushfen_first_site"], "sigil")
+        self.assertEqual(game.state.flags["hushfen_second_site"], "chapel")
+        self.assertTrue(game.state.flags["hushfen_sigil_broken"])
+        self.assertTrue(game.state.flags["hushfen_chapel_relit"])
         self.assertEqual(game.state.flags["act2_route_control"], 3)
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 2)
         self.assertEqual(game.state.xp, 45)
@@ -5538,7 +5639,7 @@ class CoreTests(unittest.TestCase):
             game.state.clues,
         )
 
-    def test_conyberry_relit_chapel_reduces_sabotage_night_pressure_once(self) -> None:
+    def test_hushfen_relit_chapel_reduces_sabotage_night_pressure_once(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5556,10 +5657,10 @@ class CoreTests(unittest.TestCase):
             current_scene="act2_midpoint_convergence",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "woodland_survey_cleared": True,
                 "stonehollow_dig_cleared": True,
-                "conyberry_chapel_relit": True,
+                "hushfen_chapel_relit": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 3,
                 "act2_whisper_pressure": 3,
@@ -5573,13 +5674,13 @@ class CoreTests(unittest.TestCase):
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
-        self.assertTrue(game.state.flags["conyberry_chapel_sabotage_payoff"])
-        self.assertTrue(game.state.flags["conyberry_chapel_pressure_payoff_applied"])
+        self.assertTrue(game.state.flags["hushfen_chapel_sabotage_payoff"])
+        self.assertTrue(game.state.flags["hushfen_chapel_pressure_payoff_applied"])
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 1)
         self.assertIn("Pilgrims from Hushfen arrive with lamp discipline", rendered)
         self.assertEqual([encounter.title for encounter in captured], ["Midpoint: Sabotage Night"])
 
-    def test_conyberry_relit_chapel_guides_black_lake_if_sabotage_payoff_was_unused(self) -> None:
+    def test_hushfen_relit_chapel_guides_black_lake_if_sabotage_payoff_was_unused(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5597,7 +5698,7 @@ class CoreTests(unittest.TestCase):
             flags={
                 "act2_started": True,
                 "wave_echo_outer_cleared": True,
-                "conyberry_chapel_relit": True,
+                "hushfen_chapel_relit": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 3,
                 "act2_whisper_pressure": 3,
@@ -5612,13 +5713,13 @@ class CoreTests(unittest.TestCase):
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
-        self.assertTrue(game.state.flags["black_lake_conyberry_lamp_guidance"])
-        self.assertTrue(game.state.flags["black_lake_conyberry_pressure_payoff"])
+        self.assertTrue(game.state.flags["black_lake_hushfen_lamp_guidance"])
+        self.assertTrue(game.state.flags["black_lake_hushfen_pressure_payoff"])
         self.assertTrue(game.state.flags["black_lake_shrine_route_marked"])
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 2)
         self.assertIn("lamp discipline you restored at Hushfen", rendered)
 
-    def test_conyberry_copied_sigil_maps_forge_lens_with_moral_risk_if_unbound(self) -> None:
+    def test_hushfen_copied_sigil_maps_forge_lens_with_moral_risk_if_unbound(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5637,7 +5738,7 @@ class CoreTests(unittest.TestCase):
             flags={
                 "act2_started": True,
                 "black_lake_crossed": True,
-                "conyberry_sigil_copied": True,
+                "hushfen_sigil_copied": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 3,
                 "act2_whisper_pressure": 2,
@@ -5658,8 +5759,8 @@ class CoreTests(unittest.TestCase):
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
         self.assertEqual(checks, [("Arcana", 14, "to break the resonance lens tempo before the boss fight")])
-        self.assertTrue(game.state.flags["forge_lens_conyberry_sigil_used"])
-        self.assertTrue(game.state.flags["forge_conyberry_sigil_moral_risk"])
+        self.assertTrue(game.state.flags["forge_lens_hushfen_sigil_used"])
+        self.assertTrue(game.state.flags["forge_hushfen_sigil_moral_risk"])
         self.assertEqual(game.state.flags["act2_whisper_pressure"], 3)
         self.assertIn("copied Hushfen sigil", rendered)
 
@@ -5873,7 +5974,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(any("doctrine blesses correction" in clue for clue in game.state.clues))
         self.assertIn("Tovin Marr's case", game.act3_forge_handoff_line())
 
-    def test_agatha_claim_cover_changes_sponsor_turnin_reaction(self) -> None:
+    def test_hushfen_claim_cover_changes_sponsor_turnin_reaction(self) -> None:
         player = build_character(
             name="Vale",
             race="Human",
@@ -5891,20 +5992,20 @@ class CoreTests(unittest.TestCase):
             flags={
                 "act2_started": True,
                 "act2_sponsor": "exchange",
-                "agatha_truth_secured": True,
-                "agatha_claim_cover_suspected": True,
+                "hushfen_truth_secured": True,
+                "hushfen_claim_cover_suspected": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
             },
         )
 
-        game.act2_turn_in_dialogue("seek_agathas_truth")
-        game.act2_turn_in_dialogue("seek_agathas_truth")
+        game.act2_turn_in_dialogue("seek_pale_witness_truth")
+        game.act2_turn_in_dialogue("seek_pale_witness_truth")
 
         assert game.state is not None
         rendered = strip_ansi("\n".join(log))
-        self.assertTrue(game.state.flags["agatha_claim_cover_council_reaction_recorded"])
+        self.assertTrue(game.state.flags["hushfen_claim_cover_council_reaction_recorded"])
         self.assertEqual(game.state.flags["act2_route_control"], 3)
         self.assertIn("Claim marks on dead ground are not piety", rendered)
 
@@ -5926,7 +6027,7 @@ class CoreTests(unittest.TestCase):
             current_scene="act2_expedition_hub",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "woodland_survey_cleared": True,
                 "stonehollow_dig_cleared": True,
                 "iron_hollow_sabotage_resolved": True,
@@ -5976,7 +6077,7 @@ class CoreTests(unittest.TestCase):
             current_scene="act2_expedition_hub",
             flags={
                 "act2_started": True,
-                "agatha_truth_secured": True,
+                "hushfen_truth_secured": True,
                 "act2_town_stability": 3,
                 "act2_route_control": 2,
                 "act2_whisper_pressure": 2,
@@ -6471,7 +6572,7 @@ class CoreTests(unittest.TestCase):
                     current_scene="act2_midpoint_convergence",
                     flags={
                         "act2_started": True,
-                        "agatha_truth_secured": True,
+                        "hushfen_truth_secured": True,
                         "stonehollow_dig_cleared": True,
                         "woodland_survey_cleared": True,
                         "act2_town_stability": 3,
@@ -7916,16 +8017,16 @@ class CoreTests(unittest.TestCase):
             player=player,
             current_act=2,
             current_scene="act2_expedition_hub",
-            flags={"agatha_truth_secured": True, "wave_echo_reached": True},
+            flags={"hushfen_truth_secured": True, "wave_echo_reached": True},
         )
         game.grant_quest("recover_pact_waymap")
-        game.grant_quest("seek_agathas_truth")
+        game.grant_quest("seek_pale_witness_truth")
         game.refresh_quest_statuses(announce=False)
 
         game.run_act2_council_turnins()
 
         self.assertEqual(game.state.quests["recover_pact_waymap"].status, "completed")
-        self.assertEqual(game.state.quests["seek_agathas_truth"].status, "ready_to_turn_in")
+        self.assertEqual(game.state.quests["seek_pale_witness_truth"].status, "ready_to_turn_in")
         self.assertEqual(game.state.gold, 75)
         self.assertEqual(game.state.xp, 140)
         self.assertEqual(game.state.inventory["pact_waymap_case"], 1)
@@ -7955,7 +8056,7 @@ class CoreTests(unittest.TestCase):
             "bryns_cache_keyring",
             "dawnmantle_mercy_charm",
             "pact_waymap_case",
-            "agathas_truth_lantern",
+            "pale_witness_lantern",
             "stonehollow_survey_lantern",
             "woodland_wayfinder_boots",
             "claims_accord_brooch",

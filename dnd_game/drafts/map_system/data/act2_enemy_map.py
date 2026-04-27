@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from ..runtime.models import (
     DungeonMap,
@@ -15,7 +15,7 @@ from ..runtime.models import (
 
 
 EARLY_LEAD_FLAGS = (
-    "agatha_truth_secured",
+    "hushfen_truth_secured",
     "woodland_survey_cleared",
     "stonehollow_dig_cleared",
 )
@@ -68,7 +68,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
         "                                      |",
         "                         {act2_expedition_hub}",
         "          /              /       |       \\              \\",
-        "{conyberry_agatha} {neverwinter_wood_survey_camp} {stonehollow_dig} {glasswater_intake}",
+        "{hushfen_pale_circuit} {neverwinter_wood_survey_camp} {stonehollow_dig} {glasswater_intake}",
         "                  \\              |              /              |",
         "                         {act2_midpoint_convergence}     {siltlock_counting_house}",
         "                         /                      \\",
@@ -87,7 +87,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
     overworld_positions={
         "phandalin_claims_council": (1, 0),
         "act2_expedition_hub": (1, 1),
-        "conyberry_agatha": (0, 2),
+        "hushfen_pale_circuit": (0, 2),
         "neverwinter_wood_survey_camp": (1, 2),
         "stonehollow_dig": (2, 2),
         "glasswater_intake": (3, 2),
@@ -122,15 +122,15 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
             requirement=Requirement(all_flags=("act2_started",)),
             tags=("phase:hub", "pressure:all"),
         ),
-        "conyberry_agatha": TravelNode(
-            node_id="conyberry_agatha",
-            scene_key="conyberry_agatha",
+        "hushfen_pale_circuit": TravelNode(
+            node_id="hushfen_pale_circuit",
+            scene_key="hushfen_pale_circuit",
             title="Hushfen and the Pale Circuit",
             short_label="HUSHFEN",
             kind="dungeon_entry",
             summary="A low-combat truth route threatened by Quiet Choir defilement and restless dead.",
             requirement=Requirement(all_flags=("act2_started",)),
-            enters_dungeon_id="agathas_circuit",
+            enters_dungeon_id="pale_circuit",
             parent_hub_id="act2_expedition_hub",
             tags=("phase:early", "enemy:quiet_choir", "enemy:undead", "pressure:whisper_pressure"),
         ),
@@ -322,7 +322,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
     },
     edges=(
         TravelEdge("claims_to_hub", "phandalin_claims_council", "act2_expedition_hub", "Open the expedition table"),
-        TravelEdge("hub_to_agatha", "act2_expedition_hub", "conyberry_agatha", "Seek the Pale Witness's truth"),
+        TravelEdge("hub_to_hushfen", "act2_expedition_hub", "hushfen_pale_circuit", "Seek the Pale Witness's truth"),
         TravelEdge("hub_to_wood", "act2_expedition_hub", "neverwinter_wood_survey_camp", "Break the woodland saboteurs"),
         TravelEdge("hub_to_stonehollow", "act2_expedition_hub", "stonehollow_dig", "Enter Stonehollow Dig"),
         TravelEdge("hub_to_glasswater", "act2_expedition_hub", "glasswater_intake", "Investigate Glasswater Intake"),
@@ -427,14 +427,14 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
         ),
     ),
     dungeons={
-        "agathas_circuit": DungeonMap(
-            dungeon_id="agathas_circuit",
+        "pale_circuit": DungeonMap(
+            dungeon_id="pale_circuit",
             title="The Pale Circuit",
-            entry_node_id="conyberry_agatha",
+            entry_node_id="hushfen_pale_circuit",
             entrance_room_id="coney_road",
             width=4,
             height=3,
-            completion_flags=("agatha_truth_secured",),
+            completion_flags=("hushfen_truth_secured",),
             boss_room_id="banshee_bower",
             summary="A social-spiritual route where Choir damage decides whether the truth is clean or bruised.",
             rooms={
@@ -446,7 +446,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     "entrance",
                     "Quiet approach through grass, stones, and old grief.",
                     exits=("chalk_ring", "dead_waystone"),
-                    clear_grants_flags=("agatha_circuit_entered",),
+                    clear_grants_flags=("pale_circuit_entered",),
                     scene_note="Enemy pressure: quiet_choir traces, lantern_fen_wisp if the warning is badly delayed.",
                 ),
                 "chalk_ring": DungeonRoom(
@@ -457,8 +457,8 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     "event",
                     "Read or repair the first dead warning before the Pale Witness manifests.",
                     exits=("defiled_sigil", "banshee_bower"),
-                    requirement=Requirement(all_flags=("agatha_circuit_entered",)),
-                    clear_grants_flags=("agatha_old_vow_named",),
+                    requirement=Requirement(all_flags=("pale_circuit_entered",)),
+                    clear_grants_flags=("pale_circuit_old_vow_named",),
                 ),
                 "dead_waystone": DungeonRoom(
                     "dead_waystone",
@@ -468,8 +468,8 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     "treasure",
                     "Optional route-memory cache that can turn the warning into usable map logic.",
                     exits=("banshee_bower",),
-                    requirement=Requirement(all_flags=("agatha_circuit_entered",)),
-                    clear_grants_flags=("agatha_waystone_heard",),
+                    requirement=Requirement(all_flags=("pale_circuit_entered",)),
+                    clear_grants_flags=("pale_circuit_waystone_heard",),
                 ),
                 "defiled_sigil": DungeonRoom(
                     "defiled_sigil",
@@ -480,7 +480,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     "Choir nails and chalk marks that must be scrubbed or endured.",
                     exits=("banshee_bower",),
                     requirement=Requirement(
-                        all_flags=("agatha_old_vow_named",),
+                        all_flags=("pale_circuit_old_vow_named",),
                         numeric_flag_requirements=(
                             NumericFlagRequirement(
                                 flag_name="act2_whisper_pressure",
@@ -489,8 +489,8 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                             ),
                         ),
                     ),
-                    clear_grants_flags=("agatha_sigil_scrubbed",),
-                    encounter_key="agatha_defiled_sigil",
+                    clear_grants_flags=("pale_circuit_sigil_scrubbed",),
+                    encounter_key="pale_witness_defiled_sigil",
                     scene_note="Suggested enemies: gutter_zealot or lantern_fen_wisp; avoid making the Pale Witness a standard combat enemy.",
                 ),
                 "banshee_bower": DungeonRoom(
@@ -501,11 +501,11 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     "boss",
                     "Final truth gate. Clean if the vow and one supporting branch are resolved.",
                     requirement=Requirement(
-                        all_flags=("agatha_old_vow_named",),
-                        any_flags=("agatha_sigil_scrubbed", "agatha_waystone_heard"),
+                        all_flags=("pale_circuit_old_vow_named",),
+                        any_flags=("pale_circuit_sigil_scrubbed", "pale_circuit_waystone_heard"),
                     ),
-                    clear_grants_flags=("agatha_truth_secured",),
-                    encounter_key="agatha_truth_gate",
+                    clear_grants_flags=("hushfen_truth_secured",),
+                    encounter_key="pale_witness_truth_gate",
                     scene_note="This is a social boss room, not a kill room.",
                 ),
             },
@@ -910,7 +910,7 @@ ACT2_ENEMY_DRIVEN_MAP = HybridMapBlueprint(
                     clear_grants_flags=("siltlock_bribe_float_found", "act2_sponsor_pressure_named"),
                     scene_note=(
                         "This is the sponsor-pressure room. It should react to `act2_sponsor`: Exchange pressure looks like ledgers, "
-                        "Lionshield pressure looks like guarded crates, council pressure looks like erased signatures."
+                        "Ironbound pressure looks like guarded crates, council pressure looks like erased signatures."
                     ),
                 ),
                 "valve_wax_archive": DungeonRoom(

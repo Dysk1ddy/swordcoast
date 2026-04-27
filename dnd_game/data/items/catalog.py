@@ -33,6 +33,12 @@ CATALOG_ID_PREFIX_DESCRIPTIONS = (
     ("M", "miscellaneous items and trinkets"),
 )
 CATALOG_ID_PREFIX_ORDER = {prefix: index for index, (prefix, _) in enumerate(CATALOG_ID_PREFIX_DESCRIPTIONS)}
+ITEM_ID_ALIASES = {
+    "agathas_truth_lantern": "pale_witness_lantern",
+}
+CATALOG_SORT_ID_ALIASES = {
+    "pale_witness_lantern": "agathas_truth_lantern",
+}
 
 
 @dataclass(slots=True)
@@ -787,7 +793,7 @@ CONSUMABLE_ITEMS = [
         "name": "Dust of Disappearance",
         "rarity": "rare",
         "description": "A pinch of gray dust that bends light away for a few heartbeats when scattered right.",
-        "source": "Wizard vaults, covert operatives, and hidden manor stores.",
+        "source": "Mage vaults, covert operatives, and hidden manor stores.",
         "weight": 0.1,
         "value": 180,
         "notes": ["Makes the target invisible for a short span."],
@@ -1046,7 +1052,7 @@ UNIQUE_REWARD_ITEMS = [
         "notes": ["The case turns recovered route fragments into usable marching decisions."],
     },
     {
-        "item_id": "agathas_truth_lantern",
+        "item_id": "pale_witness_lantern",
         "name": "Pale Witness Lantern",
         "item_type": "helmet",
         "rarity": "rare",
@@ -1418,7 +1424,8 @@ def catalog_prefix_for_category(category: str) -> str:
 
 def catalog_sort_key(item: Item) -> tuple[int, str, str]:
     prefix = catalog_prefix_for_category(item.category)
-    return (CATALOG_ID_PREFIX_ORDER.get(prefix, len(CATALOG_ID_PREFIX_ORDER)), item.category, item.item_id)
+    stable_item_id = CATALOG_SORT_ID_ALIASES.get(item.item_id, item.item_id)
+    return (CATALOG_ID_PREFIX_ORDER.get(prefix, len(CATALOG_ID_PREFIX_ORDER)), item.category, stable_item_id)
 
 
 def assign_catalog_ids(items: list[Item]) -> None:
@@ -2158,6 +2165,7 @@ def resolve_item_id(item_id: str | None) -> str | None:
     token = str(item_id).strip()
     if not token:
         return token
+    token = ITEM_ID_ALIASES.get(token, token)
     upper = token.upper()
     if upper in ITEMS_BY_CATALOG_ID:
         return upper
