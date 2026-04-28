@@ -5,7 +5,12 @@ import unittest
 
 from dnd_game.content import build_character, create_enemy
 from dnd_game.game import TextDnDGame
-from dnd_game.gameplay.combat_simulator import EncounterPassSimulation, simulate_encounter_pass
+from dnd_game.gameplay.combat_simulator import (
+    EncounterPassSimulation,
+    RouteChainEncounterSpec,
+    simulate_encounter_pass,
+    simulate_route_chain,
+)
 from dnd_game.models import GameState
 
 
@@ -108,6 +113,104 @@ class FullEncounterPassTests(unittest.TestCase):
                 if action.action_name.startswith("Weapon:")
             )
         )
+
+    def test_route_chain_harness_tracks_resources_and_short_rests_after_fights(self) -> None:
+        game, party = build_level_four_mixed_party()
+        game.state.gold = 11
+        game.state.inventory = {"camp_stew_jar": 3, "potion_healing": 1}
+        game.state.short_rests_remaining = 2
+        party[0].current_hp = 1
+
+        chain = simulate_route_chain(
+            game,
+            "emberway roadside",
+            party,
+            [RouteChainEncounterSpec("cutters at the ditch", (create_enemy("goblin_skirmisher"),))],
+            party_damage_multiplier=0.0,
+        )
+        step = chain.steps[0]
+
+        self.assertEqual(step.rest_decision, "short_rest")
+        self.assertEqual(chain.short_rest_count, 1)
+        self.assertEqual(step.resource_snapshot_before["gold"], 11)
+        self.assertEqual(step.resource_snapshot_after_encounter["healing_potions"], 1)
+        self.assertLess(
+            step.resource_snapshot_after_encounter["magic_points"],
+            step.resource_snapshot_before["magic_points"],
+        )
+        self.assertEqual(chain.final_snapshot["short_rests_remaining"], 1)
+        self.assertEqual(chain.final_snapshot["supply_points"], 12)
+        self.assertGreater(chain.final_snapshot["party_hp"], step.resource_snapshot_after_encounter["party_hp"])
+
+    def test_route_chain_harness_defers_rest_until_wave_group_finishes(self) -> None:
+        game, party = build_level_four_mixed_party()
+        game.state.inventory = {"camp_stew_jar": 3}
+        game.state.short_rests_remaining = 2
+        party[0].current_hp = 1
+
+        chain = simulate_route_chain(
+            game,
+            "reserve wave ambush",
+            party,
+            [
+                RouteChainEncounterSpec("first rush", (create_enemy("goblin_skirmisher"),), wave_group="reserve"),
+                RouteChainEncounterSpec("second rush", (create_enemy("bandit"),), wave_group="reserve"),
+            ],
+            party_damage_multiplier=0.0,
+            spend_party_resources=False,
+        )
+
+        self.assertEqual(chain.rest_decisions, ("deferred_wave", "short_rest"))
+        self.assertEqual(chain.deferred_wave_count, 1)
+        self.assertEqual(chain.steps[0].wave_index, 1)
+        self.assertEqual(chain.steps[1].wave_index, 2)
+        self.assertEqual(chain.steps[0].resource_snapshot_after_rest["short_rests_remaining"], 2)
+        self.assertEqual(chain.final_snapshot["short_rests_remaining"], 1)
+        self.assertGreater(chain.final_snapshot["party_hp"], chain.steps[1].resource_snapshot_after_encounter["party_hp"])
+
+    def test_route_chain_harness_uses_long_rest_when_short_rests_are_out(self) -> None:
+        game, party = build_level_four_mixed_party()
+        game.state.inventory = {"camp_stew_jar": 3}
+        game.state.short_rests_remaining = 0
+        party[0].current_hp = 1
+        party[2].resources["mp"] = 0
+
+        chain = simulate_route_chain(
+            game,
+            "spent company",
+            party,
+            [RouteChainEncounterSpec("last sentry pair", (create_enemy("bandit"),))],
+            party_damage_multiplier=0.0,
+            spend_party_resources=False,
+        )
+
+        self.assertEqual(chain.rest_decisions, ("long_rest",))
+        self.assertEqual(chain.long_rest_count, 1)
+        self.assertEqual(chain.final_snapshot["short_rests_remaining"], 2)
+        self.assertEqual(chain.final_snapshot["supply_points"], 0)
+        self.assertEqual(party[0].current_hp, party[0].max_hp)
+        self.assertEqual(party[2].resources["mp"], party[2].max_resources["mp"])
+
+    def test_route_chain_harness_reports_blocked_long_rest_when_supplies_are_short(self) -> None:
+        game, party = build_level_four_mixed_party()
+        game.state.inventory = {"bread_round": 1}
+        game.state.short_rests_remaining = 0
+        party[0].current_hp = 1
+
+        chain = simulate_route_chain(
+            game,
+            "empty packs",
+            party,
+            [RouteChainEncounterSpec("ditch knife", (create_enemy("goblin_skirmisher"),))],
+            party_damage_multiplier=0.0,
+            spend_party_resources=False,
+        )
+
+        self.assertEqual(chain.rest_decisions, ("long_rest_blocked",))
+        self.assertEqual(chain.blocked_rest_count, 1)
+        self.assertEqual(chain.final_snapshot["short_rests_remaining"], 0)
+        self.assertEqual(chain.final_snapshot["supply_points"], 1)
+        self.assertEqual(party[0].current_hp, 1)
 
 
 if __name__ == "__main__":

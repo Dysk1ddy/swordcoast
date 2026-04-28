@@ -100,9 +100,13 @@ from dnd_game.ui.colors import colorize, strip_ansi
 from dnd_game.ui.kivy_markup import (
     ansi_to_kivy_markup,
     dialogue_typing_start_index,
+    fade_kivy_markup,
     format_kivy_log_entry,
+    kivy_non_dialogue_reveal_delay,
+    kivy_output_is_header,
     plain_combat_status_text,
     reveal_kivy_markup,
+    should_buffer_kivy_non_dialogue_output,
     visible_markup_text,
 )
 from dnd_game.ui.rich_render import RICH_AVAILABLE, render_rich_lines
@@ -326,6 +330,50 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(action_animated)
         self.assertTrue(dialogue_animated)
         self.assertIn("[i]", dialogue)
+
+    def test_kivy_non_dialogue_reveal_delay_only_applies_outside_typewriter(self) -> None:
+        narration, narration_animated = format_kivy_log_entry("The road bends through wet ash. Smoke stings.")
+        dialogue, dialogue_animated = format_kivy_log_entry('Mira Thann: "Hold the line."')
+
+        self.assertEqual(kivy_non_dialogue_reveal_delay(narration, animated=narration_animated), 0.75)
+        self.assertAlmostEqual(kivy_non_dialogue_reveal_delay("First paragraph.\n\nSecond paragraph.", animated=False), 1.5)
+        self.assertAlmostEqual(
+            kivy_non_dialogue_reveal_delay("First paragraph.\n\nSecond paragraph.", animated=False, fast=True),
+            0.36,
+        )
+        self.assertEqual(kivy_non_dialogue_reveal_delay(dialogue, animated=dialogue_animated), 0.0)
+        self.assertEqual(kivy_non_dialogue_reveal_delay("", animated=False), 0.0)
+
+    def test_kivy_fade_markup_applies_alpha_to_default_and_nested_colors(self) -> None:
+        rendered = fade_kivy_markup("Road [color=#facc15]gold[/color]", 0.5, default_color="112233")
+
+        self.assertTrue(rendered.startswith("[color=#11223380]"))
+        self.assertIn("[color=#facc1580]gold[/color]", rendered)
+        self.assertTrue(rendered.endswith("[/color]"))
+
+    def test_kivy_buffers_non_dialogue_until_headers_or_dialogue(self) -> None:
+        narration, narration_animated = format_kivy_log_entry("The road bends through wet ash.")
+        dialogue, dialogue_animated = format_kivy_log_entry('Mira Thann: "Hold the line."')
+        header, header_animated = format_kivy_log_entry("=== Crossing ===")
+
+        self.assertTrue(
+            should_buffer_kivy_non_dialogue_output(
+                narration,
+                animated=narration_animated,
+                source_text="The road bends through wet ash.",
+            )
+        )
+        self.assertFalse(
+            should_buffer_kivy_non_dialogue_output(
+                dialogue,
+                animated=dialogue_animated,
+                source_text='Mira Thann: "Hold the line."',
+            )
+        )
+        self.assertTrue(kivy_output_is_header("=== Crossing ==="))
+        self.assertFalse(
+            should_buffer_kivy_non_dialogue_output(header, animated=header_animated, source_text="=== Crossing ===")
+        )
 
     def test_kivy_dialogue_typewriter_starts_after_speaker_name(self) -> None:
         dialogue, animated = format_kivy_log_entry('Elira Dawnmantle: "Wash your hands first."')
@@ -1958,6 +2006,39 @@ class CoreTests(unittest.TestCase):
             game.start_new_game()
 
         self.assertEqual(calls, [("main_menu", False)])
+
+    def test_start_new_game_prompts_for_difficulty_selection(self) -> None:
+        save_dir = Path.cwd() / "tests_output" / "new_game_difficulty"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        settings_path = save_dir / "settings.json"
+        settings_path.unlink(missing_ok=True)
+
+        answers = iter(
+            [
+                "3",  # tactician difficulty
+                "1",  # preset character
+                "1",  # Warrior preset
+                "1",  # lock preset
+                "1",  # begin adventure
+            ]
+        )
+        log: list[str] = []
+        game = TextDnDGame(
+            input_fn=lambda _: next(answers),
+            output_fn=log.append,
+            save_dir=save_dir,
+            rng=random.Random(900821),
+        )
+
+        game.start_new_game()
+
+        self.assertEqual(game.current_difficulty_mode(), "tactician")
+        self.assertEqual(json.loads(settings_path.read_text(encoding="utf-8"))["difficulty_mode"], "tactician")
+        rendered = self.plain_output(log)
+        self.assertIn("Choose a difficulty for this new game.", rendered)
+        self.assertIn("Difficulty set to Tactician.", rendered)
+        self.assertIn("Choose how you want to start.", rendered)
+        settings_path.unlink(missing_ok=True)
 
     def test_apply_damage_triggers_health_bar_animation_on_hp_loss(self) -> None:
         player = build_character(
@@ -8582,6 +8663,7 @@ class CoreTests(unittest.TestCase):
     def test_character_creation_and_briefing_flow(self) -> None:
         answers = iter(
             [
+                "2",  # standard difficulty
                 "2",  # custom character
                 "Aric",  # name
                 "1", "1",  # race select + confirm
@@ -8606,6 +8688,7 @@ class CoreTests(unittest.TestCase):
             ]
         )
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(7))
+        game.persist_settings = lambda: None
         game.start_new_game()
         self.assertIsNotNone(game.state)
         self.assertEqual(game.state.current_scene, "background_prologue")
@@ -8631,6 +8714,7 @@ class CoreTests(unittest.TestCase):
         answers = iter(
             [
                 "2",
+                "2",
                 "Aric",
                 "1", "1",
                 "1", "1",
@@ -8654,6 +8738,7 @@ class CoreTests(unittest.TestCase):
             ]
         )
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8))
+        game.persist_settings = lambda: None
         game.start_new_game()
         game.run_encounter = lambda encounter: "victory"
         game.skill_check = lambda actor, skill, dc, context: True
@@ -9186,6 +9271,7 @@ class CoreTests(unittest.TestCase):
     def test_point_buy_character_creation_flow(self) -> None:
         answers = iter(
             [
+                "2",  # standard difficulty
                 "2",
                 "Mira",
                 "1", "1",
@@ -9205,6 +9291,7 @@ class CoreTests(unittest.TestCase):
             ]
         )
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(9))
+        game.persist_settings = lambda: None
         game.start_new_game()
         self.assertIsNotNone(game.state)
         self.assertEqual(game.state.player.ability_scores["STR"], 16)
@@ -9238,6 +9325,7 @@ class CoreTests(unittest.TestCase):
     def test_preset_character_creation_flow(self) -> None:
         answers = iter(
             [
+                "2",  # standard difficulty
                 "1",  # preset character
                 "1",  # Warrior preset
                 "1",  # lock preset
@@ -9246,6 +9334,7 @@ class CoreTests(unittest.TestCase):
         )
         log: list[str] = []
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(44))
+        game.persist_settings = lambda: None
         game.start_new_game()
         self.assertIsNotNone(game.state)
         self.assertEqual(game.state.player.class_name, "Warrior")
@@ -9264,6 +9353,7 @@ class CoreTests(unittest.TestCase):
     def test_preset_character_creation_can_back_to_start_mode(self) -> None:
         answers = iter(
             [
+                "2",  # standard difficulty
                 "1",  # preset character
                 "4",  # back from preset calling
                 "1",  # preset character again
@@ -9274,6 +9364,7 @@ class CoreTests(unittest.TestCase):
         )
         log: list[str] = []
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(444))
+        game.persist_settings = lambda: None
 
         game.start_new_game()
 
@@ -11773,6 +11864,172 @@ class CoreTests(unittest.TestCase):
         game.short_rest()
         self.assertEqual(player.resources["mp"], (player.max_resources["mp"] + 1) // 2)
         self.assertEqual(game.state.short_rests_remaining, 1)
+
+    def test_route_resource_snapshot_tracks_rest_economy_resources(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        mage = build_character(
+            name="Ash",
+            race="Human",
+            class_name="Mage",
+            background="Sage",
+            base_ability_scores={"STR": 8, "DEX": 14, "CON": 12, "INT": 15, "WIS": 13, "CHA": 10},
+            class_skill_choices=["Arcana", "Investigation"],
+        )
+        player.current_hp = max(1, (player.max_hp - 1) // 2)
+        mage.resources["mp"] = 0
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17021))
+        game.state = GameState(
+            player=player,
+            companions=[mage],
+            current_scene="emberway_ambush",
+            gold=17,
+            inventory={"potion_healing": 2, "bread_round": 4, "camp_stew_jar": 1},
+            short_rests_remaining=2,
+        )
+
+        snapshot = game.route_resource_snapshot()
+
+        self.assertEqual(snapshot["members_below_half_hp"], [player.name])
+        self.assertEqual(snapshot["short_rests_remaining"], 2)
+        self.assertEqual(snapshot["supply_points"], 8)
+        self.assertEqual(snapshot["gold"], 17)
+        self.assertEqual(snapshot["healing_potions"], 2)
+        self.assertEqual(snapshot["magic_points"], 0)
+        self.assertEqual(snapshot["maximum_magic_points"], mage.max_resources["mp"])
+
+    def test_route_resource_snapshot_captures_gold_and_potions_after_buying_items(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17026))
+        game.state = GameState(player=player, current_scene="iron_hollow_hub", gold=30, inventory={})
+        stock = game.get_merchant_stock("barthen_provisions")
+        stock.clear()
+        stock["potion_healing"] = 1
+        price = game.merchant_buy_price("barthen_provisions", "potion_healing")
+        before = game.route_resource_snapshot()
+
+        game.buy_items("barthen_provisions", "Hadrik")
+        after = game.route_resource_snapshot()
+
+        self.assertEqual(after["gold"], before["gold"] - price)
+        self.assertEqual(after["healing_potions"], before["healing_potions"] + 1)
+        self.assertNotIn("potion_healing", stock)
+
+    def test_route_rest_policy_does_nothing_until_a_member_is_below_half_hp(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        player.max_hp = 12
+        player.current_hp = 6
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17022))
+        game.state = GameState(player=player, current_scene="emberway_ambush", short_rests_remaining=2)
+
+        self.assertEqual(game.route_rest_policy_decision(), "none")
+        self.assertEqual(game.apply_route_rest_policy(), "none")
+        self.assertEqual(player.current_hp, 6)
+        self.assertEqual(game.state.short_rests_remaining, 2)
+
+    def test_route_rest_policy_uses_short_rest_when_member_drops_below_half_hp(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        mage = build_character(
+            name="Ash",
+            race="Human",
+            class_name="Mage",
+            background="Sage",
+            base_ability_scores={"STR": 8, "DEX": 14, "CON": 12, "INT": 15, "WIS": 13, "CHA": 10},
+            class_skill_choices=["Arcana", "Investigation"],
+        )
+        player.current_hp = 1
+        mage.resources["mp"] = 0
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17023))
+        game.state = GameState(
+            player=player,
+            companions=[mage],
+            current_scene="emberway_ambush",
+            inventory={"camp_stew_jar": 3},
+            short_rests_remaining=2,
+        )
+        supplies_before = game.current_supply_points()
+
+        self.assertEqual(game.apply_route_rest_policy(), "short_rest")
+
+        self.assertEqual(game.state.short_rests_remaining, 1)
+        self.assertEqual(game.current_supply_points(), supplies_before)
+        self.assertGreater(player.current_hp, 1)
+        self.assertEqual(mage.resources["mp"], (mage.max_resources["mp"] + 1) // 2)
+
+    def test_route_rest_policy_uses_long_rest_when_short_rests_are_out(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        player.current_hp = 1
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17024))
+        game.state = GameState(
+            player=player,
+            current_scene="emberway_ambush",
+            inventory={"camp_stew_jar": 3},
+            short_rests_remaining=0,
+        )
+
+        self.assertEqual(game.apply_route_rest_policy(), "long_rest")
+
+        self.assertEqual(player.current_hp, player.max_hp)
+        self.assertEqual(game.state.short_rests_remaining, 2)
+        self.assertEqual(game.current_supply_points(), 0)
+
+    def test_route_rest_policy_reports_blocked_long_rest_when_supplies_are_short(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        player.current_hp = 1
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(17025))
+        game.state = GameState(
+            player=player,
+            current_scene="emberway_ambush",
+            inventory={"bread_round": 1},
+            short_rests_remaining=0,
+        )
+
+        self.assertEqual(game.route_rest_policy_decision(), "long_rest_blocked")
+        self.assertEqual(game.apply_route_rest_policy(), "long_rest_blocked")
+        self.assertEqual(player.current_hp, 1)
+        self.assertEqual(game.state.short_rests_remaining, 0)
+        self.assertEqual(game.current_supply_points(), 1)
 
     def test_spell_slot_restore_consumable_restores_mp(self) -> None:
         player = build_character(

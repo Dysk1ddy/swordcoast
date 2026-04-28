@@ -602,10 +602,10 @@ CONSUMABLE_ITEMS = [
         "description": "A frontier-standard recovery blend carried by scouts, quartermasters, and anyone expecting blood on the road.",
         "source": "Starter kits, lantern aid packs, raider satchels, and common loot drops.",
         "weight": 0.5,
-        "value": 15,
+        "value": 10,
         "heal_dice": "2d4",
-        "heal_bonus": 2,
-        "notes": ["Standard field mixture: regains 2d4 + 2 hit points."],
+        "heal_bonus": 4,
+        "notes": ["Standard field mixture: regains 2d4 + 4 hit points."],
     },
     {
         "item_id": "greater_healing_draught",

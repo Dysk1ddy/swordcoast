@@ -1640,12 +1640,15 @@ class CombatResolutionMixin:
         self.apply_stance_upgrade_hooks(actor, stance_key)
         return True
 
-    def use_guard_stance(self, actor) -> None:
-        self.set_combat_stance(actor, "guard", announce=False)
+    def use_guard_stance(self, actor) -> bool:
+        changed = self.set_combat_stance(actor, "guard", announce=False)
+        if not changed:
+            return False
         self.say(
             f"{self.style_name(actor)} sets a guarded lane: +20% Defense, +2 Stability, and -2 Accuracy while the stance holds."
         )
         self.record_opening_tutorial_combat_event("combat_guard_stance", actor=actor)
+        return True
 
     def can_raise_shield(self, actor) -> bool:
         return bool(getattr(actor, "shield", False)) and not self.has_status(actor, "raised_shield")
@@ -1731,10 +1734,10 @@ class CombatResolutionMixin:
             return 0
         fixated_id = attacker.bond_flags.get("warrior_fixated_by_id")
         if fixated_id is not None:
-            return 0 if id(target) == fixated_id else -1
+            return 0 if id(target) == fixated_id else -2
         fixated_by = str(attacker.bond_flags.get("warrior_fixated_by", ""))
         if fixated_by and getattr(target, "name", None) != fixated_by:
-            return -1
+            return -2
         return 0
 
     def use_iron_draw(self, actor, target) -> None:
@@ -4148,11 +4151,13 @@ class CombatResolutionMixin:
             return
         healed = target.heal(
             self.roll_with_animation_context(
-                "2d4+2",
+                healing_potion.heal_dice,
                 style="healing",
                 context_label=healing_potion.name,
                 outcome_kind="healing",
             ).total
+            + healing_potion.heal_bonus
+            + target.gear_bonuses.get("healing_received", 0)
         )
         play_heal_sound_for = getattr(self, "play_heal_sound_for", None)
         if healed > 0 and callable(play_heal_sound_for):

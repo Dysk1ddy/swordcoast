@@ -88,12 +88,20 @@ class GameBase:
         "minimal": "Minimal",
         "full": "Full",
     }
-    SETTINGS_KEYS = (*BOOLEAN_SETTINGS_KEYS, "dice_animation_mode")
+    DIFFICULTY_MODES = ("story", "standard", "tactician")
+    DIFFICULTY_MODE_LABELS = {
+        "story": "Story",
+        "standard": "Standard",
+        "tactician": "Tactician",
+    }
+    DEFAULT_DIFFICULTY_MODE = "standard"
+    SETTINGS_KEYS = (*BOOLEAN_SETTINGS_KEYS, "dice_animation_mode", "difficulty_mode")
     DEFAULT_SETTINGS_PAYLOAD = {
         "sound_effects_enabled": False,
         "music_enabled": True,
         "dice_animations_enabled": True,
         "dice_animation_mode": "full",
+        "difficulty_mode": DEFAULT_DIFFICULTY_MODE,
         "typed_dialogue_enabled": True,
         "pacing_pauses_enabled": True,
         "staggered_reveals_enabled": True,
@@ -335,6 +343,12 @@ class GameBase:
             and self._typed_dialogue_preference
             and self._staggered_reveals_preference
         )
+        stored_difficulty_mode = persisted_settings.get("difficulty_mode")
+        self.difficulty_mode = (
+            stored_difficulty_mode
+            if isinstance(stored_difficulty_mode, str) and stored_difficulty_mode in self.DIFFICULTY_MODES
+            else str(default_settings["difficulty_mode"])
+        )
         self.animate_dice = self._dice_animations_preference
         self.apply_dice_animation_mode_profile()
         self.pace_output = self._pacing_pauses_preference
@@ -349,13 +363,13 @@ class GameBase:
         self._dice_animation_width = 0
         self._choice_pause_seconds = 1.0
         self._combat_transition_pause_seconds = 1.0
-        self._option_reveal_pause_seconds = 0.5
-        self._loot_reveal_pause_seconds = 0.75
+        self._option_reveal_pause_seconds = 0.75
+        self._loot_reveal_pause_seconds = 1.0
         self._health_bar_width = 12
         self._health_bar_animation_step_seconds = 0.08
         self._dialogue_character_delay_seconds = 0.03
         self._dialogue_seconds_per_sentence = 2.5
-        self._narration_seconds_per_sentence = 2.5
+        self._narration_seconds_per_sentence = 3.25
         self._typing_sentence_pause_seconds = 0.75
         self._animation_skip_latched = False
         self._animation_skip_scope_depth = 0
@@ -454,6 +468,9 @@ class GameBase:
         dice_mode = data.get("dice_animation_mode")
         if isinstance(dice_mode, str) and dice_mode in self.DICE_ANIMATION_MODES:
             settings["dice_animation_mode"] = dice_mode
+        difficulty_mode = data.get("difficulty_mode")
+        if isinstance(difficulty_mode, str) and difficulty_mode in self.DIFFICULTY_MODES:
+            settings["difficulty_mode"] = difficulty_mode
         return settings
 
     @classmethod
@@ -474,6 +491,7 @@ class GameBase:
             "music_enabled": bool(getattr(self, "_music_enabled_preference", getattr(self, "music_enabled", False))),
             "dice_animations_enabled": bool(getattr(self, "_dice_animations_preference", self.animate_dice)),
             "dice_animation_mode": self.current_dice_animation_mode(),
+            "difficulty_mode": self.current_difficulty_mode(),
             "typed_dialogue_enabled": bool(getattr(self, "_typed_dialogue_preference", self.type_dialogue)),
             "pacing_pauses_enabled": bool(getattr(self, "_pacing_pauses_preference", self.pace_output)),
             "staggered_reveals_enabled": bool(
@@ -488,6 +506,21 @@ class GameBase:
 
     def dice_animation_mode_label(self, mode: str | None = None) -> str:
         return self.DICE_ANIMATION_MODE_LABELS.get(mode or self.current_dice_animation_mode(), "Off")
+
+    def current_difficulty_mode(self) -> str:
+        mode = getattr(self, "difficulty_mode", self.DEFAULT_DIFFICULTY_MODE)
+        return mode if mode in self.DIFFICULTY_MODES else self.DEFAULT_DIFFICULTY_MODE
+
+    def difficulty_mode_label(self, mode: str | None = None) -> str:
+        return self.DIFFICULTY_MODE_LABELS.get(mode or self.current_difficulty_mode(), "Standard")
+
+    def minimum_enemy_scaling_level(self) -> int:
+        mode = self.current_difficulty_mode()
+        if mode == "story":
+            return 4
+        if mode == "tactician":
+            return 1
+        return 3
 
     def apply_dice_animation_mode_profile(self) -> None:
         mode = self.current_dice_animation_mode()
@@ -3023,6 +3056,26 @@ class GameBase:
             self.set_dice_animation_mode(self.DICE_ANIMATION_MODES[choice - 1])
             return
 
+    def set_difficulty_mode(self, mode: str) -> None:
+        selected = mode if mode in self.DIFFICULTY_MODES else self.DEFAULT_DIFFICULTY_MODE
+        self.difficulty_mode = selected
+        self.persist_settings()
+        self.say(f"Difficulty set to {self.difficulty_mode_label(selected)}.")
+
+    def open_difficulty_settings(self) -> None:
+        while True:
+            options = [
+                f"Story ({'Current' if self.current_difficulty_mode() == 'story' else 'Set'})",
+                f"Standard ({'Current' if self.current_difficulty_mode() == 'standard' else 'Set'})",
+                f"Tactician ({'Current' if self.current_difficulty_mode() == 'tactician' else 'Set'})",
+                "Back",
+            ]
+            choice = self.choose("Difficulty", options, allow_meta=False)
+            if choice == 4:
+                return
+            self.set_difficulty_mode(self.DIFFICULTY_MODES[choice - 1])
+            return
+
     def set_typed_dialogue_enabled(self, enabled: bool) -> None:
         self._typed_dialogue_preference = bool(enabled)
         self.apply_typed_dialogue_preference()
@@ -3095,6 +3148,7 @@ class GameBase:
                     f"Toggle music ({self.settings_toggle_label(getattr(self, 'music_enabled', False), unavailable=not music_available)})"
                 ),
                 f"Dice animation style ({self.dice_animation_mode_label()})",
+                f"Difficulty ({self.difficulty_mode_label()})",
                 f"Toggle typed dialogue and narration ({self.settings_toggle_label(getattr(self, '_typed_dialogue_preference', self.type_dialogue))})",
                 f"Toggle pacing pauses ({self.settings_toggle_label(getattr(self, '_pacing_pauses_preference', self.pace_output))})",
                 f"Toggle staggered option reveals ({self.settings_toggle_label(getattr(self, '_staggered_reveals_preference', getattr(self, 'staggered_reveals_enabled', False)))})",
@@ -3119,12 +3173,15 @@ class GameBase:
                 self.open_dice_animation_settings()
                 continue
             if choice == 4:
-                self.toggle_typed_dialogue()
+                self.open_difficulty_settings()
                 continue
             if choice == 5:
-                self.toggle_pacing_pauses()
+                self.toggle_typed_dialogue()
                 continue
             if choice == 6:
+                self.toggle_pacing_pauses()
+                continue
+            if choice == 7:
                 self.toggle_staggered_reveals()
                 continue
             return

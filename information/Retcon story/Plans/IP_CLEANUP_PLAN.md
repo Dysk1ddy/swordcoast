@@ -154,7 +154,6 @@ Rewrite or quarantine:
 - `information/catalogs/SPELLS_ABILITIES_PASSIVES_FEATS_REFERENCE.md`
 - `information/systems/GAME_SYSTEMS_REFERENCE.md`
 - `information/systems/LEVELING_SYSTEM_DRAFT.md`
-- `information/systems/OPENAI_STORY_WRITER.md`
 - `information/Story/ACT1_CONTENT_REFERENCE.md`
 - `information/Story/ACT2_CONTENT_REFERENCE.md`
 - `information/Story/STORY_CONTENT_SUMMARY.md`

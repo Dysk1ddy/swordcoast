@@ -156,7 +156,6 @@ Primary files:
 - `information/catalogs/ACT2_ENEMY_EXPANSION_DRAFT.md`
 - `information/systems/GAME_SYSTEMS_REFERENCE.md`
 - `information/systems/QUEST_SYSTEM_REFERENCE.md`
-- `information/systems/OPENAI_STORY_WRITER.md`
 
 Rules for this lane:
 
@@ -216,23 +215,6 @@ A file is ready to leave the batch when all of these are true:
 - mirrored sentence structure has been broken where it made the prose sound staged
 - scene logic, ids, quest flow, rewards, and branching outcomes still match the old version
 - tests pass for any runtime edit
-
-## Tooling Use
-
-`tools/story_writer.py` and `story_writer_studio.py` can speed up draft generation, but they should stay in the draft lane.
-
-Use the tooling this way:
-
-- feed it the exact source file being revised
-- attach the retcon plan or world doc that fixes canon
-- use `--no-default-context` when legacy story summaries would muddy the pass
-- save drafts outside the source file first
-- hand-edit accepted lines into the repo
-
-Useful draft targets:
-
-- `information/Story/generated/`
-- `information/Retcon story/Lore/generated/`
 
 ## First Rewrite Queue
 

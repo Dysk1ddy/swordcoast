@@ -34,9 +34,12 @@ from .ui.kivy_markup import (
     ansi_to_kivy_markup,
     dialogue_typing_start_index,
     escape_kivy_markup,
+    fade_kivy_markup,
     format_kivy_log_entry,
+    kivy_non_dialogue_reveal_delay,
     plain_combat_status_text,
     reveal_kivy_markup,
+    should_buffer_kivy_non_dialogue_output,
     visible_markup_length,
     visible_markup_text,
 )
@@ -216,6 +219,28 @@ class PanelBox(BoxLayout):
 
 
 class ClickableGameBridge:
+    FAST_REVEAL_COMMANDS = {
+        "camp",
+        "character",
+        "characters",
+        "gear",
+        "help",
+        "helpconsole",
+        "inventory",
+        "inv",
+        "journal",
+        "level",
+        "load",
+        "map",
+        "maps",
+        "party",
+        "save",
+        "saves",
+        "settings",
+        "sheet",
+        "sheets",
+    }
+
     def __init__(self, screen: "GameScreen", *, load_save: str | None = None):
         self.screen = screen
         self.load_save = load_save
@@ -223,6 +248,9 @@ class ClickableGameBridge:
         self._responses: Queue[str] = Queue()
         self._worker: Thread | None = None
         self.waiting_for_input = False
+        self._pending_non_dialogue_markups: list[str] = []
+        self._pending_non_dialogue_fast_reveal = False
+        self._fast_reveal_until_next_prompt = False
 
     def start(self) -> None:
         if self._worker is not None:
@@ -253,27 +281,69 @@ class ClickableGameBridge:
             self.game = None
 
     def finish(self) -> None:
+        self.flush_pending_non_dialogue_output()
         Clock.schedule_once(lambda _dt: self.screen.finish_session())
 
     def post_output(self, text: object = "") -> None:
+        markup, animated = format_kivy_log_entry(text)
+        if should_buffer_kivy_non_dialogue_output(
+            markup,
+            animated=animated,
+            source_text=text,
+            enabled=self.screen.typing_animation_enabled,
+        ):
+            self._pending_non_dialogue_markups.append(markup)
+            self._pending_non_dialogue_fast_reveal = (
+                self._pending_non_dialogue_fast_reveal or self._fast_reveal_until_next_prompt
+            )
+            return
+        self.flush_pending_non_dialogue_output()
+        self.post_preformatted_output(markup, animated=animated, fast_reveal=self._fast_reveal_until_next_prompt)
+
+    def post_preformatted_output(self, markup: str, *, animated: bool, fast_reveal: bool = False) -> None:
         done = Event()
-        Clock.schedule_once(lambda _dt: self.screen.append_output(text, done_event=done))
-        done.wait(timeout=self.screen.typing_wait_timeout(text))
+        Clock.schedule_once(
+            lambda _dt: self.screen.append_log(
+                markup,
+                done_event=done,
+                animated=animated,
+                fast_reveal=fast_reveal,
+            )
+        )
+        done.wait(timeout=self.screen.typing_wait_timeout_markup(markup, animated=animated, fast_reveal=fast_reveal))
+
+    def flush_pending_non_dialogue_output(self) -> None:
+        if not self._pending_non_dialogue_markups:
+            return
+        markup = "\n".join(self._pending_non_dialogue_markups)
+        fast_reveal = self._pending_non_dialogue_fast_reveal
+        self._pending_non_dialogue_markups = []
+        self._pending_non_dialogue_fast_reveal = False
+        self.post_preformatted_output(markup, animated=False, fast_reveal=fast_reveal)
 
     def request_choice(self, prompt: str, options: list[str]) -> str:
+        self.flush_pending_non_dialogue_output()
+        self._fast_reveal_until_next_prompt = False
         self.waiting_for_input = True
         Clock.schedule_once(lambda _dt: self.screen.show_choice_prompt(prompt, options))
         return self._responses.get()
 
     def request_text(self, prompt: str) -> str:
+        self.flush_pending_non_dialogue_output()
+        self._fast_reveal_until_next_prompt = False
         self.waiting_for_input = True
         Clock.schedule_once(lambda _dt: self.screen.show_text_prompt(prompt))
         return self._responses.get()
+
+    def value_requests_fast_reveal(self, value: str) -> bool:
+        normalized = " ".join(str(value).strip().lower().split())
+        return normalized in self.FAST_REVEAL_COMMANDS or normalized.startswith("load ")
 
     def submit(self, value: str) -> None:
         if not self.waiting_for_input:
             return
         self.waiting_for_input = False
+        self._fast_reveal_until_next_prompt = self.value_requests_fast_reveal(value)
         Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
         self._responses.put(value)
 
@@ -527,6 +597,7 @@ class GameScreen(BoxLayout):
     TYPEWRITER_CHARS_PER_TICK = 1
     TYPEWRITER_FULLSTOP_PAUSE_SECONDS = 0.5
     TYPEWRITER_WAIT_PADDING_SECONDS = 2.0
+    NON_DIALOGUE_FADE_INTERVAL_SECONDS = 0.05
     COMBAT_RESOURCE_ANIMATION_INTERVAL_SECONDS = 0.08
     COMBAT_RESOURCE_ANIMATION_MAX_STEPS = 12
     SINGLE_TEXT_WINDOW_FONT_SIZE = "20sp"
@@ -1115,20 +1186,73 @@ class GameScreen(BoxLayout):
         markup, animated = format_kivy_log_entry(text)
         self.append_log(markup, done_event=done_event, animated=animated)
 
-    def append_log(self, text: str, *, done_event: Event | None = None, animated: bool = True) -> None:
+    def append_log(
+        self,
+        text: str,
+        *,
+        done_event: Event | None = None,
+        animated: bool = True,
+        fast_reveal: bool = False,
+    ) -> None:
         if not text or not self.typing_animation_enabled or not animated or visible_markup_length(text) <= 8:
-            self._append_log_entry(text)
-            if done_event is not None:
-                done_event.set()
+            delay = kivy_non_dialogue_reveal_delay(
+                text,
+                animated=animated,
+                enabled=bool(text and self.typing_animation_enabled),
+                fast=fast_reveal,
+            )
+            if delay > 0:
+                self._append_fading_log_entry(text, done_event=done_event, duration=delay)
+            else:
+                self._append_log_entry(text)
+                self._complete_log_append(done_event)
             return
         self._typing_queue.append((text, done_event))
         self._start_typing_next()
 
+    def _append_fading_log_entry(self, text: str, *, done_event: Event | None, duration: float) -> None:
+        entry_index = len(self._log_lines)
+        self._append_log_entry(fade_kivy_markup(text, 0.0))
+        elapsed = 0.0
+
+        def advance_fade(dt) -> bool:
+            nonlocal elapsed
+            if entry_index >= len(self._log_lines):
+                self._complete_log_append(done_event)
+                return False
+            elapsed += dt
+            progress = 1.0 if duration <= 0 else min(1.0, elapsed / duration)
+            self._log_lines[entry_index] = text if progress >= 1.0 else fade_kivy_markup(text, progress)
+            self._render_log()
+            if progress >= 1.0:
+                self._complete_log_append(done_event)
+                return False
+            return True
+
+        Clock.schedule_interval(advance_fade, self.NON_DIALOGUE_FADE_INTERVAL_SECONDS)
+
+    def _complete_log_append(self, done_event: Event | None, *, delay: float = 0.0) -> None:
+        if done_event is None:
+            return
+        if delay <= 0:
+            done_event.set()
+            return
+        Clock.schedule_once(lambda _dt: done_event.set(), delay)
+
     def typing_wait_timeout(self, text: object) -> float:
         markup, animated = format_kivy_log_entry(text)
+        return self.typing_wait_timeout_markup(markup, animated=animated)
+
+    def typing_wait_timeout_markup(self, markup: str, *, animated: bool, fast_reveal: bool = False) -> float:
         visible_length = visible_markup_length(markup)
         if not markup or not self.typing_animation_enabled or not animated or visible_length <= 8:
-            return 8
+            reveal_delay = kivy_non_dialogue_reveal_delay(
+                markup,
+                animated=animated,
+                enabled=bool(markup and self.typing_animation_enabled),
+                fast=fast_reveal,
+            )
+            return max(8, reveal_delay + 1.0)
         typing_start = dialogue_typing_start_index(markup)
         seconds_per_character = self.TYPEWRITER_INTERVAL_SECONDS / max(1, self.TYPEWRITER_CHARS_PER_TICK)
         typed_text = visible_markup_text(markup)[typing_start:]

@@ -16,3 +16,6 @@ class Encounter:
     hero_initiative_bonus: int = 0
     enemy_initiative_bonus: int = 0
     allow_post_combat_random_encounter: bool = True
+    allow_party_size_scaling: bool = True
+    minimum_enemy_count: int | None = None
+    max_added_supports: int | None = None

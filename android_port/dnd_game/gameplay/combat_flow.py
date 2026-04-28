@@ -176,8 +176,17 @@ class CombatFlowMixin:
         self.scale_encounter_enemies_to_party_level(original_living_enemies, target_level, slots=scaling_slots)
         self.scale_encounter_enemies_to_minimum_level(original_living_enemies, minimum_enemy_level)
 
-        if len(party) >= 3:
-            self.ensure_minimum_encounter_enemies(encounter, target_level=target_level, minimum=3)
+        allow_party_size_scaling = getattr(encounter, "allow_party_size_scaling", True)
+        if len(party) >= 3 and allow_party_size_scaling:
+            minimum_enemy_count = getattr(encounter, "minimum_enemy_count", None)
+            if minimum_enemy_count is None:
+                minimum_enemy_count = 3 if target_level >= self.minimum_enemy_scaling_level() else len(original_living_enemies)
+            self.ensure_minimum_encounter_enemies(
+                encounter,
+                target_level=target_level,
+                minimum=minimum_enemy_count,
+                max_added=getattr(encounter, "max_added_supports", None),
+            )
             living_enemies = [enemy for enemy in encounter.enemies if "enemy" in enemy.tags and not enemy.dead]
             self.scale_encounter_enemies_to_minimum_level(living_enemies, minimum_enemy_level)
 
@@ -230,12 +239,23 @@ class CombatFlowMixin:
         per_level = 0.5 if xp else 0.35
         return max(base_value + 1, int(round(base_value * (1 + per_level * level_gap))))
 
-    def ensure_minimum_encounter_enemies(self, encounter: Encounter, *, target_level: int, minimum: int) -> None:
+    def ensure_minimum_encounter_enemies(
+        self,
+        encounter: Encounter,
+        *,
+        target_level: int,
+        minimum: int,
+        max_added: int | None = None,
+    ) -> None:
+        added = 0
         while len([enemy for enemy in encounter.enemies if "enemy" in enemy.tags and not enemy.dead]) < minimum:
+            if max_added is not None and added >= max(0, max_added):
+                return
             template = self.support_enemy_template_for_encounter(encounter.enemies, target_level=target_level)
             support = create_enemy(template)
             support.notes.append("Added by party-size encounter scaling.")
             encounter.enemies.append(support)
+            added += 1
 
     def support_enemy_template_for_encounter(self, enemies: list[Character], *, target_level: int) -> str:
         living = [enemy for enemy in enemies if "enemy" in enemy.tags and not enemy.dead]
@@ -852,8 +872,8 @@ class CombatFlowMixin:
                 turn_state.bonus_action_available = False
                 continue
             if action == "Take Guard Stance":
-                self.use_guard_stance(actor)
-                turn_state.actions_remaining -= 1
+                if self.use_guard_stance(actor):
+                    turn_state.actions_remaining -= 1
                 continue
             if action == "Raise Shield":
                 self.use_raise_shield(actor)
@@ -1749,7 +1769,7 @@ class CombatFlowMixin:
         if "minor_channel" in actor.features and self.can_afford_spell(actor, "minor_channel"):
             self.use_minor_channel(actor, conscious_enemies[0])
             return
-        if "warrior_guard" in actor.features and not self.has_status(actor, "guarding"):
+        if "warrior_guard" in actor.features and self.current_combat_stance_key(actor) != "guard":
             if self.use_guard_stance(actor):
                 return
         if "rogue_feint" in actor.features and not self.has_status(conscious_enemies[0], "off_balance"):
@@ -2502,7 +2522,7 @@ class CombatFlowMixin:
         elif actor.archetype == "whispermaw_blob":
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
         else:
-            target = min(conscious_heroes, key=lambda hero: hero.current_hp)
+            target = self.rng.choice(conscious_heroes)
         self.maybe_apply_enemy_stance(actor, target, conscious_heroes, conscious_allies)
         self.perform_enemy_attack(actor, target, heroes, enemies, dodging)
 

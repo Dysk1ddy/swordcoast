@@ -15,9 +15,12 @@ ANSI_COLOR_HEX = {
     "96": "67e8f9",
     "97": "fff7ed",
 }
+KIVY_NON_DIALOGUE_PARAGRAPH_DELAY_SECONDS = 0.75
+KIVY_COMMAND_PARAGRAPH_DELAY_SECONDS = 0.18
 
 
 TAG_NAME_RE = re.compile(r"^/?([a-zA-Z]+)")
+COLOR_TAG_RE = re.compile(r"\[color=#(?P<rgb>[0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?\]")
 DIALOGUE_PREFIX_RE = re.compile(r'^[^:\n]{1,42}:\s+"')
 RESOURCE_BAR_RE = re.compile(
     r"\b(?P<label>[A-Za-z][A-Za-z0-9 /'_-]{0,32})\s+\[[^\]\n]*\]\s*"
@@ -133,6 +136,27 @@ def format_kivy_log_entry(text: object) -> tuple[str, bool]:
     return (ansi_to_kivy_markup(raw), False)
 
 
+def kivy_output_is_header(text: object) -> bool:
+    plain = ANSI_RE.sub("", str(text)).strip()
+    return re.fullmatch(r"=+\s*(.*?)\s*=+", plain) is not None
+
+
+def should_buffer_kivy_non_dialogue_output(
+    markup: str,
+    *,
+    animated: bool,
+    source_text: object = "",
+    enabled: bool = True,
+) -> bool:
+    return bool(
+        enabled
+        and markup
+        and not animated
+        and visible_markup_length(markup) > 0
+        and not kivy_output_is_header(source_text)
+    )
+
+
 def _tag_name(tag: str) -> str | None:
     match = TAG_NAME_RE.match(tag.strip())
     if match is None:
@@ -158,6 +182,34 @@ def visible_markup_length(markup: str) -> int:
         visible += 1
         position += 1
     return visible
+
+
+def kivy_non_dialogue_reveal_delay(
+    markup: str,
+    *,
+    animated: bool,
+    enabled: bool = True,
+    fast: bool = False,
+) -> float:
+    if not enabled or animated:
+        return 0.0
+    paragraphs = [part for part in re.split(r"\n\s*\n+", visible_markup_text(markup).strip()) if part.strip()]
+    if not paragraphs:
+        return 0.0
+    seconds_per_paragraph = KIVY_COMMAND_PARAGRAPH_DELAY_SECONDS if fast else KIVY_NON_DIALOGUE_PARAGRAPH_DELAY_SECONDS
+    return seconds_per_paragraph * len(paragraphs)
+
+
+def fade_kivy_markup(markup: str, opacity: float, *, default_color: str = "ffffff") -> str:
+    alpha = int(round(max(0.0, min(1.0, opacity)) * 255))
+    alpha_hex = f"{alpha:02x}"
+    default_rgb = re.sub(r"[^0-9a-fA-F]", "", default_color)[:6] or "ffffff"
+
+    def replace_color(match: re.Match[str]) -> str:
+        return f"[color=#{match.group('rgb')}{alpha_hex}]"
+
+    faded = COLOR_TAG_RE.sub(replace_color, markup)
+    return f"[color=#{default_rgb}{alpha_hex}]{faded}[/color]"
 
 
 def visible_markup_text(markup: str) -> str:

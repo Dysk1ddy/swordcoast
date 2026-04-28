@@ -3,11 +3,23 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import product
-from math import inf
+from math import ceil, inf
 import re
+
+from .magic_points import magic_point_cost, spend_magic_points
 
 
 _DICE_RE = re.compile(r"\s*(?P<count>\d*)d(?P<sides>\d+)(?P<modifier>[+-]\d+)?\s*")
+_ACTION_SPELL_IDS = {
+    "Minor Channel": "minor_channel",
+    "Arc Pulse": "arc_pulse",
+    "Ember Lance": "ember_lance",
+    "Frost Shard": "frost_shard",
+    "Volt Grasp": "volt_grasp",
+    "Blue Glass Palm": "blue_glass_palm",
+    "Action: Arcane Bolt": "arcane_bolt",
+    "Bonus: Arcane Bolt": "arcane_bolt",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +149,70 @@ class EncounterPassSimulation:
     @property
     def survival_margin_rounds(self) -> float:
         return self.rounds_to_party_defeat - self.rounds_to_clear
+
+
+@dataclass(frozen=True, slots=True)
+class RouteChainEncounterSpec:
+    name: str
+    enemies: tuple
+    wave_group: str | None = None
+    party_armor_break_percent: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RouteChainStepSimulation:
+    name: str
+    wave_index: int
+    wave_group: str | None
+    encounter: EncounterPassSimulation
+    resource_snapshot_before: dict[str, object]
+    resource_snapshot_after_encounter: dict[str, object]
+    resource_snapshot_after_rest: dict[str, object]
+    rest_decision: str
+    simulated_rounds: int
+    expected_party_damage_applied: int
+
+
+@dataclass(frozen=True, slots=True)
+class RouteChainSimulation:
+    name: str
+    steps: tuple[RouteChainStepSimulation, ...]
+
+    @property
+    def final_snapshot(self) -> dict[str, object]:
+        if not self.steps:
+            return {}
+        return self.steps[-1].resource_snapshot_after_rest
+
+    @property
+    def rest_decisions(self) -> tuple[str, ...]:
+        return tuple(step.rest_decision for step in self.steps)
+
+    @property
+    def short_rest_count(self) -> int:
+        return self.rest_decisions.count("short_rest")
+
+    @property
+    def long_rest_count(self) -> int:
+        return self.rest_decisions.count("long_rest")
+
+    @property
+    def blocked_rest_count(self) -> int:
+        return self.rest_decisions.count("long_rest_blocked")
+
+    @property
+    def deferred_wave_count(self) -> int:
+        return self.rest_decisions.count("deferred_wave")
+
+    @property
+    def minimum_survival_margin_rounds(self) -> float:
+        if not self.steps:
+            return inf
+        return min(step.encounter.survival_margin_rounds for step in self.steps)
+
+    @property
+    def total_expected_party_damage_applied(self) -> int:
+        return sum(step.expected_party_damage_applied for step in self.steps)
 
 
 def d20_kept_distribution(*, advantage_state: int = 0, lucky: bool = False) -> dict[int, float]:
@@ -806,3 +882,128 @@ def simulate_encounter_pass(
         max_enemy_defense_percent=max(enemy_defenses, default=0),
         max_enemy_avoidance=max(enemy_avoidance, default=0),
     )
+
+
+def _encounter_round_count(encounter: EncounterPassSimulation) -> int:
+    if encounter.rounds_to_clear == inf:
+        return 1
+    return max(1, ceil(max(0.0, encounter.rounds_to_clear)))
+
+
+def _expected_party_damage(encounter: EncounterPassSimulation, *, multiplier: float) -> int:
+    if multiplier <= 0 or encounter.enemy_expected_damage_per_round <= 0:
+        return 0
+    active_rounds = 1.0 if encounter.rounds_to_clear == inf else max(1.0, encounter.rounds_to_clear)
+    return max(0, int(round(encounter.enemy_expected_damage_per_round * active_rounds * multiplier)))
+
+
+def _apply_expected_party_damage(party: list, amount: int) -> int:
+    remaining = max(0, int(amount))
+    applied = 0
+    living = [member for member in party if not getattr(member, "dead", False) and member.current_hp > 0]
+    cursor = 0
+    while remaining > 0 and living:
+        target = living[cursor % len(living)]
+        target.current_hp = max(0, target.current_hp - 1)
+        remaining -= 1
+        applied += 1
+        living = [member for member in living if member.current_hp > 0 and not getattr(member, "dead", False)]
+        cursor += 1
+    return applied
+
+
+def _action_magic_point_cost(game, actor, action_name: str) -> int:
+    spell_id = _ACTION_SPELL_IDS.get(action_name)
+    if spell_id is None:
+        return 0
+    if spell_id == "arcane_bolt" and hasattr(game, "arcane_bolt_mp_cost"):
+        return game.arcane_bolt_mp_cost(actor, action_cast=action_name.startswith("Action:"))
+    return magic_point_cost(spell_id, actor)
+
+
+def _action_uses_for_encounter(action_name: str, simulated_rounds: int) -> int:
+    if action_name.endswith("Arcane Bolt"):
+        return max(1, ceil(max(1, simulated_rounds) / 3))
+    return max(1, simulated_rounds)
+
+
+def _spend_simulated_party_resources(game, party: list, actions: tuple[OffensiveActionSimulation, ...], *, simulated_rounds: int) -> None:
+    actors_by_name = {actor.name: actor for actor in party}
+    for action in actions:
+        actor = actors_by_name.get(action.actor_name)
+        if actor is None:
+            continue
+        cost = _action_magic_point_cost(game, actor, action.action_name)
+        if cost <= 0:
+            continue
+        for _ in range(_action_uses_for_encounter(action.action_name, simulated_rounds)):
+            if not spend_magic_points(actor, cost):
+                break
+
+
+def _defer_rest_until_wave_group_finishes(specs: tuple[RouteChainEncounterSpec, ...], index: int) -> bool:
+    wave_group = specs[index].wave_group
+    if wave_group is None or index + 1 >= len(specs):
+        return False
+    return specs[index + 1].wave_group == wave_group
+
+
+def simulate_route_chain(
+    game,
+    name: str,
+    party: list,
+    encounters: list[RouteChainEncounterSpec] | tuple[RouteChainEncounterSpec, ...],
+    *,
+    party_damage_multiplier: float = 1.0,
+    spend_party_resources: bool = True,
+) -> RouteChainSimulation:
+    specs = tuple(encounters)
+    steps: list[RouteChainStepSimulation] = []
+    previous_wave_group: str | None = None
+    wave_index = 0
+    for index, spec in enumerate(specs):
+        if spec.wave_group is not None and spec.wave_group == previous_wave_group:
+            wave_index += 1
+        else:
+            wave_index = 1
+        previous_wave_group = spec.wave_group
+        enemies = list(spec.enemies)
+        if hasattr(game, "_active_combat_heroes"):
+            game._active_combat_heroes = party
+        if hasattr(game, "_active_combat_enemies"):
+            game._active_combat_enemies = enemies
+        before = game.route_resource_snapshot()
+        encounter = simulate_encounter_pass(
+            game,
+            spec.name,
+            party,
+            enemies,
+            party_armor_break_percent=spec.party_armor_break_percent,
+        )
+        simulated_rounds = _encounter_round_count(encounter)
+        if spend_party_resources:
+            _spend_simulated_party_resources(game, party, encounter.party_actions, simulated_rounds=simulated_rounds)
+        expected_damage = _expected_party_damage(encounter, multiplier=party_damage_multiplier)
+        damage_applied = _apply_expected_party_damage(party, expected_damage)
+        after_encounter = game.route_resource_snapshot()
+        if _defer_rest_until_wave_group_finishes(specs, index):
+            rest_decision = "deferred_wave"
+            after_rest = after_encounter
+        else:
+            rest_decision = game.apply_route_rest_policy()
+            after_rest = game.route_resource_snapshot()
+        steps.append(
+            RouteChainStepSimulation(
+                name=spec.name,
+                wave_index=wave_index,
+                wave_group=spec.wave_group,
+                encounter=encounter,
+                resource_snapshot_before=before,
+                resource_snapshot_after_encounter=after_encounter,
+                resource_snapshot_after_rest=after_rest,
+                rest_decision=rest_decision,
+                simulated_rounds=simulated_rounds,
+                expected_party_damage_applied=damage_applied,
+            )
+        )
+    return RouteChainSimulation(name=name, steps=tuple(steps))

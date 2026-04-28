@@ -127,6 +127,9 @@ def music_files_for_context(context: str, asset_dir: Path = MUSIC_ASSET_DIR) -> 
 
 
 class MusicMixin:
+    def music_output_allows_playback(self) -> bool:
+        return self.output_fn is print
+
     def initialize_music_system(self, play_music: bool | None = None) -> None:
         wants_music = self._interactive_output if play_music is None else play_music
         self._music_enabled_preference = bool(wants_music)
@@ -144,7 +147,10 @@ class MusicMixin:
             for context in MUSIC_CONTEXT_FOLDERS
         )
         self.music_enabled = bool(
-            wants_music and self.output_fn is print and self._music_supported and self._music_assets_ready
+            wants_music
+            and self.music_output_allows_playback()
+            and self._music_supported
+            and self._music_assets_ready
         )
 
     def music_files_for_context(self, context: str) -> list[Path]:
@@ -251,7 +257,7 @@ class MusicMixin:
                 persist_settings()
             self.say("Music assets are not available yet.")
             return
-        self.music_enabled = bool(enabled and self.output_fn is print and self._music_supported)
+        self.music_enabled = bool(enabled and self.music_output_allows_playback() and self._music_supported)
         if callable(persist_settings):
             persist_settings()
         if not self.music_enabled:

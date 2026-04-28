@@ -13,6 +13,8 @@ from ..items import (
     roll_loot_for_enemy,
 )
 from .magic_points import (
+    current_magic_points,
+    maximum_magic_points,
     restore_all_magic_points,
     restore_half_magic_points,
     restore_magic_points,
@@ -24,6 +26,9 @@ from ..ui.rich_render import Panel, RICH_AVAILABLE, Table, Text, box
 
 
 class InventoryCoreMixin:
+    LONG_REST_SUPPLY_POINTS = 12
+    ROUTE_REST_HP_THRESHOLD_NUMERATOR = 1
+    ROUTE_REST_HP_THRESHOLD_DENOMINATOR = 2
     INVENTORY_FILTER_DEFINITIONS = (
         ("all", "All Items"),
         ("consumables", "Consumables"),
@@ -42,6 +47,66 @@ class InventoryCoreMixin:
 
     def current_supply_points(self) -> int:
         return inventory_supply_points(self.inventory_dict())
+
+    def long_rest_supply_cost(self) -> int:
+        return self.LONG_REST_SUPPLY_POINTS
+
+    def route_resource_snapshot(self) -> dict[str, object]:
+        assert self.state is not None
+        party = self.state.party_members()
+        living_party = [member for member in party if not member.dead]
+        party_hp = sum(max(0, member.current_hp) for member in living_party)
+        party_max_hp = sum(max(0, member.max_hp) for member in living_party)
+        current_mp = sum(current_magic_points(member) for member in living_party)
+        maximum_mp = sum(maximum_magic_points(member) for member in living_party)
+        lowest_hp_percent = 1.0
+        if living_party:
+            lowest_hp_percent = min(
+                max(0, member.current_hp) / max(1, member.max_hp)
+                for member in living_party
+            )
+        inventory = self.inventory_dict()
+        return {
+            "party_hp": party_hp,
+            "party_max_hp": party_max_hp,
+            "lowest_hp_percent": round(lowest_hp_percent, 3),
+            "members_below_half_hp": [member.name for member in self.route_rest_pressure_members()],
+            "short_rests_remaining": self.state.short_rests_remaining,
+            "long_rest_supply_cost": self.long_rest_supply_cost(),
+            "supply_points": self.current_supply_points(),
+            "gold": self.state.gold,
+            "healing_potions": inventory.get("potion_healing", 0),
+            "magic_points": current_mp,
+            "maximum_magic_points": maximum_mp,
+        }
+
+    def route_rest_pressure_members(self) -> list:
+        assert self.state is not None
+        numerator = self.ROUTE_REST_HP_THRESHOLD_NUMERATOR
+        denominator = max(1, self.ROUTE_REST_HP_THRESHOLD_DENOMINATOR)
+        return [
+            member
+            for member in self.state.party_members()
+            if not member.dead and max(0, member.current_hp) * denominator < member.max_hp * numerator
+        ]
+
+    def route_rest_policy_decision(self) -> str:
+        assert self.state is not None
+        if not self.route_rest_pressure_members():
+            return "none"
+        if self.state.short_rests_remaining > 0:
+            return "short_rest"
+        if self.current_supply_points() >= self.long_rest_supply_cost():
+            return "long_rest"
+        return "long_rest_blocked"
+
+    def apply_route_rest_policy(self) -> str:
+        decision = self.route_rest_policy_decision()
+        if decision == "short_rest":
+            self.short_rest()
+        elif decision == "long_rest":
+            self.long_rest()
+        return decision
 
     def inventory_filter_label(self, filter_key: str) -> str:
         for key, label in self.INVENTORY_FILTER_DEFINITIONS:
@@ -267,7 +332,7 @@ class InventoryCoreMixin:
 
     def long_rest(self) -> None:
         assert self.state is not None
-        required_points = 12
+        required_points = self.long_rest_supply_cost()
         consumed, missing = choose_supply_items_to_consume(self.inventory_dict(), required_points)
         if missing > 0:
             self.say(

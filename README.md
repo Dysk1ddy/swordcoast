@@ -99,27 +99,6 @@ Useful CLI flags:
 
 When stdin or stdout is piped, the game automatically disables Rich live menus, keyboard polling, box drawing, animations, and resize-aware rendering.
 
-## AI-Assisted Writing
-
-The repo includes an optional OpenAI-backed drafting tool for scene prose, dialogue, and lore revision. It is for authoring support only; runtime story logic stays deterministic in Python and data files.
-
-Example:
-
-```powershell
-pip install openai
-python tools/story_writer.py --brief "Rewrite this route-control exchange so it reads as Greywake and Emberway logistics without changing route logic." --scene-key blackwake_crossing --context dnd_game/gameplay/story_intro.py
-```
-
-Full setup and examples live in `information/systems/OPENAI_STORY_WRITER.md`.
-
-The desktop wrapper can be launched with:
-
-```powershell
-python story_writer_studio.py
-```
-
-or by double-clicking `Launch Story Writer Studio.bat` on Windows.
-
 ## Map Flow
 
 The current implementation preserves the existing route structure while the public names are being retconned.

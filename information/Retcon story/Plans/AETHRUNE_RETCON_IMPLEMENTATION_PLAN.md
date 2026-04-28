@@ -257,7 +257,6 @@ Files:
 - `dnd_game/__init__.py`
 - `android_port/README.md`
 - `android_port/dnd_game/__init__.py`
-- `information/systems/OPENAI_STORY_WRITER.md`
 
 Goal:
 
