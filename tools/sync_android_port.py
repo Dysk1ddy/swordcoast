@@ -13,7 +13,7 @@ DEFAULT_SOURCE_ROOT = REPO_ROOT / "dnd_game"
 DEFAULT_TARGET_ROOT = REPO_ROOT / "android_port" / "dnd_game"
 SYNC_SUFFIXES = {".py", ".json", ".md", ".txt"}
 EXCLUDED_DIR_NAMES = {"__pycache__", "ai", "assets", "drafts"}
-EXCLUDED_FILE_NAMES = {"cli.py"}
+EXCLUDED_FILE_NAMES = {"cli.py", "gui.py"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 DRIFT_KIND_ORDER = {"changed": 0, "missing": 1, "stale": 2}
 

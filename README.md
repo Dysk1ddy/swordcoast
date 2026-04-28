@@ -57,6 +57,20 @@ Easiest option on Windows:
 .\Play Aethrune.bat
 ```
 
+Mouse-clickable window on Windows.
+Kivy currently supports Python 3.13 for this project, so keep Python 3.14 installed and add Python 3.13 side-by-side:
+
+```powershell
+py -3.13 -m pip install -r requirements-gui.txt
+.\Play Aethrune With Mouse.bat
+```
+
+You can also launch the clickable window directly:
+
+```powershell
+py -3.13 main.py --gui
+```
+
 Terminal option:
 
 ```powershell
@@ -77,6 +91,7 @@ python tools/prose_lint.py README.md
 Useful CLI flags:
 
 - `--plain`: force plain terminal output.
+- `--gui`: open a mouse-clickable Kivy window with choice buttons.
 - `--no-animation`: skip typed narration and dice pacing.
 - `--no-audio`: disable sound startup and playback.
 - `--load-save SLOT`: load a save slot at startup.

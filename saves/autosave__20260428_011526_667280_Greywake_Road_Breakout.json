@@ -1,0 +1,354 @@
+{
+  "player": {
+    "name": "Mara Gatehand",
+    "race": "Human",
+    "class_name": "Warrior",
+    "background": "Soldier",
+    "level": 1,
+    "ability_scores": {
+      "STR": 16,
+      "DEX": 13,
+      "CON": 15,
+      "INT": 9,
+      "WIS": 14,
+      "CHA": 11
+    },
+    "skill_proficiencies": [
+      "Athletics",
+      "Intimidation",
+      "Perception"
+    ],
+    "saving_throw_proficiencies": [
+      "STR",
+      "CON"
+    ],
+    "features": [
+      "warrior_grit",
+      "warrior_guard",
+      "warrior_pin",
+      "warrior_rally",
+      "warrior_shove",
+      "weapon_read"
+    ],
+    "weapon": {
+      "name": "Roadworn Longsword",
+      "damage": "1d8",
+      "ability": "STR",
+      "weapon_type": "longsword",
+      "to_hit_bonus": 0,
+      "damage_bonus": 0,
+      "finesse": false,
+      "ranged": false,
+      "hands_required": 1,
+      "properties": [
+        "versatile"
+      ]
+    },
+    "armor": {
+      "name": "Roadworn Chain Mail",
+      "base_ac": 16,
+      "armor_type": "heavy",
+      "dex_cap": 0,
+      "heavy": true,
+      "stealth_disadvantage": true,
+      "defense_percent": 35,
+      "defense_cap_percent": 80
+    },
+    "hit_die": 10,
+    "current_hp": 15,
+    "max_hp": 18,
+    "shield": true,
+    "spellcasting_ability": null,
+    "skill_expertise": [],
+    "bonus_proficiencies": [
+      "Land Vehicles",
+      "Gaming Set"
+    ],
+    "resources": {
+      "grit": 2
+    },
+    "max_resources": {
+      "grit": 6
+    },
+    "inventory": {},
+    "conditions": {},
+    "equipment_bonuses": {
+      "Athletics": 1,
+      "Intimidation": 1
+    },
+    "gear_bonuses": {
+      "shield_defense_percent": 5,
+      "raised_shield_defense_percent": 10
+    },
+    "notes": [
+      "Veteran's kit: +1 to Athletics and Intimidation checks.",
+      "A shield-line route guard built for Grit, Guard Stance, shoves, and reading armored enemies.",
+      "Preset build: optimized for faster testing and quick starts."
+    ],
+    "tags": [
+      "hero"
+    ],
+    "equipment_slots": {
+      "head": null,
+      "ring_1": null,
+      "ring_2": null,
+      "neck": null,
+      "chest": "chain_mail_common",
+      "gloves": null,
+      "boots": null,
+      "main_hand": "longsword_common",
+      "off_hand": "shield_common",
+      "cape": null
+    },
+    "archetype": "warrior",
+    "companion_id": "",
+    "disposition": 0,
+    "lore": [],
+    "bond_flags": {
+      "story_skill_modifiers": {}
+    },
+    "relationship_bonuses": {},
+    "story_skill_bonuses": {},
+    "stable": false,
+    "dead": false,
+    "death_successes": 0,
+    "death_failures": 0,
+    "temp_hp": 0,
+    "xp_value": 0,
+    "gold_value": 0
+  },
+  "companions": [
+    {
+      "name": "Elira Dawnmantle",
+      "race": "Human",
+      "class_name": "Mage",
+      "background": "Acolyte",
+      "level": 1,
+      "ability_scores": {
+        "STR": 11,
+        "DEX": 13,
+        "CON": 14,
+        "INT": 11,
+        "WIS": 16,
+        "CHA": 15
+      },
+      "skill_proficiencies": [
+        "Insight",
+        "Medicine",
+        "Persuasion",
+        "Religion"
+      ],
+      "saving_throw_proficiencies": [
+        "INT",
+        "WIS"
+      ],
+      "features": [
+        "arcane_bolt",
+        "focused_eye",
+        "ground",
+        "mage_charge",
+        "mage_focus",
+        "minor_channel",
+        "pattern_read"
+      ],
+      "weapon": {
+        "name": "Roadworn Quarterstaff",
+        "damage": "1d6",
+        "ability": "STR",
+        "weapon_type": "quarterstaff",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "versatile"
+        ]
+      },
+      "armor": null,
+      "hit_die": 6,
+      "current_hp": 2,
+      "max_hp": 14,
+      "shield": false,
+      "spellcasting_ability": "WIS",
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Calligrapher's Supplies",
+        "Celestial"
+      ],
+      "resources": {
+        "spell_slots_1": 2,
+        "mp": 11,
+        "focus": 0
+      },
+      "max_resources": {
+        "spell_slots_1": 2,
+        "mp": 13,
+        "focus": 5
+      },
+      "inventory": {},
+      "conditions": {
+        "arcane_bolt_cooldown": 1
+      },
+      "equipment_bonuses": {
+        "Medicine": 1,
+        "Religion": 1
+      },
+      "gear_bonuses": {},
+      "notes": [
+        "Healer's satchel: +1 to Medicine and Religion checks.",
+        "A Lantern priestess tending the frontier faithful in Iron Hollow.",
+        "A priestess of the Lantern whose compassion is sharpened, not softened, by the frontier's cruelty."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": null,
+        "gloves": null,
+        "boots": null,
+        "main_hand": "quarterstaff_common",
+        "off_hand": null,
+        "cape": null
+      },
+      "archetype": "mage",
+      "companion_id": "elira_dawnmantle",
+      "disposition": 0,
+      "lore": [
+        "Elira learned battlefield triage from roadside shrines that treated lumber crews, miners, and pilgrims with equal urgency.",
+        "She believes luck is not random mercy but a chance people build for one another with courage and timing.",
+        "Under stress she gets quieter, not colder, as though she is measuring every word for whether it heals or harms."
+      ],
+      "bond_flags": {
+        "talked_topics": [],
+        "retcon_class": "Mage",
+        "default_subclass": "aethermancer",
+        "secondary_subclass": "spellguard",
+        "companion_recruited_level": 1,
+        "companion_subclass_player_choice_eligible": true
+      },
+      "relationship_bonuses": {},
+      "story_skill_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    }
+  ],
+  "camp_companions": [],
+  "current_act": 1,
+  "current_scene": "greywake_road_breakout",
+  "flags": {
+    "act1_started": true,
+    "opening_tutorial_pending": false,
+    "map_state": {
+      "current_node_id": "wayside_luck_shrine",
+      "current_dungeon_id": null,
+      "current_room_id": null,
+      "visited_nodes": [],
+      "cleared_rooms": [],
+      "seen_story_beats": [],
+      "node_history": [],
+      "room_history": []
+    },
+    "opening_tutorial_seen": true,
+    "opening_tutorial_skipped": true,
+    "opening_tutorial_completed": false,
+    "story_check_option_attempt::711a001080011a54": true,
+    "introduced_characters": [
+      "Ashen Brand Runner",
+      "Elira Dawnmantle"
+    ],
+    "background_prologue_completed": "Soldier",
+    "system_profile_seeded": true,
+    "wayside_luck_shrine_seen": true,
+    "wayside_luck_bell_seen": true,
+    "elira_first_contact": true,
+    "greywake_elira_met": true,
+    "elira_first_read": "triage_competence",
+    "wayside_aid_route": "wounded",
+    "elira_initial_trust_reason": "warm_trust",
+    "story_check_option_attempt::4e4c509918fb10b7": true,
+    "elira_wayside_recruit_attempted": true,
+    "elira_wayside_recruit_failed": true,
+    "elira_iron_hollow_fallback_pending": true,
+    "greywake_triage_yard_seen": true,
+    "greywake_outcome_sorting_seen": true,
+    "story_check_option_attempt::fbbbefeda0c1d6f6": true,
+    "greywake_wounded_stabilized": true,
+    "greywake_outcome_tags_matched_wounds": true,
+    "greywake_mira_evidence_kind": "matched_triage_tags",
+    "elira_helped": true,
+    "elira_greywake_recruit_attempted": true,
+    "elira_greywake_recruited": true,
+    "elira_first_companion": true,
+    "greywake_attack_imminent": true,
+    "story_check_option_attempt::27086afa30f360d1": true,
+    "random_encounters_seen": [
+      "bandit_toll_line"
+    ],
+    "story_check_option_attempt::7911b091003e4735": true
+  },
+  "clues": [
+    "A stolen dispatch confirms the attacks around Iron Hollow are organized enough to rattle Greywake's quartermasters.",
+    "Greywake's intake board sorted travelers into outcomes before their wagons reached the yard.",
+    "Greywake triage tags matched injury categories written before the victims arrived."
+  ],
+  "journal": [
+    "Your soldier's opening leaves you with a live look at how hard Greywake is leaning on thin patrol lines and tired veterans to protect the road south.",
+    "Word reaches you that Mira Thann is quietly gathering capable hands in Greywake against Ashen Brand pressure around Iron Hollow.",
+    "Reward from South Barracks Breakout: 50 XP, 8 gold.",
+    "Looted Roadworn Leather Armor x1 from South Barracks Breakout.",
+    "Reward from holding the barracks line: 15 XP, 6 gold.",
+    "Clue: A stolen dispatch confirms the attacks around Iron Hollow are organized enough to rattle Greywake's quartermasters.",
+    "Your soldier prologue ends with the trail leading toward Mira Thann's private briefing in Greywake.",
+    "Clue: Greywake's intake board sorted travelers into outcomes before their wagons reached the yard.",
+    "Clue: Greywake triage tags matched injury categories written before the victims arrived.",
+    "Reward from stabilizing Greywake's wounded line: 20 XP.",
+    "Elira Dawnmantle joined the active party.",
+    "Reward from Greywake Road Breakout: 100 XP, 17 gold.",
+    "Looted Potion of Healing x1 from Greywake Road Breakout.",
+    "Looted Roadworn Leather Armor x1 from Greywake Road Breakout.",
+    "Looted Frontier Ale x1 from Greywake Road Breakout."
+  ],
+  "quests": {},
+  "completed_acts": [],
+  "xp": 185,
+  "gold": 56,
+  "inventory": {
+    "C0011": 4,
+    "S0002": 4,
+    "S0021": 4,
+    "S0005": 3,
+    "S0007": 2,
+    "S0006": 3,
+    "S0016": 2,
+    "C0000": 1,
+    "E0004": 1,
+    "E0097": 1,
+    "E0060": 1,
+    "E0009": 2,
+    "E0104": 1
+  },
+  "short_rests_remaining": 2,
+  "playtime_seconds": 151.67453620000015,
+  "save_metadata": {
+    "kind": "autosave",
+    "saved_at": "2026-04-28T01:15:26",
+    "act": 1,
+    "act_label": "Act I",
+    "scene": "greywake_road_breakout",
+    "scene_label": "Greywake Breakout",
+    "party_level": 1,
+    "playtime_seconds": 151,
+    "last_objective": "Protect the wounded or the proof when the Ashen Brand attacks."
+  }
+}

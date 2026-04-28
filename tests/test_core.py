@@ -12,7 +12,14 @@ from unittest.mock import patch
 
 import dnd_game.gameplay.base as gameplay_base
 import dnd_game.gameplay.audio_backend as audio_backend
-from dnd_game.cli import ScriptedInput, build_argument_parser, create_game_from_args, plain_output_text, resolve_save_path
+from dnd_game.cli import (
+    ScriptedInput,
+    build_argument_parser,
+    create_game_from_args,
+    plain_output_text,
+    resolve_save_path,
+    run_game_from_args,
+)
 from dnd_game.content import (
     BACKGROUNDS,
     CLASSES,
@@ -269,6 +276,23 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(game.staggered_reveals_enabled)
         self.assertFalse(game.music_enabled)
         self.assertFalse(game.sound_effects_enabled)
+
+    def test_gui_cli_flag_can_be_combined_with_load_save(self) -> None:
+        parser = build_argument_parser()
+        args = parser.parse_args(["--gui", "--load-save", "campaign"])
+
+        self.assertTrue(args.gui)
+        self.assertEqual(args.load_save, "campaign")
+
+    def test_gui_cli_flag_explains_python_314_guard(self) -> None:
+        parser = build_argument_parser()
+        args = parser.parse_args(["--gui"])
+        stderr = io.StringIO()
+
+        with patch("dnd_game.cli.sys.version_info", (3, 14, 0)), patch("sys.stderr", stderr):
+            self.assertEqual(run_game_from_args(args), 2)
+
+        self.assertIn("py -3.13 main.py --gui", stderr.getvalue())
 
     def test_piped_stdio_disables_interactive_terminal_surfaces(self) -> None:
         fake_stdin = SimpleNamespace(isatty=lambda: False)

@@ -102,6 +102,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
         help="Load a save slot, save filename, or save path and start from it.",
     )
     parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="Open a mouse-clickable Kivy window with choice buttons.",
+    )
+    parser.add_argument(
         "--scripted-input",
         metavar="FILE",
         type=Path,
@@ -159,6 +164,29 @@ def create_game_from_args(args: argparse.Namespace) -> TextDnDGame:
 
 def run_game_from_args(args: argparse.Namespace) -> int:
     configure_standard_streams()
+    if args.gui:
+        if sys.version_info >= (3, 14):
+            print(
+                "The clickable game window uses Kivy, which currently supports Python 3.13 for this project.\n"
+                "Keep Python 3.14 installed, then run the GUI with:\n"
+                "    py -3.13 -m pip install -r requirements-gui.txt\n"
+                "    py -3.13 main.py --gui",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            from .gui import run_gui
+        except ModuleNotFoundError as exc:
+            if (exc.name or "").split(".")[0] == "kivy":
+                print(
+                    "The clickable game window needs Kivy installed for this Python version. Install it with:\n"
+                    "    py -3.13 -m pip install -r requirements-gui.txt",
+                    file=sys.stderr,
+                )
+                return 2
+            raise
+        return run_gui(load_save=args.load_save)
+
     game = create_game_from_args(args)
     if args.load_save:
         save_path = resolve_save_path(game, args.load_save)

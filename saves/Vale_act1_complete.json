@@ -1,0 +1,589 @@
+{
+  "player": {
+    "name": "Vale",
+    "race": "Human",
+    "class_name": "Warrior",
+    "background": "Soldier",
+    "level": 1,
+    "ability_scores": {
+      "STR": 16,
+      "DEX": 15,
+      "CON": 14,
+      "INT": 9,
+      "WIS": 13,
+      "CHA": 11
+    },
+    "skill_proficiencies": [
+      "Athletics",
+      "Intimidation",
+      "Survival"
+    ],
+    "saving_throw_proficiencies": [
+      "STR",
+      "CON"
+    ],
+    "features": [
+      "warrior_grit",
+      "warrior_guard",
+      "warrior_pin",
+      "warrior_rally",
+      "warrior_shove",
+      "weapon_read"
+    ],
+    "weapon": {
+      "name": "Roadworn Longsword",
+      "damage": "1d8",
+      "ability": "STR",
+      "weapon_type": "longsword",
+      "to_hit_bonus": 0,
+      "damage_bonus": 0,
+      "finesse": false,
+      "ranged": false,
+      "hands_required": 1,
+      "properties": [
+        "versatile"
+      ]
+    },
+    "armor": {
+      "name": "Roadworn Chain Mail",
+      "base_ac": 16,
+      "armor_type": "heavy",
+      "dex_cap": 0,
+      "heavy": true,
+      "stealth_disadvantage": true,
+      "defense_percent": 35,
+      "defense_cap_percent": 80
+    },
+    "hit_die": 10,
+    "current_hp": 18,
+    "max_hp": 18,
+    "shield": true,
+    "spellcasting_ability": null,
+    "skill_expertise": [],
+    "bonus_proficiencies": [
+      "Land Vehicles",
+      "Gaming Set"
+    ],
+    "resources": {
+      "grit": 1
+    },
+    "max_resources": {
+      "grit": 6
+    },
+    "inventory": {},
+    "conditions": {},
+    "equipment_bonuses": {
+      "Athletics": 1,
+      "Intimidation": 1
+    },
+    "gear_bonuses": {
+      "shield_defense_percent": 5,
+      "raised_shield_defense_percent": 10
+    },
+    "notes": [
+      "Veteran's kit: +1 to Athletics and Intimidation checks."
+    ],
+    "tags": [
+      "hero"
+    ],
+    "equipment_slots": {
+      "head": null,
+      "ring_1": null,
+      "ring_2": null,
+      "neck": null,
+      "chest": "chain_mail_common",
+      "gloves": null,
+      "boots": null,
+      "main_hand": "longsword_common",
+      "off_hand": "shield_common",
+      "cape": null
+    },
+    "archetype": "warrior",
+    "companion_id": "",
+    "disposition": 0,
+    "lore": [],
+    "bond_flags": {
+      "story_skill_modifiers": {}
+    },
+    "relationship_bonuses": {},
+    "story_skill_bonuses": {},
+    "stable": false,
+    "dead": false,
+    "death_successes": 0,
+    "death_failures": 0,
+    "temp_hp": 0,
+    "xp_value": 0,
+    "gold_value": 0
+  },
+  "companions": [
+    {
+      "name": "Tolan Ironshield",
+      "race": "Dwarf",
+      "class_name": "Warrior",
+      "background": "Soldier",
+      "level": 1,
+      "ability_scores": {
+        "STR": 15,
+        "DEX": 10,
+        "CON": 16,
+        "INT": 8,
+        "WIS": 12,
+        "CHA": 13
+      },
+      "skill_proficiencies": [
+        "Athletics",
+        "Intimidation",
+        "Perception",
+        "Survival"
+      ],
+      "saving_throw_proficiencies": [
+        "STR",
+        "CON"
+      ],
+      "features": [
+        "darkvision",
+        "dwarven_resilience",
+        "warrior_grit",
+        "warrior_guard",
+        "warrior_pin",
+        "warrior_rally",
+        "warrior_shove",
+        "weapon_read"
+      ],
+      "weapon": {
+        "name": "Roadworn Longsword",
+        "damage": "1d8",
+        "ability": "STR",
+        "weapon_type": "longsword",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "versatile"
+        ]
+      },
+      "armor": {
+        "name": "Roadworn Chain Mail",
+        "base_ac": 16,
+        "armor_type": "heavy",
+        "dex_cap": 0,
+        "heavy": true,
+        "stealth_disadvantage": true,
+        "defense_percent": 35,
+        "defense_cap_percent": 80
+      },
+      "hit_die": 10,
+      "current_hp": 19,
+      "max_hp": 19,
+      "shield": true,
+      "spellcasting_ability": null,
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Land Vehicles",
+        "Gaming Set"
+      ],
+      "resources": {
+        "grit": 1
+      },
+      "max_resources": {
+        "grit": 7
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Athletics": 1,
+        "Intimidation": 1
+      },
+      "gear_bonuses": {
+        "shield_defense_percent": 5,
+        "raised_shield_defense_percent": 10
+      },
+      "notes": [
+        "Veteran's kit: +1 to Athletics and Intimidation checks.",
+        "A caravan guard from Greywake with a shield wall mindset.",
+        "A dwarven shield veteran who measures people by whether they hold the line when it matters."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "chain_mail_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "longsword_common",
+        "off_hand": "shield_common",
+        "cape": null
+      },
+      "archetype": "warrior",
+      "companion_id": "tolan_ironshield",
+      "disposition": 0,
+      "lore": [
+        "Tolan served on Emberway caravans out of Greywake for two decades, long enough to see three trade leagues fail and two rise in their place.",
+        "He still carries a notched tower-shield rivet from the ambush that killed his older brother near the drowned flats west of Blackwake.",
+        "He trusts steady action more than speeches, but remembers every promise anyone makes in his hearing."
+      ],
+      "bond_flags": {
+        "talked_topics": [],
+        "retcon_class": "Warrior",
+        "default_subclass": "juggernaut",
+        "secondary_subclass": "weapon_master",
+        "story_skill_modifiers": {}
+      },
+      "relationship_bonuses": {},
+      "story_skill_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    },
+    {
+      "name": "Elira Dawnmantle",
+      "race": "Human",
+      "class_name": "Mage",
+      "background": "Acolyte",
+      "level": 1,
+      "ability_scores": {
+        "STR": 11,
+        "DEX": 13,
+        "CON": 14,
+        "INT": 11,
+        "WIS": 16,
+        "CHA": 15
+      },
+      "skill_proficiencies": [
+        "Insight",
+        "Medicine",
+        "Persuasion",
+        "Religion"
+      ],
+      "saving_throw_proficiencies": [
+        "INT",
+        "WIS"
+      ],
+      "features": [
+        "arcane_bolt",
+        "focused_eye",
+        "ground",
+        "mage_charge",
+        "mage_focus",
+        "minor_channel",
+        "pattern_read"
+      ],
+      "weapon": {
+        "name": "Roadworn Quarterstaff",
+        "damage": "1d6",
+        "ability": "STR",
+        "weapon_type": "quarterstaff",
+        "to_hit_bonus": 0,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": false,
+        "hands_required": 1,
+        "properties": [
+          "versatile"
+        ]
+      },
+      "armor": null,
+      "hit_die": 6,
+      "current_hp": 14,
+      "max_hp": 14,
+      "shield": false,
+      "spellcasting_ability": "WIS",
+      "skill_expertise": [],
+      "bonus_proficiencies": [
+        "Calligrapher's Supplies",
+        "Celestial"
+      ],
+      "resources": {
+        "spell_slots_1": 2,
+        "mp": 13,
+        "focus": 0
+      },
+      "max_resources": {
+        "spell_slots_1": 2,
+        "mp": 13,
+        "focus": 5
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Medicine": 1,
+        "Religion": 1
+      },
+      "gear_bonuses": {},
+      "notes": [
+        "Healer's satchel: +1 to Medicine and Religion checks.",
+        "A Lantern priestess tending the frontier faithful in Iron Hollow.",
+        "A priestess of the Lantern whose compassion is sharpened, not softened, by the frontier's cruelty."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": null,
+        "gloves": null,
+        "boots": null,
+        "main_hand": "quarterstaff_common",
+        "off_hand": null,
+        "cape": null
+      },
+      "archetype": "mage",
+      "companion_id": "elira_dawnmantle",
+      "disposition": 0,
+      "lore": [
+        "Elira learned battlefield triage from roadside shrines that treated lumber crews, miners, and pilgrims with equal urgency.",
+        "She believes luck is not random mercy but a chance people build for one another with courage and timing.",
+        "Under stress she gets quieter, not colder, as though she is measuring every word for whether it heals or harms."
+      ],
+      "bond_flags": {
+        "talked_topics": [],
+        "retcon_class": "Mage",
+        "default_subclass": "aethermancer",
+        "secondary_subclass": "spellguard",
+        "story_skill_modifiers": {}
+      },
+      "relationship_bonuses": {},
+      "story_skill_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    },
+    {
+      "name": "Kaelis Starling",
+      "race": "Half-Elf",
+      "class_name": "Rogue",
+      "background": "Criminal",
+      "level": 1,
+      "ability_scores": {
+        "STR": 10,
+        "DEX": 16,
+        "CON": 13,
+        "INT": 11,
+        "WIS": 15,
+        "CHA": 14
+      },
+      "skill_proficiencies": [
+        "Deception",
+        "Insight",
+        "Investigation",
+        "Perception",
+        "Persuasion",
+        "Stealth",
+        "Survival"
+      ],
+      "saving_throw_proficiencies": [
+        "DEX",
+        "INT"
+      ],
+      "features": [
+        "expertise",
+        "fey_ancestry",
+        "rogue_edge",
+        "rogue_mark",
+        "rogue_poison",
+        "rogue_satchel",
+        "sneak_attack"
+      ],
+      "weapon": {
+        "name": "Roadworn Longbow",
+        "damage": "1d8",
+        "ability": "DEX",
+        "weapon_type": "longbow",
+        "to_hit_bonus": 1,
+        "damage_bonus": 0,
+        "finesse": false,
+        "ranged": true,
+        "hands_required": 2,
+        "properties": [
+          "ammunition",
+          "heavy",
+          "two-handed"
+        ]
+      },
+      "armor": {
+        "name": "Roadworn Leather Armor",
+        "base_ac": 11,
+        "armor_type": "light",
+        "dex_cap": null,
+        "heavy": false,
+        "stealth_disadvantage": false,
+        "defense_percent": 10,
+        "defense_cap_percent": 45
+      },
+      "hit_die": 8,
+      "current_hp": 15,
+      "max_hp": 15,
+      "shield": false,
+      "spellcasting_ability": null,
+      "skill_expertise": [
+        "Perception",
+        "Stealth"
+      ],
+      "bonus_proficiencies": [
+        "Thieves' Tools",
+        "Disguise Kit"
+      ],
+      "resources": {
+        "edge": 1,
+        "satchel": 4,
+        "toxin": 0
+      },
+      "max_resources": {
+        "edge": 5,
+        "satchel": 4,
+        "toxin": 5
+      },
+      "inventory": {},
+      "conditions": {},
+      "equipment_bonuses": {
+        "Stealth": 1,
+        "Sleight of Hand": 1
+      },
+      "gear_bonuses": {},
+      "notes": [
+        "Thieves' tools: +1 to Stealth and Sleight of Hand checks.",
+        "A Greywake scout who knows how to read an ambush before it closes.",
+        "A sharp-eyed scout-rogue with Assassin patience, trained to trust patterns before promises."
+      ],
+      "tags": [
+        "hero",
+        "companion"
+      ],
+      "equipment_slots": {
+        "head": null,
+        "ring_1": null,
+        "ring_2": null,
+        "neck": null,
+        "chest": "leather_armor_common",
+        "gloves": null,
+        "boots": null,
+        "main_hand": "longbow_common",
+        "off_hand": null,
+        "cape": null
+      },
+      "archetype": "rogue",
+      "companion_id": "kaelis_starling",
+      "disposition": 0,
+      "lore": [
+        "Kaelis spent years guiding outriders and woodsfolk through the northern edges of Greywake Wood, where bad judgment kills faster than steel does.",
+        "He keeps private sketches of trails, ridges, and blind corners because memory alone has betrayed him once already.",
+        "He rarely speaks first in a room, but once he commits to someone he watches over them with relentless attention."
+      ],
+      "bond_flags": {
+        "talked_topics": [],
+        "retcon_class": "Rogue",
+        "default_subclass": "assassin",
+        "secondary_subclass": "shadowguard",
+        "story_skill_modifiers": {}
+      },
+      "relationship_bonuses": {},
+      "story_skill_bonuses": {},
+      "stable": false,
+      "dead": false,
+      "death_successes": 0,
+      "death_failures": 0,
+      "temp_hp": 0,
+      "xp_value": 0,
+      "gold_value": 0
+    }
+  ],
+  "camp_companions": [],
+  "current_act": 1,
+  "current_scene": "act1_complete",
+  "flags": {
+    "map_state": {
+      "current_node_id": "emberhall_cellars",
+      "current_dungeon_id": null,
+      "current_room_id": null,
+      "visited_nodes": [
+        "wayside_luck_shrine",
+        "greywake_triage_yard",
+        "greywake_road_breakout",
+        "greywake_briefing",
+        "emberway_ambush",
+        "iron_hollow_hub",
+        "blackglass_well",
+        "red_mesa_hold",
+        "ashfall_watch",
+        "duskmere_manor",
+        "emberhall_cellars"
+      ],
+      "cleared_rooms": [
+        "antechamber",
+        "black_reserve",
+        "varyn_sanctum"
+      ],
+      "seen_story_beats": [],
+      "node_history": [],
+      "room_history": []
+    },
+    "story_check_option_attempt::a45bf13420d66221": true,
+    "emberhall_threshold_crossed": true,
+    "emberhall_reserve_opened": true,
+    "story_check_option_attempt::143bb993037c037b": true,
+    "introduced_characters": [
+      "Varyn Sable"
+    ],
+    "act1_complete": true,
+    "varyn_body_defeated_act1": true,
+    "varyn_route_displaced": true,
+    "act1_ashen_brand_broken": true,
+    "act1_town_fear": 2,
+    "act1_ashen_strength": 3,
+    "act1_survivors_saved": 0,
+    "act1_victory_tier": "fractured_victory",
+    "act2_starting_pressure": 2
+  },
+  "clues": [],
+  "journal": [
+    "You broke the Ashen Brand and secured Iron Hollow through the end of Act 1.",
+    "Reward from securing Iron Hollow at the end of Act I: 250 XP, 80 gold."
+  ],
+  "quests": {},
+  "completed_acts": [
+    1
+  ],
+  "xp": 250,
+  "gold": 80,
+  "inventory": {
+    "E0004": 2,
+    "E0097": 2,
+    "E0060": 2,
+    "C0011": 4,
+    "E0104": 1,
+    "E0009": 1,
+    "E0093": 1
+  },
+  "short_rests_remaining": 2,
+  "playtime_seconds": 0.003893699999025557,
+  "save_metadata": {
+    "kind": "manual",
+    "saved_at": "2026-04-28T01:26:54",
+    "act": 1,
+    "act_label": "Act I",
+    "scene": "act1_complete",
+    "scene_label": "Iron Hollow",
+    "party_level": 1,
+    "playtime_seconds": 0,
+    "last_objective": "Close out Act I and prepare for the next march."
+  }
+}
