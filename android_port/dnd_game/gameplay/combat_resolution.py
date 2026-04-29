@@ -619,6 +619,8 @@ class CombatResolutionMixin:
             self.trigger_blacklake_adjudicator_reflection(actor, target, source=channel)
             if not success and target.is_conscious():
                 self.apply_status(target, "reeling", 1, source=channel)
+                self.fixate_target(actor, target, duration=1, flag_prefix="mage_fixated", source=channel)
+                self.say(f"{channel} leaves {self.style_name(target)} staring into {self.style_name(actor)}'s ward-glare.")
             if not success and actual > 0 and target.is_conscious():
                 self.add_arcanist_pattern_charge(actor, target, source=channel)
             self.maybe_gain_mage_focus_from_channel(actor, target, source=channel)
@@ -1604,15 +1606,13 @@ class CombatResolutionMixin:
         return " | ".join(resource_lines)
 
     def clear_combat_stance(self, actor) -> None:
-        for status in (*STANCE_STATUS_NAMES, "guard_stance"):
+        for status in STANCE_STATUS_NAMES:
             actor.conditions.pop(status, None)
 
     def current_combat_stance_key(self, actor) -> str:
         for key, status in STANCE_STATUS_BY_KEY.items():
             if self.has_status(actor, status):
                 return key
-        if self.has_status(actor, "guard_stance"):
-            return "guard"
         return "neutral"
 
     def combat_stance_label(self, actor) -> str:
@@ -1707,37 +1707,63 @@ class CombatResolutionMixin:
         self.record_opening_tutorial_combat_event("combat_warrior_rally", actor=actor, target=target)
         return True
 
-    def fixate_target(self, actor, target, *, duration: int = 1) -> None:
-        target.bond_flags["warrior_fixated_by"] = actor.name
-        target.bond_flags["warrior_fixated_by_id"] = id(actor)
-        self.apply_status(target, "fixated", duration, source=f"{actor.name}'s Iron Draw")
+    def fixate_target(self, actor, target, *, duration: int = 1, flag_prefix: str = "warrior_fixated", source: str = "") -> None:
+        for prefix in ("warrior_fixated", "mage_fixated"):
+            target.bond_flags.pop(f"{prefix}_by", None)
+            target.bond_flags.pop(f"{prefix}_by_id", None)
+        target.bond_flags[f"{flag_prefix}_by"] = actor.name
+        target.bond_flags[f"{flag_prefix}_by_id"] = id(actor)
+        self.apply_status(target, "fixated", duration, source=source or f"{actor.name}'s Iron Draw")
+
+    def fixated_source(self, target) -> tuple[object | None, str]:
+        for prefix in ("warrior_fixated", "mage_fixated"):
+            fixated_id = target.bond_flags.get(f"{prefix}_by_id")
+            fixated_by = str(target.bond_flags.get(f"{prefix}_by", ""))
+            if fixated_id is not None or fixated_by:
+                return fixated_id, fixated_by
+        return None, ""
 
     def target_is_fixated_by(self, actor, target) -> bool:
         if not self.has_status(target, "fixated"):
             return False
-        fixated_id = target.bond_flags.get("warrior_fixated_by_id")
+        fixated_id, fixated_by = self.fixated_source(target)
         if fixated_id is not None:
             return fixated_id == id(actor)
-        return target.bond_flags.get("warrior_fixated_by") == actor.name
+        return fixated_by == actor.name
 
     def fixated_priority_target(self, attacker, candidates: list) -> object | None:
         if not self.has_status(attacker, "fixated"):
             return None
-        fixated_id = attacker.bond_flags.get("warrior_fixated_by_id")
+        fixated_id, fixated_by = self.fixated_source(attacker)
         if fixated_id is not None:
             return next((candidate for candidate in candidates if candidate.is_conscious() and id(candidate) == fixated_id), None)
-        fixated_by = str(attacker.bond_flags.get("warrior_fixated_by", ""))
         return next((candidate for candidate in candidates if candidate.is_conscious() and candidate.name == fixated_by), None)
 
+    def ward_draw_priority_target(self, candidates: list) -> object | None:
+        warded = [
+            candidate
+            for candidate in candidates
+            if candidate.is_conscious()
+            and self.has_status(candidate, "anchor_shell")
+            and int(candidate.resources.get("ward", 0)) > 0
+            and self.spellguard_anchor_shell_owner(candidate) is not None
+        ]
+        if not warded:
+            return None
+        return max(warded, key=lambda candidate: (int(candidate.resources.get("ward", 0)), candidate.current_hp))
+
     def attack_focus_modifier(self, attacker, target) -> int:
-        if not self.has_status(attacker, "fixated"):
+        if self.has_status(attacker, "fixated"):
+            fixated_id, fixated_by = self.fixated_source(attacker)
+            if fixated_id is not None:
+                return 0 if id(target) == fixated_id else -2
+            if fixated_by and getattr(target, "name", None) != fixated_by:
+                return -2
             return 0
-        fixated_id = attacker.bond_flags.get("warrior_fixated_by_id")
-        if fixated_id is not None:
-            return 0 if id(target) == fixated_id else -2
-        fixated_by = str(attacker.bond_flags.get("warrior_fixated_by", ""))
-        if fixated_by and getattr(target, "name", None) != fixated_by:
-            return -2
+        if "enemy" in getattr(attacker, "tags", []):
+            draw_target = self.ward_draw_priority_target(getattr(self, "_active_combat_heroes", []) or [])
+            if draw_target is not None and target is not draw_target:
+                return -1
         return 0
 
     def use_iron_draw(self, actor, target) -> None:
@@ -1813,12 +1839,12 @@ class CombatResolutionMixin:
         return "combo"
 
     def target_has_guard_layer(self, target) -> bool:
-        guarded_statuses = ("guarded", "raised_shield", "guard_stance", "stance_guard", "stance_brace")
+        guarded_statuses = ("guarded", "raised_shield", "stance_guard", "stance_brace")
         return any(self.has_status(target, status) for status in guarded_statuses)
 
     def clear_target_guard_layers(self, target) -> bool:
         removed = False
-        for status in ("guarded", "raised_shield", "guard_stance"):
+        for status in ("guarded", "raised_shield"):
             if self.has_status(target, status):
                 self.clear_status(target, status)
                 removed = True

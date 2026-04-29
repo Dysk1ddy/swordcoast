@@ -113,7 +113,7 @@ CLASS_LEVEL_PROGRESSION = {
         4: {
             "features": [
                 ("Channel Focus", "Gain +1 channel strike checks as your patterns tighten."),
-                ("Spellguard Training", "Gain Ward Shell, Anchor Shell, Blue Glass Palm, and Lockstep Field."),
+                ("Spellguard Training", "Gain Ward Shell, Anchor Shell ward-draw, Blue Glass Palm Fixated pressure, and Lockstep Field."),
                 ("Arcanist Training", "Gain Arc, Pattern Charge, Arc Pulse, Marked Angle, Quiet Sum, and Detonate Pattern."),
                 ("Elementalist Training", "Gain Attunement, Elemental Weave, Ember Lance, Frost Shard, Volt Grasp, Burning Line, and Lockfrost."),
                 ("Aethermancer Training", "Gain Flow, Field Mend, Pulse Restore, Triage Line, Clean Breath, Steady Pulse, and Overflow Shell."),

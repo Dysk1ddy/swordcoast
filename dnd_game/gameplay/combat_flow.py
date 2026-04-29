@@ -29,7 +29,6 @@ class TurnState:
 PUBLIC_COMBAT_ACTION_KEYS = {
     "Make Off-Hand Strike": "Make Off-Hand Attack",
     "Use Veil Step": "Use Cunning Action",
-    "Take Guarded Stance": "Take the Dodge action",
     DRINK_HEALING_POTION_ACTION: "Drink a Healing Potion",
 }
 
@@ -1791,7 +1790,8 @@ class CombatFlowMixin:
             return
         conscious_allies = [enemy for enemy in enemies if enemy.is_conscious() and enemy is not actor]
         fixated_target = self.fixated_priority_target(actor, conscious_heroes)
-        marked_target = fixated_target or self.marked_priority_target(conscious_heroes)
+        ward_draw_target = None if fixated_target is not None else self.ward_draw_priority_target(conscious_heroes)
+        marked_target = fixated_target or ward_draw_target or self.marked_priority_target(conscious_heroes)
         if not self.can_make_hostile_action(actor):
             self.say(f"{self.style_name(actor)} falters and cannot press a hostile attack while Charmed.")
             return
@@ -2522,7 +2522,7 @@ class CombatFlowMixin:
         elif actor.archetype == "whispermaw_blob":
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
         else:
-            target = self.rng.choice(conscious_heroes)
+            target = marked_target or self.rng.choice(conscious_heroes)
         self.maybe_apply_enemy_stance(actor, target, conscious_heroes, conscious_allies)
         self.perform_enemy_attack(actor, target, heroes, enemies, dodging)
 
@@ -2624,7 +2624,6 @@ class CombatFlowMixin:
                 options.append(self.skill_tag("PERSUASION / INTIMIDATION", "Attempt Parley"))
             if encounter.allow_flee:
                 options.append(self.skill_tag("STEALTH", "Try to Flee"))
-            options.append("Take Guarded Stance")
         if turn_state.bonus_action_available:
             if "cunning_action" in actor.features:
                 options.append("Use Veil Step")

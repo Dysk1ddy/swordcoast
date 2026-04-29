@@ -5,9 +5,11 @@ import json
 import math
 from pathlib import Path
 from queue import Queue
+import random
 import re
 import sys
 from threading import Event, Thread
+import time
 import traceback
 
 os.environ.setdefault("KIVY_NO_ARGS", "1")
@@ -16,8 +18,8 @@ os.environ.setdefault("KIVY_NO_FILELOG", "1")
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle
-from kivy.metrics import dp
+from kivy.graphics import Color, Line, RoundedRectangle
+from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
@@ -28,6 +30,14 @@ from kivy.uix.widget import Widget
 
 from .game import TextDnDGame
 from .gameplay.constants import MENU_PAGE_SIZE
+from .drafts.map_system import ACT1_HYBRID_MAP, ACT2_ENEMY_DRIVEN_MAP
+from .drafts.map_system.runtime import (
+    available_travel_edges,
+    current_room_exits,
+    requirement_met,
+    room_exit_directions,
+    room_travel_path,
+)
 from .gameplay.magic_points import current_magic_points, maximum_magic_points
 from .ui.colors import strip_ansi
 from .ui.kivy_markup import (
@@ -36,7 +46,11 @@ from .ui.kivy_markup import (
     escape_kivy_markup,
     fade_kivy_markup,
     format_kivy_log_entry,
+    kivy_dice_animation_allowed,
+    kivy_dice_frame_delays,
+    kivy_dice_highlight_index,
     kivy_non_dialogue_reveal_delay,
+    kivy_resource_bar_markup,
     plain_combat_status_text,
     reveal_kivy_markup,
     should_buffer_kivy_non_dialogue_output,
@@ -111,6 +125,19 @@ FONT_ROLE_KEYWORDS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 FONT_PATH_CACHE: dict[str, str | None] = {}
 FONT_FILE_CACHE: list[Path] | None = None
+KIVY_DICE_COLOR_HEX = {
+    "cyan": "67e8f9",
+    "light_aqua": "67e8f9",
+    "light_green": "86efac",
+    "light_red": "f87171",
+    "light_yellow": "d6c59a",
+    "yellow": "facc15",
+}
+KIVY_SIDE_COMMAND_CLOSE_TOKEN = "__aethrune_kivy_close_side_command__"
+
+
+class KivySideCommandClosed(Exception):
+    """Raised inside the Kivy worker thread when the command panel is closed."""
 
 
 def normalize_font_filename(name: str) -> str:
@@ -218,6 +245,490 @@ class PanelBox(BoxLayout):
         self._canvas_color.rgba = color
 
 
+class MapTokenLabel(Label):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.size_hint = (None, None)
+        self.markup = True
+        self.halign = "center"
+        self.valign = "middle"
+        self.padding = [dp(2), 0]
+        self._fill_rgba = (0.10, 0.10, 0.10, 1)
+        self._border_rgba = (0.40, 0.40, 0.40, 1)
+        with self.canvas.before:
+            self._fill_color = Color(*self._fill_rgba)
+            self._fill_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(5)])
+            self._border_color = Color(*self._border_rgba)
+            self._border_line = Line(rectangle=(self.x, self.y, self.width, self.height), width=dp(1))
+        self.bind(pos=self._sync_canvas, size=self._sync_canvas)
+        self._sync_canvas()
+
+    def _sync_canvas(self, *_args) -> None:
+        self._fill_rect.pos = self.pos
+        self._fill_rect.size = self.size
+        self._border_line.rectangle = (self.x, self.y, self.width, self.height)
+        self.text_size = (max(1, self.width - dp(4)), self.height)
+
+    def set_style(
+        self,
+        *,
+        fill: tuple[float, float, float, float],
+        border: tuple[float, float, float, float],
+        text: tuple[float, float, float, float],
+    ) -> None:
+        self._fill_rgba = fill
+        self._border_rgba = border
+        self._fill_color.rgba = fill
+        self._border_color.rgba = border
+        self.color = text
+
+
+class NativeMapCanvas(Widget):
+    ROLE_SYMBOLS = {
+        "entrance": "D",
+        "combat": "E",
+        "event": "*",
+        "treasure": "T",
+        "boss": "B",
+        "exit": "X",
+    }
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._mode = ""
+        self._payload: dict[str, object] = {}
+        self._dark_mode = True
+        self._redraw_event = None
+        self.bind(pos=self._schedule_redraw, size=self._schedule_redraw)
+
+    def set_dark_mode(self, enabled: bool) -> None:
+        self._dark_mode = bool(enabled)
+        self._schedule_redraw()
+
+    def clear_map(self) -> None:
+        self._mode = ""
+        self._payload = {}
+        self._schedule_redraw()
+
+    def show_overworld(self, blueprint, state) -> None:
+        self._mode = "overworld"
+        self._payload = {"blueprint": blueprint, "state": state}
+        self._schedule_redraw()
+
+    def show_dungeon(self, dungeon, state) -> None:
+        self._mode = "dungeon"
+        self._payload = {"dungeon": dungeon, "state": state}
+        self._schedule_redraw()
+
+    def _schedule_redraw(self, *_args) -> None:
+        if self._redraw_event is not None:
+            return
+        self._redraw_event = Clock.schedule_once(self._redraw, 0)
+
+    def _palette(self) -> dict[str, tuple[float, float, float, float]]:
+        if self._dark_mode:
+            return {
+                "background": (0.045, 0.050, 0.052, 1),
+                "grid": (0.22, 0.26, 0.25, 0.55),
+                "route": (0.40, 0.56, 0.58, 0.80),
+                "route_available": (0.90, 0.73, 0.30, 1),
+                "route_hidden": (0.24, 0.24, 0.24, 0.48),
+                "current_fill": (0.15, 0.42, 0.48, 1),
+                "current_border": (0.98, 0.82, 0.28, 1),
+                "visited_fill": (0.11, 0.28, 0.19, 1),
+                "visited_border": (0.40, 0.84, 0.56, 1),
+                "available_fill": (0.30, 0.22, 0.10, 1),
+                "available_border": (0.86, 0.64, 0.26, 1),
+                "locked_fill": (0.10, 0.10, 0.10, 1),
+                "locked_border": (0.32, 0.30, 0.28, 1),
+                "text": (0.98, 0.94, 0.82, 1),
+                "muted_text": (0.64, 0.59, 0.50, 1),
+                "danger_fill": (0.32, 0.10, 0.12, 1),
+                "danger_border": (0.82, 0.28, 0.32, 1),
+                "event_fill": (0.34, 0.25, 0.10, 1),
+                "event_border": (0.92, 0.72, 0.32, 1),
+                "treasure_fill": (0.34, 0.27, 0.08, 1),
+                "boss_fill": (0.26, 0.12, 0.30, 1),
+                "boss_border": (0.78, 0.36, 0.92, 1),
+            }
+        return {
+            "background": (0.92, 0.88, 0.78, 1),
+            "grid": (0.44, 0.36, 0.24, 0.45),
+            "route": (0.30, 0.42, 0.40, 0.90),
+            "route_available": (0.58, 0.36, 0.08, 1),
+            "route_hidden": (0.54, 0.49, 0.40, 0.45),
+            "current_fill": (0.20, 0.58, 0.62, 1),
+            "current_border": (0.24, 0.15, 0.04, 1),
+            "visited_fill": (0.46, 0.68, 0.50, 1),
+            "visited_border": (0.12, 0.38, 0.22, 1),
+            "available_fill": (0.80, 0.62, 0.36, 1),
+            "available_border": (0.42, 0.23, 0.07, 1),
+            "locked_fill": (0.74, 0.70, 0.63, 1),
+            "locked_border": (0.48, 0.42, 0.34, 1),
+            "text": (0.10, 0.08, 0.05, 1),
+            "muted_text": (0.34, 0.29, 0.22, 1),
+            "danger_fill": (0.70, 0.32, 0.30, 1),
+            "danger_border": (0.35, 0.08, 0.08, 1),
+            "event_fill": (0.82, 0.65, 0.34, 1),
+            "event_border": (0.46, 0.30, 0.06, 1),
+            "treasure_fill": (0.86, 0.72, 0.34, 1),
+            "boss_fill": (0.58, 0.34, 0.64, 1),
+            "boss_border": (0.30, 0.12, 0.38, 1),
+        }
+
+    def _redraw(self, _dt) -> None:
+        self._redraw_event = None
+        self.canvas.before.clear()
+        self.clear_widgets()
+        palette = self._palette()
+        with self.canvas.before:
+            Color(*palette["background"])
+            RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(6)])
+        if self.width <= dp(12) or self.height <= dp(12):
+            return
+        if self._mode == "overworld":
+            self._draw_overworld(palette)
+        elif self._mode == "dungeon":
+            self._draw_dungeon(palette)
+
+    def _node_is_known(self, node, state) -> bool:
+        return node.node_id == state.current_node_id or node.node_id in state.visited_nodes
+
+    def _node_status(self, node, state) -> str:
+        if node.node_id == state.current_node_id:
+            return "current"
+        if node.node_id in state.visited_nodes:
+            return "visited"
+        if requirement_met(state, node.requirement):
+            return "available"
+        return "locked"
+
+    def _draw_overworld(self, palette: dict[str, tuple[float, float, float, float]]) -> None:
+        blueprint = self._payload.get("blueprint")
+        state = self._payload.get("state")
+        if blueprint is None or state is None or not getattr(blueprint, "overworld_positions", None):
+            return
+
+        positions = dict(blueprint.overworld_positions)
+        min_x = min(x for x, _ in positions.values())
+        max_x = max(x for x, _ in positions.values())
+        min_y = min(y for _, y in positions.values())
+        max_y = max(y for _, y in positions.values())
+        margin = dp(12)
+        columns = max(1, max_x - min_x + 1)
+        rows = max(1, max_y - min_y + 1)
+        slot_w = max(dp(28), (self.width - 2 * margin) / columns)
+        slot_h = max(dp(22), (self.height - 2 * margin) / rows)
+        node_w = min(dp(112), max(dp(48), slot_w * 0.84))
+        node_h = min(dp(31), max(dp(18), slot_h * 0.72))
+        font_size = min(sp(10), max(sp(6), node_h * 0.44))
+
+        centers: dict[str, tuple[float, float]] = {}
+        for node_id, (grid_x, grid_y) in positions.items():
+            centers[node_id] = (
+                self.x + margin + (grid_x - min_x + 0.5) * slot_w,
+                self.top - margin - (grid_y - min_y + 0.5) * slot_h,
+            )
+
+        try:
+            available_edge_ids = {edge.edge_id for edge in available_travel_edges(blueprint, state)}
+        except Exception:
+            available_edge_ids = set()
+
+        with self.canvas.before:
+            for edge in blueprint.edges:
+                if edge.from_node_id not in centers or edge.to_node_id not in centers:
+                    continue
+                source = blueprint.nodes[edge.from_node_id]
+                target = blueprint.nodes[edge.to_node_id]
+                source_visible = self._node_status(source, state) != "locked" or self._node_is_known(source, state)
+                target_visible = self._node_status(target, state) != "locked" or self._node_is_known(target, state)
+                if edge.edge_id in available_edge_ids:
+                    Color(*palette["route_available"])
+                    width = dp(2.2)
+                elif source_visible and target_visible:
+                    Color(*palette["route"])
+                    width = dp(1.4)
+                else:
+                    Color(*palette["route_hidden"])
+                    width = dp(1)
+                sx, sy = centers[edge.from_node_id]
+                tx, ty = centers[edge.to_node_id]
+                Line(points=[sx, sy, tx, ty], width=width)
+
+        for node_id, (center_x, center_y) in centers.items():
+            node = blueprint.nodes[node_id]
+            status = self._node_status(node, state)
+            label_text = node.short_label if self._node_is_known(node, state) else "???"
+            if status == "current":
+                fill, border, text = palette["current_fill"], palette["current_border"], palette["text"]
+            elif status == "visited":
+                fill, border, text = palette["visited_fill"], palette["visited_border"], palette["text"]
+            elif status == "available":
+                fill, border, text = palette["available_fill"], palette["available_border"], palette["text"]
+            else:
+                fill, border, text = palette["locked_fill"], palette["locked_border"], palette["muted_text"]
+            token = MapTokenLabel(
+                text=escape_kivy_markup(label_text),
+                font_size=font_size,
+                bold=status == "current",
+                size=(node_w, node_h),
+                pos=(center_x - node_w / 2, center_y - node_h / 2),
+            )
+            token.set_style(fill=fill, border=border, text=text)
+            self.add_widget(token)
+
+    def _room_anchor(self, room) -> tuple[int, int]:
+        return (room.x * 2, room.y * 2)
+
+    def _room_visible(self, dungeon, state, room_id: str) -> bool:
+        room = dungeon.rooms[room_id]
+        return room_id == (state.current_room_id or dungeon.entrance_room_id) or room_id in state.cleared_rooms or requirement_met(state, room.requirement)
+
+    def _room_status(self, dungeon, state, room_id: str) -> str:
+        if room_id == (state.current_room_id or dungeon.entrance_room_id):
+            return "current"
+        if room_id in state.cleared_rooms:
+            return "cleared"
+        if requirement_met(state, dungeon.rooms[room_id].requirement):
+            return "available"
+        return "locked"
+
+    def _draw_dungeon(self, palette: dict[str, tuple[float, float, float, float]]) -> None:
+        dungeon = self._payload.get("dungeon")
+        state = self._payload.get("state")
+        if dungeon is None or state is None or not getattr(dungeon, "rooms", None):
+            return
+
+        margin = dp(14)
+        fine_w = max(1, dungeon.width * 2 - 1)
+        fine_h = max(1, dungeon.height * 2 - 1)
+        cell_w = max(dp(20), (self.width - 2 * margin) / fine_w)
+        cell_h = max(dp(20), (self.height - 2 * margin) / fine_h)
+        tile = min(dp(44), max(dp(24), min(cell_w, cell_h) * 0.78))
+        font_size = min(sp(17), max(sp(10), tile * 0.42))
+
+        def center_for(anchor: tuple[int, int]) -> tuple[float, float]:
+            anchor_x, anchor_y = anchor
+            return (
+                self.x + margin + (anchor_x + 0.5) * cell_w,
+                self.top - margin - (anchor_y + 0.5) * cell_h,
+            )
+
+        with self.canvas.before:
+            Color(*palette["grid"])
+            for index in range(fine_w):
+                x = self.x + margin + (index + 0.5) * cell_w
+                Line(points=[x, self.y + margin, x, self.top - margin], width=dp(0.5))
+            for index in range(fine_h):
+                y = self.top - margin - (index + 0.5) * cell_h
+                Line(points=[self.x + margin, y, self.right - margin, y], width=dp(0.5))
+
+            drawn_edges: set[tuple[str, str]] = set()
+            for room in dungeon.rooms.values():
+                if not self._room_visible(dungeon, state, room.room_id):
+                    continue
+                for target_id in room.exits:
+                    if target_id not in dungeon.rooms or not self._room_visible(dungeon, state, target_id):
+                        continue
+                    edge_key = tuple(sorted((room.room_id, target_id)))
+                    if edge_key in drawn_edges:
+                        continue
+                    drawn_edges.add(edge_key)
+                    target = dungeon.rooms[target_id]
+                    route = [self._room_anchor(room), *room_travel_path(dungeon, room, target)]
+                    if len(route) < 2:
+                        route = [self._room_anchor(room), self._room_anchor(target)]
+                    points: list[float] = []
+                    for anchor in route:
+                        cx, cy = center_for(anchor)
+                        points.extend([cx, cy])
+                    Color(*palette["route"])
+                    Line(points=points, width=dp(2))
+
+        for room_id, room in dungeon.rooms.items():
+            status = self._room_status(dungeon, state, room_id)
+            if status == "current":
+                fill, border, text = palette["current_fill"], palette["current_border"], palette["text"]
+                symbol = "P"
+            elif status == "cleared":
+                fill, border, text = palette["visited_fill"], palette["visited_border"], palette["text"]
+                symbol = "."
+            elif status == "locked":
+                fill, border, text = palette["locked_fill"], palette["locked_border"], palette["muted_text"]
+                symbol = "?"
+            else:
+                symbol = self.ROLE_SYMBOLS.get(room.role, "?")
+                if room.role == "combat":
+                    fill, border = palette["danger_fill"], palette["danger_border"]
+                elif room.role in {"event", "treasure"}:
+                    fill = palette["treasure_fill"] if room.role == "treasure" else palette["event_fill"]
+                    border = palette["event_border"]
+                elif room.role == "boss":
+                    fill, border = palette["boss_fill"], palette["boss_border"]
+                else:
+                    fill, border = palette["available_fill"], palette["available_border"]
+                text = palette["text"]
+            cx, cy = center_for(self._room_anchor(room))
+            token = MapTokenLabel(
+                text=escape_kivy_markup(symbol),
+                font_size=font_size,
+                bold=True,
+                size=(tile, tile),
+                pos=(cx - tile / 2, cy - tile / 2),
+            )
+            token.set_style(fill=fill, border=border, text=text)
+            self.add_widget(token)
+
+
+class NativeMapView(BoxLayout):
+    MAP_HEIGHT_MIN = 210
+    MAP_HEIGHT_MAX = 390
+
+    def __init__(self, **kwargs):
+        super().__init__(
+            orientation="vertical",
+            size_hint_y=None,
+            height=0,
+            opacity=0,
+            disabled=True,
+            spacing=dp(5),
+            **kwargs,
+        )
+        self._dark_mode = True
+        self.header = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.78, 0.28, 1),
+            font_size="15sp",
+            bold=True,
+            size_hint_y=None,
+            height=dp(24),
+            halign="left",
+            valign="middle",
+        )
+        self.header.bind(size=self._sync_header)
+        self.canvas_widget = NativeMapCanvas()
+        self.info = WrappedLabel(
+            text="",
+            markup=True,
+            color=(0.82, 0.76, 0.65, 1),
+            font_size="12sp",
+            halign="left",
+            valign="top",
+            size_hint_y=None,
+        )
+        self.add_widget(self.header)
+        self.add_widget(self.canvas_widget)
+        self.add_widget(self.info)
+
+    def _sync_header(self, instance: Label, _value) -> None:
+        instance.text_size = (instance.width, None)
+
+    def set_dark_mode(self, enabled: bool) -> None:
+        self._dark_mode = bool(enabled)
+        self.header.color = (0.96, 0.78, 0.28, 1) if self._dark_mode else (0.18, 0.12, 0.06, 1)
+        self.info.color = (0.82, 0.76, 0.65, 1) if self._dark_mode else (0.28, 0.22, 0.14, 1)
+        self.canvas_widget.set_dark_mode(enabled)
+
+    def hide_map(self) -> None:
+        self.canvas_widget.clear_map()
+        self.header.text = ""
+        self.info.text = ""
+        self.height = 0
+        self.opacity = 0
+        self.disabled = True
+
+    def _show(self, desired_height: float) -> None:
+        self.height = max(dp(self.MAP_HEIGHT_MIN), min(dp(self.MAP_HEIGHT_MAX), desired_height))
+        self.opacity = 1
+        self.disabled = False
+
+    def show_overworld(self, *, title: str, blueprint, state) -> None:
+        positions = getattr(blueprint, "overworld_positions", {})
+        rows = 6
+        if positions:
+            rows = max(y for _, y in positions.values()) - min(y for _, y in positions.values()) + 1
+        self._show(dp(78) + rows * dp(28))
+        self.header.text = f"[b]{escape_kivy_markup(title)}[/b]"
+        self.info.text = self._overworld_info_markup(blueprint, state)
+        self.info._sync_text_size()
+        self.info._sync_height()
+        self.canvas_widget.show_overworld(blueprint, state)
+
+    def show_dungeon(self, *, title: str, dungeon, state) -> None:
+        rows = max(1, dungeon.height * 2 - 1)
+        self._show(dp(90) + rows * dp(34))
+        self.header.text = f"[b]{escape_kivy_markup(title)}[/b]"
+        self.info.text = self._dungeon_info_markup(dungeon, state)
+        self.info._sync_text_size()
+        self.info._sync_height()
+        self.canvas_widget.show_dungeon(dungeon, state)
+
+    def _overworld_info_markup(self, blueprint, state) -> str:
+        current = blueprint.nodes.get(state.current_node_id)
+        known_count = sum(
+            1
+            for node in blueprint.nodes.values()
+            if node.node_id == state.current_node_id or node.node_id in state.visited_nodes
+        )
+        travel_labels: list[str] = []
+        for edge in available_travel_edges(blueprint, state):
+            target = blueprint.nodes[edge.to_node_id]
+            label = target.title if target.node_id in state.visited_nodes else edge.label
+            travel_labels.append(label)
+        travel = "; ".join(travel_labels[:3]) if travel_labels else "No open route from here"
+        if len(travel_labels) > 3:
+            travel += f"; +{len(travel_labels) - 3} more"
+        lines = [
+            f"[b]Here[/b]: {escape_kivy_markup(current.title if current is not None else 'Unknown')}",
+            f"[b]Known[/b]: {known_count}/{len(blueprint.nodes)}",
+            f"[b]Open routes[/b]: {escape_kivy_markup(travel)}",
+        ]
+        pressure = self._act2_pressure_markup(state)
+        if pressure:
+            lines.append(pressure)
+        return "\n".join(lines)
+
+    def _dungeon_info_markup(self, dungeon, state) -> str:
+        room = dungeon.rooms[state.current_room_id or dungeon.entrance_room_id]
+        exits = current_room_exits(dungeon, state)
+        directions = room_exit_directions(room, exits, dungeon=dungeon) if exits else {}
+        exit_text = ", ".join(
+            f"{directions[exit_room.room_id]} {exit_room.title}" for exit_room in exits[:4]
+        )
+        if not exit_text:
+            exit_text = "No visible exit"
+        elif len(exits) > 4:
+            exit_text += f", +{len(exits) - 4} more"
+        lines = [
+            f"[b]Room[/b]: {escape_kivy_markup(room.title)}",
+            f"[b]Role[/b]: {escape_kivy_markup(room.role.upper())}",
+            f"[b]Exits[/b]: {escape_kivy_markup(exit_text)}",
+            "[b]Legend[/b]: P you, . cleared, E fight, * event, T treasure, B boss, ? locked",
+        ]
+        pressure = self._act2_pressure_markup(state)
+        if pressure:
+            lines.insert(3, pressure)
+        return "\n".join(lines)
+
+    def _act2_pressure_markup(self, state) -> str:
+        values = getattr(state, "flag_values", {})
+        if not values or not any(key in values for key in ("act2_town_stability", "act2_route_control", "act2_whisper_pressure")):
+            return ""
+        parts: list[str] = []
+        for key, label in (
+            ("act2_town_stability", "Town"),
+            ("act2_route_control", "Routes"),
+            ("act2_whisper_pressure", "Whispers"),
+        ):
+            value = values.get(key, 0)
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                value = 0
+            parts.append(f"{label} {max(0, min(5, int(value)))}/5")
+        return f"[b]Pressure[/b]: {escape_kivy_markup(' | '.join(parts))}"
+
+
 class ClickableGameBridge:
     FAST_REVEAL_COMMANDS = {
         "camp",
@@ -251,6 +762,7 @@ class ClickableGameBridge:
         self._pending_non_dialogue_markups: list[str] = []
         self._pending_non_dialogue_fast_reveal = False
         self._fast_reveal_until_next_prompt = False
+        self._side_command_depth = 0
 
     def start(self) -> None:
         if self._worker is not None:
@@ -286,11 +798,16 @@ class ClickableGameBridge:
 
     def post_output(self, text: object = "") -> None:
         markup, animated = format_kivy_log_entry(text)
+        in_combat = self.screen.combat_active()
+        if self.side_command_active:
+            self.post_side_output(markup)
+            return
         if should_buffer_kivy_non_dialogue_output(
             markup,
             animated=animated,
             source_text=text,
             enabled=self.screen.typing_animation_enabled,
+            in_combat=in_combat,
         ):
             self._pending_non_dialogue_markups.append(markup)
             self._pending_non_dialogue_fast_reveal = (
@@ -298,7 +815,42 @@ class ClickableGameBridge:
             )
             return
         self.flush_pending_non_dialogue_output()
+        if in_combat:
+            animated = False
+        elif markup:
+            Clock.schedule_once(lambda _dt: self.screen.restore_default_side_panel())
         self.post_preformatted_output(markup, animated=animated, fast_reveal=self._fast_reveal_until_next_prompt)
+
+    @property
+    def side_command_active(self) -> bool:
+        return self._side_command_depth > 0
+
+    def begin_side_command(self, title: str) -> None:
+        self._side_command_depth += 1
+        if self._side_command_depth > 1:
+            return
+        done = Event()
+        Clock.schedule_once(lambda _dt: self.screen.begin_side_command(title, done_event=done))
+        done.wait(timeout=1.0)
+
+    def end_side_command(self) -> None:
+        if self._side_command_depth > 0:
+            self._side_command_depth -= 1
+
+    def post_side_output(self, markup: str) -> None:
+        done = Event()
+        Clock.schedule_once(lambda _dt: self.screen.append_side_output(markup, done_event=done))
+        done.wait(timeout=1.0)
+
+    def show_dice_animation_frame(self, markup: str, *, final: bool = False) -> None:
+        done = Event()
+        Clock.schedule_once(lambda _dt: self.screen.show_dice_animation_frame(markup, final=final, done_event=done))
+        done.wait(timeout=1.0)
+
+    def append_dice_result(self, markup: str) -> None:
+        done = Event()
+        Clock.schedule_once(lambda _dt: self.screen.append_dice_result(markup, done_event=done))
+        done.wait(timeout=1.0)
 
     def post_preformatted_output(self, markup: str, *, animated: bool, fast_reveal: bool = False) -> None:
         done = Event()
@@ -347,16 +899,67 @@ class ClickableGameBridge:
         Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
         self._responses.put(value)
 
+    def close_side_command(self) -> None:
+        if not self.side_command_active:
+            return
+        self._fast_reveal_until_next_prompt = False
+        if not self.waiting_for_input:
+            return
+        self.waiting_for_input = False
+        Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
+        self._responses.put(KIVY_SIDE_COMMAND_CLOSE_TOKEN)
+
     def show_combat_actor(self, actor) -> None:
         name = "" if actor is None else str(getattr(actor, "name", ""))
         Clock.schedule_once(lambda _dt: self.screen.set_active_combat_actor(name))
 
+    def refresh_combat_panel(self) -> None:
+        Clock.schedule_once(lambda _dt: self.screen.refresh_combat_panel())
+
+    def wait_for_combat_transition(self, *, ending: bool = False) -> None:
+        done = Event()
+        Clock.schedule_once(lambda _dt: self.screen.prepare_combat_transition(done_event=done, ending=ending))
+        done.wait(timeout=2.0)
+
+    def wait_for_animation(self, duration: float) -> bool:
+        return self.screen.wait_for_animation_skip(duration)
+
     def set_kivy_dark_mode(self, enabled: bool) -> None:
         Clock.schedule_once(lambda _dt: self.screen.set_kivy_dark_mode_enabled(enabled))
+
+    def set_kivy_fullscreen(self, enabled: bool) -> None:
+        Clock.schedule_once(lambda _dt: self.screen.set_kivy_fullscreen_enabled(enabled))
+
+    def show_overworld_map(self, blueprint, state, title: str) -> None:
+        done = Event()
+        Clock.schedule_once(
+            lambda _dt: self.screen.show_native_overworld_map(
+                blueprint,
+                state,
+                title=title,
+                done_event=done,
+            )
+        )
+        done.wait(timeout=1.0)
+
+    def show_dungeon_map(self, dungeon, state, title: str) -> None:
+        done = Event()
+        Clock.schedule_once(
+            lambda _dt: self.screen.show_native_dungeon_map(
+                dungeon,
+                state,
+                title=title,
+                done_event=done,
+            )
+        )
+        done.wait(timeout=1.0)
 
 
 class ClickableTextDnDGame(TextDnDGame):
     KIVY_DARK_MODE_SETTING_KEY = "kivy_dark_mode_enabled"
+    KIVY_FULLSCREEN_SETTING_KEY = "kivy_fullscreen_enabled"
+    DEFAULT_KIVY_DARK_MODE_ENABLED = True
+    DEFAULT_KIVY_FULLSCREEN_ENABLED = True
 
     def __init__(self, bridge: ClickableGameBridge, *, save_dir: Path):
         self.bridge = bridge
@@ -364,15 +967,19 @@ class ClickableTextDnDGame(TextDnDGame):
             input_fn=lambda _prompt="": "",
             output_fn=self.bridge.post_output,
             save_dir=save_dir,
-            animate_dice=False,
-            pace_output=False,
-            type_dialogue=False,
-            staggered_reveals=False,
+            animate_dice=None,
+            pace_output=None,
+            type_dialogue=None,
+            staggered_reveals=None,
         )
         self._kivy_dark_mode_preference = bool(
             getattr(self, "_loaded_kivy_dark_mode_preference", self.bridge.screen.kivy_dark_mode_enabled)
         )
+        self._kivy_fullscreen_preference = bool(
+            getattr(self, "_loaded_kivy_fullscreen_preference", self.bridge.screen.kivy_fullscreen_enabled)
+        )
         self.bridge.set_kivy_dark_mode(self._kivy_dark_mode_preference)
+        self.bridge.set_kivy_fullscreen(self._kivy_fullscreen_preference)
 
     def load_persisted_settings(self) -> dict[str, object]:
         settings = super().load_persisted_settings()
@@ -382,6 +989,8 @@ class ClickableTextDnDGame(TextDnDGame):
             return settings
         if isinstance(data, dict) and self.KIVY_DARK_MODE_SETTING_KEY in data:
             self._loaded_kivy_dark_mode_preference = bool(data[self.KIVY_DARK_MODE_SETTING_KEY])
+        if isinstance(data, dict) and self.KIVY_FULLSCREEN_SETTING_KEY in data:
+            self._loaded_kivy_fullscreen_preference = bool(data[self.KIVY_FULLSCREEN_SETTING_KEY])
         return settings
 
     def current_settings_payload(self) -> dict[str, object]:
@@ -389,10 +998,820 @@ class ClickableTextDnDGame(TextDnDGame):
         payload[self.KIVY_DARK_MODE_SETTING_KEY] = bool(
             getattr(self, "_kivy_dark_mode_preference", self.bridge.screen.kivy_dark_mode_enabled)
         )
+        payload[self.KIVY_FULLSCREEN_SETTING_KEY] = bool(
+            getattr(self, "_kivy_fullscreen_preference", self.bridge.screen.kivy_fullscreen_enabled)
+        )
         return payload
 
     def music_output_allows_playback(self) -> bool:
         return True
+
+    def kivy_should_animate_dice_roll(self, *, style: str | None = None, outcome_kind: str | None = None) -> bool:
+        return kivy_dice_animation_allowed(
+            in_combat=bool(getattr(self, "_in_combat", False)),
+            style=style,
+            outcome_kind=outcome_kind,
+        )
+
+    def animate_dice_roll(self, **payload) -> None:
+        if not self.kivy_should_animate_dice_roll(
+            style=payload.get("style"),
+            outcome_kind=payload.get("outcome_kind"),
+        ):
+            return
+        kind = str(payload.get("kind", "roll"))
+        rolls = list(payload.get("rolls") or [])
+        if not self.animate_dice or not rolls:
+            return
+        expression = str(payload.get("expression", "roll"))
+        sides = int(payload.get("sides", 20) or 20)
+        modifier = int(payload.get("modifier", 0) or 0)
+        display_modifier = payload.get("display_modifier")
+        effective_modifier = modifier if display_modifier is None else int(display_modifier)
+        critical = bool(payload.get("critical", False))
+        advantage_state = int(payload.get("advantage_state", 0) or 0)
+        rerolls = list(payload.get("rerolls") or [])
+        kept = payload.get("kept")
+        kept = int(kept) if kept is not None else None
+        target_number = payload.get("target_number")
+        target_number = int(target_number) if target_number is not None else None
+        target_label = payload.get("target_label")
+        context_label = payload.get("context_label")
+        style = payload.get("style")
+        outcome_kind = payload.get("outcome_kind")
+
+        self.begin_animation_skip_scope()
+        try:
+            mode = self.current_dice_animation_mode()
+            show_total_frame = (
+                mode == "full"
+                or kind == "d20"
+                or effective_modifier != 0
+                or len(rolls) > 1
+                or style in {"damage", "healing"}
+            )
+            emphasis = 0.0
+            if critical:
+                emphasis += 0.18
+            if style in {"attack", "damage", "save", "skill"}:
+                emphasis += 0.12
+            if target_number is not None or advantage_state:
+                emphasis += 0.08
+            duration = min(
+                self._dice_animation_max_seconds,
+                max(
+                    self._dice_animation_min_seconds,
+                    self._dice_animation_min_seconds
+                    + 0.18 * max(0, len(rolls) - 1)
+                    + (0.14 if advantage_state else 0.0)
+                    + emphasis,
+                ),
+            )
+            play_dice_roll_sound = getattr(self, "play_dice_roll_sound", None)
+            if callable(play_dice_roll_sound):
+                play_dice_roll_sound(duration, cooldown=0.05)
+            frames = min(
+                max(self._dice_animation_max_frames + 12, 1),
+                max(
+                    self._dice_animation_min_frames + 8,
+                    int(max(1.0, duration) * max(1.0, self._dice_animation_frame_rate + 9)),
+                ),
+            )
+            preview_rng = random.Random(time.perf_counter_ns() ^ id(rolls) ^ (sides << 8))
+            label = self.dice_animation_label(
+                kind,
+                expression,
+                style=style,
+                critical=critical,
+                advantage_state=advantage_state,
+            )
+            skipped = False
+            delays = kivy_dice_frame_delays(frames, duration)
+            for index, delay in enumerate(delays):
+                progress = (index + 1) / max(1, frames)
+                shown = self.kivy_dice_preview_rolls(
+                    rolls,
+                    sides=sides,
+                    preview_rng=preview_rng,
+                    progress=progress,
+                )
+                self.render_dice_animation_frame(
+                    label,
+                    shown,
+                    kind=kind,
+                    final=False,
+                    kept=kept,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                    target_number=target_number,
+                    target_label=target_label,
+                    context_label=context_label,
+                    highlight_index=self._kivy_dice_live_highlight_index(
+                        kind,
+                        shown,
+                        advantage_state=advantage_state,
+                    ),
+                    pop_scale=self._kivy_dice_live_pop_scale(index, frames),
+                )
+                if self.sleep_for_dice_animation(delay):
+                    skipped = True
+                    break
+
+            final_label = self.dice_animation_final_label(
+                kind,
+                expression,
+                style=style,
+                critical=critical,
+                advantage_state=advantage_state,
+            )
+            if not skipped:
+                final_highlight_index = kivy_dice_highlight_index(rolls, kept)
+                winner_color = self._kivy_dice_winner_color(
+                    kind=kind,
+                    rolls=rolls,
+                    modifier=modifier,
+                    kept=kept,
+                    target_number=target_number,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                    critical=critical,
+                    fallback=self._kivy_dice_accent(kind, style, outcome_kind),
+                )
+                for pop_scale, pause in (
+                    (1.68, 0.045),
+                    (0.78, 0.035),
+                    (1.42, 0.04),
+                    (0.92, 0.035),
+                    (1.18, 0.035),
+                ):
+                    self.render_dice_animation_frame(
+                        final_label,
+                        rolls,
+                        kind=kind,
+                        final=True,
+                        modifier=modifier,
+                        kept=kept,
+                        rerolls=rerolls,
+                        style=style,
+                        outcome_kind=outcome_kind,
+                        target_number=target_number,
+                        target_label=target_label,
+                        show_total=not show_total_frame,
+                        context_label=context_label,
+                        highlight_index=final_highlight_index,
+                        highlight_color=winner_color,
+                        pop_scale=pop_scale,
+                        clear_animation=False,
+                    )
+                    skipped = self.sleep_for_dice_animation(pause)
+                    if skipped:
+                        break
+            self.render_dice_animation_frame(
+                final_label,
+                rolls,
+                kind=kind,
+                final=True,
+                modifier=modifier,
+                kept=kept,
+                rerolls=rerolls,
+                style=style,
+                outcome_kind=outcome_kind,
+                target_number=target_number,
+                target_label=target_label,
+                show_total=not show_total_frame,
+                context_label=context_label,
+                highlight_index=kivy_dice_highlight_index(rolls, kept),
+                highlight_color=self._kivy_dice_winner_color(
+                    kind=kind,
+                    rolls=rolls,
+                    modifier=modifier,
+                    kept=kept,
+                    target_number=target_number,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                    critical=critical,
+                    fallback=self._kivy_dice_accent(kind, style, outcome_kind),
+                ),
+                pop_scale=1.0,
+                clear_animation=True,
+            )
+            if show_total_frame and self._dice_total_reveal_pause_seconds > 0:
+                self.sleep_for_animation(self._dice_total_reveal_pause_seconds, require_animation=True)
+            if kind == "d20" and show_total_frame:
+                self.render_dice_animation_total_frame(
+                    rolls=list(rolls),
+                    kept=kept if kept is not None else rolls[-1],
+                    modifier=effective_modifier,
+                    rerolls=list(rerolls),
+                    target_number=target_number,
+                    target_label=target_label,
+                    context_label=context_label,
+                    expression=expression,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                    critical=critical,
+                    advantage_state=advantage_state,
+                )
+            elif show_total_frame:
+                self.render_roll_animation_total_frame(
+                    rolls=list(rolls),
+                    modifier=effective_modifier,
+                    rerolls=list(rerolls),
+                    context_label=context_label,
+                    expression=expression,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                    critical=critical,
+                )
+            if self._dice_animation_final_pause_seconds > 0:
+                self.sleep_for_animation(self._dice_animation_final_pause_seconds, require_animation=True)
+        finally:
+            self.end_animation_skip_scope()
+
+    def can_render_initiative_panel_animation(self) -> bool:
+        return True
+
+    def _kivy_dice_color(self, color_name: str | None, *, fallback: str = "d6c59a") -> str:
+        return KIVY_DICE_COLOR_HEX.get(str(color_name or ""), fallback)
+
+    def _kivy_dice_accent(self, kind: str, style: str | None, outcome_kind: str | None = None) -> str:
+        if style == "initiative" or outcome_kind == "initiative":
+            return "facc15"
+        if style in {"attack", "damage"} or outcome_kind == "attack":
+            return "f87171"
+        if style == "healing":
+            return "86efac"
+        if style == "skill":
+            return "67e8f9"
+        if style == "save" or outcome_kind == "save":
+            return "d6c59a"
+        return "d6c59a" if kind == "roll" else "facc15"
+
+    def _kivy_dice_winner_color(
+        self,
+        *,
+        kind: str,
+        rolls: list[int],
+        modifier: int,
+        kept: int | None,
+        target_number: int | None,
+        style: str | None,
+        outcome_kind: str | None,
+        critical: bool,
+        fallback: str,
+    ) -> str:
+        if not rolls:
+            return fallback
+        _label, outcome_color, _note = self.dice_outcome_details(
+            kind=kind,
+            rolls=rolls,
+            modifier=modifier,
+            kept=kept,
+            target_number=target_number,
+            style=style,
+            outcome_kind=outcome_kind,
+            critical=critical,
+        )
+        return self._kivy_dice_color(outcome_color, fallback=fallback)
+
+    def _kivy_dice_live_highlight_index(
+        self,
+        kind: str,
+        rolls: list[int],
+        *,
+        advantage_state: int = 0,
+    ) -> int | None:
+        if not rolls:
+            return None
+        if kind == "d20" and len(rolls) > 1 and advantage_state < 0:
+            return min(range(len(rolls)), key=lambda index: rolls[index])
+        return max(range(len(rolls)), key=lambda index: rolls[index])
+
+    def _kivy_dice_live_pop_scale(self, frame_index: int, frame_count: int) -> float:
+        progress = frame_index / max(1, frame_count - 1)
+        beat = (1.00, 1.22, 0.90, 1.14, 0.96, 1.08)[frame_index % 6]
+        return 1.0 + (beat - 1.0) * (0.55 + 0.45 * progress)
+
+    def kivy_dice_preview_rolls(
+        self,
+        final_rolls: list[int],
+        *,
+        sides: int,
+        preview_rng: random.Random,
+        progress: float,
+    ) -> list[int]:
+        lock_progress = max(0.0, (progress - 0.78) / 0.22)
+        lock_chance = lock_progress**1.7
+        shown: list[int] = []
+        for final_value in final_rolls:
+            if preview_rng.random() < lock_chance:
+                shown.append(final_value)
+            else:
+                shown.append(preview_rng.randint(1, sides))
+        return shown
+
+    def _kivy_mono_span(self, markup: str) -> str:
+        font_name = resolve_kivy_font("mono")
+        if not font_name:
+            return markup
+        safe_font_name = font_name.replace("\\", "/")
+        return f"[font={safe_font_name}]{markup}[/font]"
+
+    def _kivy_dice_value_markup(
+        self,
+        value: int,
+        *,
+        highlighted: bool,
+        accent: str,
+        highlight_color: str | None = None,
+        pop_scale: float = 1.0,
+        muted: bool = False,
+    ) -> str:
+        escaped = escape_kivy_markup(str(value))
+        if muted:
+            return f"[color=#8f7d62]{escaped}[/color]"
+        if not highlighted:
+            return escaped
+        size = max(13, int(round(20 * max(0.68, pop_scale))))
+        color = highlight_color or accent
+        return f"[size={size}sp][b][color=#{color}]{escaped}[/color][/b][/size]"
+
+    def _kivy_dice_frame_core(
+        self,
+        kind: str,
+        rolls: list[int],
+        *,
+        kept: int | None = None,
+        final: bool = False,
+        highlight_index: int | None = None,
+        highlight_color: str | None = None,
+        pop_scale: float = 1.0,
+        accent: str = "facc15",
+    ) -> str:
+        if kind == "d20":
+            if len(rolls) == 1:
+                value = self._kivy_dice_value_markup(
+                    rolls[0],
+                    highlighted=highlight_index == 0,
+                    accent=accent,
+                    highlight_color=highlight_color,
+                    pop_scale=pop_scale,
+                )
+                return f"Die: {value}"
+            lanes: list[str] = []
+            kept_index = self.dice_kept_index(rolls, kept) if final else None
+            for index, value in enumerate(rolls):
+                rendered = self._kivy_dice_value_markup(
+                    value,
+                    highlighted=highlight_index == index,
+                    accent=accent,
+                    highlight_color=highlight_color,
+                    pop_scale=pop_scale,
+                    muted=final and highlight_index is not None and highlight_index != index,
+                )
+                lane = f"Die {chr(65 + index)}: {rendered}"
+                if kept_index == index:
+                    lane += f" [b][color=#{highlight_color or accent}][kept][/color][/b]"
+                lanes.append(lane)
+            return " | ".join(lanes)
+        parts = [
+            self._kivy_dice_value_markup(
+                value,
+                highlighted=highlight_index == index,
+                accent=accent,
+                highlight_color=highlight_color,
+                pop_scale=pop_scale,
+            )
+            for index, value in enumerate(rolls)
+        ]
+        return " + ".join(parts)
+
+    def render_dice_animation_frame(
+        self,
+        label: str,
+        rolls: list[int],
+        *,
+        kind: str = "roll",
+        final: bool,
+        modifier: int = 0,
+        kept: int | None = None,
+        rerolls: list[tuple[int, int]] | None = None,
+        style: str | None = None,
+        outcome_kind: str | None = None,
+        target_number: int | None = None,
+        target_label: str | None = None,
+        show_total: bool = True,
+        context_label: str | None = None,
+        highlight_index: int | None = None,
+        highlight_color: str | None = None,
+        pop_scale: float = 1.0,
+        clear_animation: bool | None = None,
+    ) -> None:
+        rerolls = rerolls or []
+        accent = self._kivy_dice_accent(kind, style, outcome_kind)
+        core = self._kivy_dice_frame_core(
+            kind,
+            rolls,
+            kept=kept,
+            final=final,
+            highlight_index=highlight_index,
+            highlight_color=highlight_color,
+            pop_scale=pop_scale,
+            accent=accent,
+        )
+        prefix = escape_kivy_markup(strip_ansi(str(context_label or label)))
+        text = f"{prefix}: {core}"
+        if target_number is not None:
+            text += f" vs {escape_kivy_markup(str(target_label or target_number))}"
+        if final and show_total:
+            text += f" | {escape_kivy_markup(self.dice_breakdown_text(kind, rolls, modifier=modifier, kept=kept))}"
+            total = (kept if kind == "d20" and kept is not None else (rolls[-1] if kind == "d20" else sum(rolls))) + modifier
+            total_markup = escape_kivy_markup(str(total))
+            if highlight_color:
+                total_markup = f"[b][color=#{highlight_color}]{total_markup}[/color][/b]"
+            text += f" = {total_markup}"
+        if final and rerolls:
+            text += f" | reroll {escape_kivy_markup(', '.join(f'{old}->{new}' for old, new in rerolls))}"
+        markup = self._kivy_mono_span(f"[b][color=#{accent}]{text}[/color][/b]")
+        self.bridge.show_dice_animation_frame(markup, final=final if clear_animation is None else clear_animation)
+
+    def render_dice_result_panel(
+        self,
+        *,
+        kind: str,
+        expression: str,
+        rolls: list[int],
+        modifier: int,
+        kept: int | None = None,
+        rerolls: list[tuple[int, int]] | None = None,
+        target_number: int | None = None,
+        target_label: str | None = None,
+        context_label: str | None = None,
+        style: str | None = None,
+        outcome_kind: str | None = None,
+        critical: bool = False,
+        advantage_state: int = 0,
+    ) -> None:
+        rerolls = rerolls or []
+        total = (kept if kept is not None else sum(rolls)) + modifier
+        panel_title, _accent_name = self.dice_animation_theme(kind, style)
+        heading = context_label or panel_title
+        outcome_label, outcome_color, outcome_note = self.dice_outcome_details(
+            kind=kind,
+            rolls=rolls,
+            modifier=modifier,
+            kept=kept,
+            target_number=target_number,
+            style=style,
+            outcome_kind=outcome_kind,
+            critical=critical,
+        )
+        accent = self._kivy_dice_accent(kind, style, outcome_kind)
+        outcome_hex = self._kivy_dice_color(outcome_color, fallback=accent)
+        dice_markup = self._kivy_dice_frame_core(
+            kind,
+            rolls,
+            kept=kept,
+            final=True,
+            highlight_index=kivy_dice_highlight_index(rolls, kept),
+            highlight_color=outcome_hex,
+            pop_scale=1.0,
+            accent=accent,
+        )
+        lines = [
+            f"[b][color=#{accent}]{escape_kivy_markup(strip_ansi(heading))}[/color][/b]",
+            (
+                f"[color=#8f7d62]Roll[/color]: "
+                f"{escape_kivy_markup(self.dice_animation_final_label(kind, expression, style=style, critical=critical, advantage_state=advantage_state))}"
+            ),
+            f"[color=#8f7d62]Dice[/color]: {dice_markup}",
+            f"[color=#8f7d62]Breakdown[/color]: {escape_kivy_markup(self.dice_breakdown_text(kind, rolls, modifier=modifier, kept=kept))}",
+            f"[color=#8f7d62]Total[/color]: [b][color=#{outcome_hex}]{total}[/color][/b]",
+        ]
+        if target_number is not None:
+            lines.append(f"[color=#8f7d62]Target[/color]: {escape_kivy_markup(str(target_label or target_number))}")
+        lines.append(f"[color=#8f7d62]Outcome[/color]: [b][color=#{outcome_hex}]{escape_kivy_markup(outcome_label)}[/color][/b]")
+        if outcome_note is not None:
+            lines.append(f"[color=#8f7d62]Note[/color]: {escape_kivy_markup(outcome_note)}")
+        if rerolls:
+            reroll_text = ", ".join(f"{old}->{new}" for old, new in rerolls)
+            lines.append(f"[color=#8f7d62]Reroll[/color]: {escape_kivy_markup(reroll_text)}")
+        self.bridge.append_dice_result("\n".join(lines))
+
+    def _kivy_table_cell(self, text: object, width: int, *, align: str = "left") -> str:
+        value = strip_ansi(str(text))
+        if len(value) > width:
+            value = value[: max(1, width - 1)] + "~"
+        if align == "right":
+            return value.rjust(width)
+        if align == "center":
+            return value.center(width)
+        return value.ljust(width)
+
+    def _kivy_initiative_actor_color(self, actor) -> str:
+        enemies = list(getattr(self, "_active_combat_enemies", []) or [])
+        if actor in enemies or "enemy" in set(getattr(actor, "tags", []) or []):
+            return "f87171"
+        return "67e8f9"
+
+    def _kivy_initiative_leader_index(self, entries: list[dict[str, object]], shown_rolls: list[int]) -> int | None:
+        if not entries or not shown_rolls:
+            return None
+        return max(
+            range(min(len(entries), len(shown_rolls))),
+            key=lambda index: (
+                int(shown_rolls[index]) + int(entries[index]["modifier"]),
+                int(entries[index].get("dex_mod", 0)),
+                int(entries[index].get("side_priority", 0)),
+                int(entries[index].get("tie_index", 0)),
+            ),
+        )
+
+    def _kivy_initiative_status_markup(self, entry: dict[str, object], *, final: bool, leader: bool) -> str:
+        if not final:
+            return "[color=#d6c59a]Rolling[/color]" if leader else "[color=#8f7d62]Rolling[/color]"
+        note = self.initiative_entry_note(entry)
+        if note == "Natural 20":
+            return "[b][color=#facc15]Natural 20[/color][/b]"
+        if note == "Natural 1":
+            return "[b][color=#f87171]Natural 1[/color][/b]"
+        if leader:
+            return "[b][color=#86efac]First move[/color][/b]"
+        return "[color=#8f7d62]Ready[/color]"
+
+    def _kivy_initiative_panel_markup(
+        self,
+        entries: list[dict[str, object]],
+        *,
+        shown_rolls: list[int] | None = None,
+        final: bool,
+        frame_index: int = 0,
+        frame_count: int = 1,
+        pop_scale: float | None = None,
+    ) -> str:
+        display_rolls = shown_rolls or [getattr(entry["outcome"], "kept", 0) for entry in entries]
+        leader_index = self._kivy_initiative_leader_index(entries, display_rolls)
+        title = "Initiative Order" if final else "Rolling Initiative"
+        subtitle = "Highest total acts first" if final else "Dice are settling into turn order"
+        lines = [
+            f"[size=20sp][b][color=#facc15]{title}[/color][/b][/size]",
+            f"[size=13sp][color=#8f7d62]{subtitle}[/color][/size]",
+        ]
+        live_pop = self._kivy_dice_live_pop_scale(frame_index, frame_count)
+        for index, (entry, shown) in enumerate(zip(entries, display_rolls), start=1):
+            actor = entry["actor"]
+            modifier = int(entry["modifier"])
+            total = int(entry["total"]) if final else int(shown) + modifier
+            is_leader = leader_index == index - 1
+            actor_name = escape_kivy_markup(strip_ansi(self.initiative_actor_summary_name(actor)))
+            actor_color = self._kivy_initiative_actor_color(actor)
+            rank_color = "facc15" if is_leader else "8f7d62"
+            row_pop = pop_scale if final and is_leader else (live_pop if is_leader else 1.0)
+            winner_color = "facc15" if is_leader else "d6c59a"
+            roll_markup = self._kivy_dice_value_markup(
+                int(shown),
+                highlighted=is_leader,
+                accent="d6c59a",
+                highlight_color=winner_color,
+                pop_scale=row_pop,
+                muted=final and not is_leader,
+            )
+            total_text = escape_kivy_markup(str(total))
+            if is_leader:
+                total_size = max(14, int(round(19 * max(0.76, row_pop))))
+                total_markup = f"[size={total_size}sp][b][color=#{winner_color}]{total_text}[/color][/b][/size]"
+            else:
+                total_markup = f"[color=#b8a98d]{total_text}[/color]"
+            status = self._kivy_initiative_status_markup(entry, final=final, leader=is_leader)
+            lines.append(
+                "\n"
+                f"[b][color=#{rank_color}]{index}[/color][/b] "
+                f"[b][color=#{actor_color}]{actor_name}[/color][/b]\n"
+                f"   [color=#8f7d62]Roll[/color] {roll_markup}  "
+                f"[color=#8f7d62]Mod[/color] [color=#d6c59a]{modifier:+d}[/color]  "
+                f"[color=#8f7d62]Total[/color] {total_markup}  {status}"
+            )
+        return "\n".join(lines)
+
+    def build_initiative_panel_lines(
+        self,
+        entries: list[dict[str, object]],
+        *,
+        shown_rolls: list[int] | None = None,
+        final: bool,
+    ) -> list[str]:
+        return [
+            self._kivy_initiative_panel_markup(
+                entries,
+                shown_rolls=shown_rolls,
+                final=final,
+            )
+        ]
+
+    def draw_initiative_panel_lines(self, lines: list[str], *, previous_line_count: int = 0) -> None:
+        del previous_line_count
+        markup = "\n".join(lines)
+        final = "Initiative Order" in visible_markup_text(markup)
+        self.bridge.show_dice_animation_frame(markup, final=final)
+
+    def render_kivy_initiative_panel(
+        self,
+        entries: list[dict[str, object]],
+        *,
+        shown_rolls: list[int],
+        final: bool,
+        frame_index: int = 0,
+        frame_count: int = 1,
+        pop_scale: float | None = None,
+        clear_animation: bool | None = None,
+    ) -> None:
+        markup = self._kivy_initiative_panel_markup(
+            entries,
+            shown_rolls=shown_rolls,
+            final=final,
+            frame_index=frame_index,
+            frame_count=frame_count,
+            pop_scale=pop_scale,
+        )
+        self.bridge.show_dice_animation_frame(markup, final=final if clear_animation is None else clear_animation)
+
+    def animate_initiative_rolls(self, entries: list[dict[str, object]]) -> None:
+        if not self.animate_dice or not entries:
+            return
+        self.begin_animation_skip_scope()
+        try:
+            duration = min(
+                self._dice_animation_max_seconds + 0.35,
+                max(
+                    self._dice_animation_min_seconds + 0.12,
+                    self._dice_animation_min_seconds + 0.08 * max(0, len(entries) - 1) + 0.24,
+                ),
+            )
+            play_dice_roll_sound = getattr(self, "play_dice_roll_sound", None)
+            if callable(play_dice_roll_sound):
+                play_dice_roll_sound(duration, cooldown=0.08)
+            frames = min(
+                max(self._dice_animation_max_frames + 12, 1),
+                max(
+                    self._dice_animation_min_frames + 8,
+                    int(max(1.0, duration) * max(1.0, self._dice_animation_frame_rate + 8)),
+                ),
+            )
+            preview_rng = random.Random(time.perf_counter_ns() ^ len(entries) ^ (id(entries) << 1))
+            final_rolls = [getattr(entry["outcome"], "kept", 0) for entry in entries]
+            skipped = False
+            for index, delay in enumerate(kivy_dice_frame_delays(frames, duration)):
+                shown = self.initiative_preview_rolls(
+                    final_rolls,
+                    preview_rng=preview_rng,
+                    progress=(index + 1) / max(1, frames),
+                )
+                self.render_kivy_initiative_panel(
+                    entries,
+                    shown_rolls=shown,
+                    final=False,
+                    frame_index=index,
+                    frame_count=frames,
+                    clear_animation=False,
+                )
+                if self.sleep_for_dice_animation(delay):
+                    skipped = True
+                    break
+            if not skipped:
+                for pop_scale, pause in (
+                    (1.52, 0.045),
+                    (0.84, 0.035),
+                    (1.28, 0.04),
+                    (0.96, 0.035),
+                    (1.10, 0.035),
+                ):
+                    self.render_kivy_initiative_panel(
+                        entries,
+                        shown_rolls=final_rolls,
+                        final=True,
+                        pop_scale=pop_scale,
+                        clear_animation=False,
+                    )
+                    skipped = self.sleep_for_dice_animation(pause)
+                    if skipped:
+                        break
+            self.render_kivy_initiative_panel(
+                entries,
+                shown_rolls=final_rolls,
+                final=True,
+                pop_scale=1.0,
+                clear_animation=True,
+            )
+            if self._dice_total_reveal_pause_seconds > 0:
+                self.sleep_for_animation(self._dice_total_reveal_pause_seconds, require_animation=True)
+            if self._dice_animation_final_pause_seconds > 0:
+                self.sleep_for_animation(self._dice_animation_final_pause_seconds, require_animation=True)
+        finally:
+            self.end_animation_skip_scope()
+
+    def sleep_for_animation(self, duration: float, *, require_animation: bool = False) -> bool:
+        if require_animation and not self.animate_dice:
+            return False
+        return self.bridge.wait_for_animation(duration)
+
+    def kivy_combat_is_ending(self) -> bool:
+        enemies = list(getattr(self, "_active_combat_enemies", []) or [])
+        return bool(enemies) and not any(enemy.is_conscious() for enemy in enemies)
+
+    def pause_for_combat_transition(self) -> None:
+        if getattr(self, "_in_combat", False):
+            ending = self.kivy_combat_is_ending()
+            self.bridge.wait_for_combat_transition(ending=ending)
+            return
+        super().pause_for_combat_transition()
+
+    def after_actor_damaged(self, target, *, previous_hp: int, damage: int, damage_type: str = "") -> None:
+        super().after_actor_damaged(target, previous_hp=previous_hp, damage=damage, damage_type=damage_type)
+        if getattr(self, "_in_combat", False):
+            self.bridge.refresh_combat_panel()
+
+    def kivy_side_panel_available(self) -> bool:
+        return self.state is not None and not getattr(self, "_at_title_screen", False)
+
+    def kivy_side_command_title(self, raw: str) -> str:
+        normalized = " ".join(str(raw).strip().lower().split())
+        titles = {
+            "~": "Console",
+            "console": "Console",
+            "console menu": "Console",
+            "console commands": "Console",
+            "help": "Commands",
+            "helpconsole": "Console Commands",
+            "console help": "Console Commands",
+            "load": "Load Game",
+            "saves": "Save Files",
+            "save files": "Save Files",
+            "settings": "Settings",
+            "save": "Save",
+            "party": "Party",
+            "journal": "Journal",
+            "inventory": "Inventory",
+            "backpack": "Inventory",
+            "bag": "Inventory",
+            "equipment": "Gear",
+            "gear": "Gear",
+            "sheet": "Character Sheets",
+            "sheets": "Character Sheets",
+            "character": "Character Sheets",
+            "characters": "Character Sheets",
+            "camp": "Camp",
+            "map": "Map",
+            "maps": "Map",
+            "map menu": "Map",
+            "quit": "Quit",
+        }
+        return titles.get(normalized, normalized.title() or "Command")
+
+    def kivy_should_route_command_to_side(self, raw: str) -> bool:
+        if not self.kivy_side_panel_available():
+            return False
+        normalized = " ".join(str(raw).strip().lower().split())
+        return normalized in {
+            "~",
+            "console",
+            "console menu",
+            "console commands",
+            "help",
+            "helpconsole",
+            "console help",
+            "load",
+            "saves",
+            "save files",
+            "settings",
+            "save",
+            "party",
+            "journal",
+            "inventory",
+            "backpack",
+            "bag",
+            "equipment",
+            "gear",
+            "sheet",
+            "sheets",
+            "character",
+            "characters",
+            "camp",
+            "map",
+            "maps",
+            "map menu",
+            "quit",
+        }
+
+    def handle_meta_command(self, raw: str) -> bool:
+        if not self.kivy_should_route_command_to_side(raw):
+            return super().handle_meta_command(raw)
+        self.bridge.begin_side_command(self.kivy_side_command_title(raw))
+        try:
+            return super().handle_meta_command(raw)
+        except KivySideCommandClosed:
+            return True
+        finally:
+            self.bridge.end_side_command()
 
     def say(self, text: str, *, typed: bool = False) -> None:
         if not text:
@@ -404,6 +1823,30 @@ class ClickableTextDnDGame(TextDnDGame):
     def banner(self, title: str) -> None:
         self.output_fn("")
         self.output_fn(f"=== {title} ===")
+
+    def render_act1_overworld_map(self, *, force: bool = False) -> None:
+        if self.kivy_side_panel_available():
+            self.bridge.show_overworld_map(ACT1_HYBRID_MAP, self.act1_map_state(), "Act I Overworld")
+            return
+        super().render_act1_overworld_map(force=force)
+
+    def render_act1_dungeon_map(self, dungeon, *, force: bool = False) -> None:
+        if self.kivy_side_panel_available():
+            self.bridge.show_dungeon_map(dungeon, self.act1_map_state(), dungeon.title)
+            return
+        super().render_act1_dungeon_map(dungeon, force=force)
+
+    def render_act2_overworld_map(self, *, force: bool = False) -> None:
+        if self.kivy_side_panel_available():
+            self.bridge.show_overworld_map(ACT2_ENEMY_DRIVEN_MAP, self.act2_map_state(), "Act II Route Map")
+            return
+        super().render_act2_overworld_map(force=force)
+
+    def render_act2_dungeon_map(self, dungeon, *, force: bool = False) -> None:
+        if self.kivy_side_panel_available():
+            self.bridge.show_dungeon_map(dungeon, self.act2_map_state(), dungeon.title)
+            return
+        super().render_act2_dungeon_map(dungeon, force=force)
 
     def choose_title_menu(
         self,
@@ -434,6 +1877,8 @@ class ClickableTextDnDGame(TextDnDGame):
     def ask_text(self, prompt: str) -> str:
         while True:
             value = self.bridge.request_text(f"{prompt}:").strip()
+            if value == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                raise KivySideCommandClosed
             if self.handle_meta_command(value):
                 continue
             if value:
@@ -441,7 +1886,10 @@ class ClickableTextDnDGame(TextDnDGame):
             self.say("Please enter a value.")
 
     def read_input(self, prompt: str) -> str:
-        return self.bridge.request_text(prompt)
+        value = self.bridge.request_text(prompt)
+        if value == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+            raise KivySideCommandClosed
+        return value
 
     def set_kivy_dark_mode_enabled(self, enabled: bool) -> None:
         self._kivy_dark_mode_preference = bool(enabled)
@@ -450,7 +1898,20 @@ class ClickableTextDnDGame(TextDnDGame):
         self.say(f"Kivy dark mode {'enabled' if self._kivy_dark_mode_preference else 'disabled'}.")
 
     def toggle_kivy_dark_mode(self) -> None:
-        self.set_kivy_dark_mode_enabled(not getattr(self, "_kivy_dark_mode_preference", True))
+        self.set_kivy_dark_mode_enabled(
+            not getattr(self, "_kivy_dark_mode_preference", self.DEFAULT_KIVY_DARK_MODE_ENABLED)
+        )
+
+    def set_kivy_fullscreen_enabled(self, enabled: bool) -> None:
+        self._kivy_fullscreen_preference = bool(enabled)
+        self.bridge.set_kivy_fullscreen(self._kivy_fullscreen_preference)
+        self.persist_settings()
+        self.say(f"Kivy fullscreen {'enabled' if self._kivy_fullscreen_preference else 'disabled'}.")
+
+    def toggle_kivy_fullscreen(self) -> None:
+        self.set_kivy_fullscreen_enabled(
+            not getattr(self, "_kivy_fullscreen_preference", self.DEFAULT_KIVY_FULLSCREEN_ENABLED)
+        )
 
     def open_settings_menu(self) -> None:
         while True:
@@ -465,7 +1926,8 @@ class ClickableTextDnDGame(TextDnDGame):
                 f"Toggle typed dialogue and narration ({self.settings_toggle_label(getattr(self, '_typed_dialogue_preference', self.type_dialogue))})",
                 f"Toggle pacing pauses ({self.settings_toggle_label(getattr(self, '_pacing_pauses_preference', self.pace_output))})",
                 f"Toggle staggered option reveals ({self.settings_toggle_label(getattr(self, '_staggered_reveals_preference', getattr(self, 'staggered_reveals_enabled', False)))})",
-                f"Toggle Kivy dark mode ({self.settings_toggle_label(getattr(self, '_kivy_dark_mode_preference', True))})",
+                f"Toggle Kivy dark mode ({self.settings_toggle_label(getattr(self, '_kivy_dark_mode_preference', self.DEFAULT_KIVY_DARK_MODE_ENABLED))})",
+                f"Toggle fullscreen ({self.settings_toggle_label(getattr(self, '_kivy_fullscreen_preference', self.DEFAULT_KIVY_FULLSCREEN_ENABLED))})",
                 "Back",
             ]
             choice = self.choose("Settings", options, allow_meta=False)
@@ -501,7 +1963,42 @@ class ClickableTextDnDGame(TextDnDGame):
             if choice == 8:
                 self.toggle_kivy_dark_mode()
                 continue
+            if choice == 9:
+                self.toggle_kivy_fullscreen()
+                continue
             return
+
+    def kivy_combat_group_label(self, section: str, grouped_options: list[tuple[int, str]]) -> str:
+        if section == "End Turn" and len(grouped_options) == 1:
+            return "End Turn"
+        option_count = len(grouped_options)
+        noun = "option" if option_count == 1 else "options"
+        return f"[{section}] {option_count} {noun}"
+
+    def choose_kivy_combat_group_action(
+        self,
+        prompt: str,
+        section: str,
+        grouped_options: list[tuple[int, str]],
+    ) -> str | None:
+        action_options = [self.format_option_text(option) for _display_index, option in grouped_options]
+        action_options.append("Back")
+        while True:
+            raw = self.bridge.request_choice(f"{section} - {prompt}", action_options).strip()
+            if raw == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                raise KivySideCommandClosed
+            if self.handle_meta_command(raw):
+                continue
+            normalized = raw.strip().lower()
+            if normalized in {"back", "b"}:
+                return None
+            if raw.isdigit():
+                selected = int(raw)
+                if selected == len(action_options):
+                    return None
+                if 1 <= selected <= len(grouped_options):
+                    return grouped_options[selected - 1][1]
+            self.say("Please choose one of the listed combat options.")
 
     def choose_grouped_combat_option(
         self,
@@ -514,17 +2011,43 @@ class ClickableTextDnDGame(TextDnDGame):
     ) -> str:
         self.bridge.show_combat_actor(actor)
         while True:
-            indexed, _sections = self.group_combat_options(options)
-            ordered_indexes = sorted(indexed)
-            display_options = [self.format_option_text(indexed[index]) for index in ordered_indexes]
-            raw = self.bridge.request_choice(prompt, display_options).strip()
+            indexed, sections = self.group_combat_options(options)
+            if len(sections) <= 1:
+                ordered_indexes = sorted(indexed)
+                display_options = [self.format_option_text(indexed[index]) for index in ordered_indexes]
+                raw = self.bridge.request_choice(prompt, display_options).strip()
+                if raw == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                    raise KivySideCommandClosed
+                if self.handle_meta_command(raw):
+                    continue
+                if raw.isdigit():
+                    selected = int(raw)
+                    if 1 <= selected <= len(ordered_indexes):
+                        return indexed[ordered_indexes[selected - 1]]
+                self.say("Please choose one of the listed combat options.")
+                continue
+
+            group_lookup = {index: section for index, section in enumerate(sections, start=1)}
+            group_options = [
+                self.kivy_combat_group_label(section, grouped_options)
+                for section, grouped_options in sections
+            ]
+            raw = self.bridge.request_choice(prompt, group_options).strip()
+            if raw == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                raise KivySideCommandClosed
             if self.handle_meta_command(raw):
                 continue
             if raw.isdigit():
                 selected = int(raw)
-                if 1 <= selected <= len(ordered_indexes):
-                    return indexed[ordered_indexes[selected - 1]]
-            self.say("Please choose one of the listed combat options.")
+                if selected in group_lookup:
+                    section, grouped_options = group_lookup[selected]
+                    if section == "End Turn" and len(grouped_options) == 1:
+                        return grouped_options[0][1]
+                    selected_option = self.choose_kivy_combat_group_action(prompt, section, grouped_options)
+                    if selected_option is not None:
+                        return selected_option
+                    continue
+            self.say("Please choose one of the listed combat groups.")
 
     def choose_with_display_mode(
         self,
@@ -566,6 +2089,8 @@ class ClickableTextDnDGame(TextDnDGame):
                 paged_prompt = f"{prompt} (page {page + 1})" if prompt else f"Page {page + 1}"
                 display_labels = [self.format_option_text(label) for label in labels]
                 raw = self.bridge.request_choice(paged_prompt, display_labels).strip()
+                if raw == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                    raise KivySideCommandClosed
                 if self.handle_meta_command(raw):
                     continue
                 if raw.isdigit():
@@ -582,6 +2107,8 @@ class ClickableTextDnDGame(TextDnDGame):
         while True:
             display_options = [self.format_option_text(option) for option in options]
             raw = self.bridge.request_choice(prompt, display_options).strip()
+            if raw == KIVY_SIDE_COMMAND_CLOSE_TOKEN:
+                raise KivySideCommandClosed
             if self.handle_meta_command(raw):
                 continue
             if raw.isdigit():
@@ -600,10 +2127,21 @@ class GameScreen(BoxLayout):
     NON_DIALOGUE_FADE_INTERVAL_SECONDS = 0.05
     COMBAT_RESOURCE_ANIMATION_INTERVAL_SECONDS = 0.08
     COMBAT_RESOURCE_ANIMATION_MAX_STEPS = 12
+    COMBAT_ENTRY_TRANSITION_SECONDS = 0.35
+    COMBAT_EXIT_TRANSITION_SECONDS = 1.05
+    DEFEATED_ENEMY_HOLD_SECONDS = 0.25
+    DEFEATED_ENEMY_FADE_SECONDS = 0.65
+    DEFEATED_ENEMY_FADE_INTERVAL_SECONDS = 0.05
     SINGLE_TEXT_WINDOW_FONT_SIZE = "20sp"
     SPLIT_TEXT_WINDOW_FONT_SIZE = "15sp"
-    OPTION_BUTTON_MIN_HEIGHT = 30
-    OPTION_BUTTON_ROW_GAP = 4
+    OPTION_BUTTON_MIN_HEIGHT = 48
+    OPTION_BUTTON_ROW_GAP = 6
+    BUTTON_FONT_MIN_SP = 7
+    BUTTON_FONT_MAX_SP = 24
+    BUTTON_TEXT_HORIZONTAL_PADDING = 16
+    BUTTON_TEXT_VERTICAL_PADDING = 8
+    SEND_BUTTON_FONT_SIZE = "14sp"
+    COMMAND_BUTTON_FONT_SIZE = "12sp"
     COMMANDS = [
         "help",
         "load",
@@ -631,6 +2169,9 @@ class GameScreen(BoxLayout):
         "quit": "Quit",
     }
     KIVY_DARK_MODE_SETTING_KEY = ClickableTextDnDGame.KIVY_DARK_MODE_SETTING_KEY
+    KIVY_FULLSCREEN_SETTING_KEY = ClickableTextDnDGame.KIVY_FULLSCREEN_SETTING_KEY
+    DEFAULT_KIVY_DARK_MODE_ENABLED = ClickableTextDnDGame.DEFAULT_KIVY_DARK_MODE_ENABLED
+    DEFAULT_KIVY_FULLSCREEN_ENABLED = ClickableTextDnDGame.DEFAULT_KIVY_FULLSCREEN_ENABLED
     DARK_THEME = {
         "window": (0.055, 0.050, 0.045, 1),
         "header": (0.13, 0.10, 0.07, 1),
@@ -650,6 +2191,12 @@ class GameScreen(BoxLayout):
         "command_text": (1, 0.94, 0.78, 1),
         "choice_bg": (0.20, 0.42, 0.34, 1),
         "choice_text": (1, 0.98, 0.94, 1),
+        "choice_group_bg": (0.38, 0.28, 0.12, 1),
+        "choice_group_text": (1, 0.96, 0.82, 1),
+        "choice_end_turn_bg": (0.46, 0.16, 0.14, 1),
+        "choice_end_turn_text": (1, 0.94, 0.90, 1),
+        "choice_back_bg": (0.20, 0.28, 0.42, 1),
+        "choice_back_text": (0.92, 0.96, 1, 1),
     }
     LIGHT_THEME = {
         "window": (0.93, 0.89, 0.80, 1),
@@ -670,6 +2217,12 @@ class GameScreen(BoxLayout):
         "command_text": (0.16, 0.11, 0.07, 1),
         "choice_bg": (0.36, 0.58, 0.47, 1),
         "choice_text": (0.06, 0.08, 0.06, 1),
+        "choice_group_bg": (0.70, 0.53, 0.25, 1),
+        "choice_group_text": (0.12, 0.08, 0.03, 1),
+        "choice_end_turn_bg": (0.75, 0.30, 0.24, 1),
+        "choice_end_turn_text": (0.12, 0.04, 0.03, 1),
+        "choice_back_bg": (0.45, 0.57, 0.74, 1),
+        "choice_back_text": (0.04, 0.07, 0.12, 1),
     }
 
     def __init__(self, *, load_save: str | None = None, **kwargs):
@@ -682,17 +2235,37 @@ class GameScreen(BoxLayout):
         self._typing_current_visible_text = ""
         self._typing_visible_characters = 0
         self._typing_total_characters = 0
+        self._dice_animation_line_index: int | None = None
+        self._fade_animation_event = None
+        self._fade_animation_index: int | None = None
+        self._fade_animation_markup = ""
+        self._fade_animation_done_event: Event | None = None
+        self._delayed_done_events: list[tuple[Event, object]] = []
+        self._animation_sleep_event = Event()
+        self._animation_sleep_active = False
         self._combat_resource_display_values: dict[tuple[int, str], int] = {}
         self._combat_resource_targets: dict[tuple[int, str], int] = {}
         self._combat_resource_animation_event = None
+        self._defeated_enemy_fade_elapsed: dict[int, float] = {}
+        self._hidden_defeated_enemy_ids: set[int] = set()
+        self._defeated_enemy_fade_event = None
         self._active_combat_actor_name = ""
         self._combat_mode_enabled = False
+        self._side_panel_visible = False
+        self._side_panel_mode = "default"
+        self._side_command_title = ""
+        self._side_command_lines: list[str] = []
         self.kivy_dark_mode_enabled = self.load_kivy_dark_mode_setting()
+        self.kivy_fullscreen_enabled = self.load_kivy_fullscreen_setting()
         self.command_buttons: list[Button] = []
         self.option_buttons: list[Button] = []
+        self._button_font_bindings: dict[Button, list[tuple[str, int]]] = {}
+        self._button_font_sync_event = None
+        self._button_font_syncing = False
         self.typing_animation_enabled = True
         self.bridge = ClickableGameBridge(self, load_save=load_save)
         self._build_ui()
+        self.apply_kivy_fullscreen()
         Window.bind(on_key_down=self._handle_window_key_down)
 
     def load_kivy_dark_mode_setting(self) -> bool:
@@ -700,10 +2273,20 @@ class GameScreen(BoxLayout):
         try:
             data = json.loads(settings_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return True
+            return self.DEFAULT_KIVY_DARK_MODE_ENABLED
         if not isinstance(data, dict):
-            return True
-        return bool(data.get(self.KIVY_DARK_MODE_SETTING_KEY, True))
+            return self.DEFAULT_KIVY_DARK_MODE_ENABLED
+        return bool(data.get(self.KIVY_DARK_MODE_SETTING_KEY, self.DEFAULT_KIVY_DARK_MODE_ENABLED))
+
+    def load_kivy_fullscreen_setting(self) -> bool:
+        settings_path = Path.cwd() / "saves" / "settings.json"
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return self.DEFAULT_KIVY_FULLSCREEN_ENABLED
+        if not isinstance(data, dict):
+            return self.DEFAULT_KIVY_FULLSCREEN_ENABLED
+        return bool(data.get(self.KIVY_FULLSCREEN_SETTING_KEY, self.DEFAULT_KIVY_FULLSCREEN_ENABLED))
 
     @property
     def theme(self) -> dict[str, tuple[float, float, float, float]]:
@@ -788,12 +2371,12 @@ class GameScreen(BoxLayout):
             text="",
             markup=True,
             color=(0.94, 0.78, 0.36, 1),
-            font_size="15sp",
+            font_size="19sp",
             bold=True,
             halign="left",
             valign="middle",
             size_hint_y=None,
-            height=dp(30),
+            height=dp(42),
         )
         self._apply_font(self.prompt_label, "ui")
 
@@ -810,7 +2393,7 @@ class GameScreen(BoxLayout):
 
         self.combat_panel = PanelBox(
             orientation="vertical",
-            size_hint_x=0.5,
+            size_hint_x=0.4,
             padding=[dp(8), dp(8), dp(8), dp(8)],
             background_color=(0.075, 0.075, 0.085, 1),
             radius=6,
@@ -825,8 +2408,45 @@ class GameScreen(BoxLayout):
             size_hint_y=None,
         )
         self._apply_font(self.combat_stats_label, "mono")
+        self.side_command_header = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=0,
+            opacity=0,
+            disabled=True,
+            spacing=dp(6),
+        )
+        self.side_command_title_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.78, 0.28, 1),
+            font_size="18sp",
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        self._apply_font(self.side_command_title_label, "ui")
+        self.side_command_title_label.bind(size=self._sync_side_command_title_label)
+        self.side_command_close_button = Button(
+            text="X",
+            size_hint_x=None,
+            width=dp(34),
+            background_normal="",
+            background_color=(0.48, 0.36, 0.18, 1),
+            color=(1, 0.94, 0.78, 1),
+            font_size="15sp",
+            bold=True,
+        )
+        self._apply_font(self.side_command_close_button, "ui")
+        self.side_command_close_button.bind(on_release=lambda *_args: self.close_side_command_panel())
+        self.side_command_header.add_widget(self.side_command_title_label)
+        self.side_command_header.add_widget(self.side_command_close_button)
+        self.native_map_view = NativeMapView()
+        self.native_map_view.set_dark_mode(self.kivy_dark_mode_enabled)
         self.combat_stats_scroll = ScrollView(do_scroll_x=False, bar_width=dp(5))
         self.combat_stats_scroll.add_widget(self.combat_stats_label)
+        self.combat_panel.add_widget(self.side_command_header)
+        self.combat_panel.add_widget(self.native_map_view)
         self.combat_panel.add_widget(self.combat_stats_scroll)
         self.add_widget(self.main_body)
         self.add_widget(self.prompt_label)
@@ -851,8 +2471,12 @@ class GameScreen(BoxLayout):
             background_normal="",
             background_color=(0.36, 0.22, 0.08, 1),
             color=(1, 0.98, 0.94, 1),
+            font_size=self.SEND_BUTTON_FONT_SIZE,
+            halign="center",
+            valign="middle",
         )
         self._apply_font(self.send_button, "ui")
+        self._bind_fixed_button_alignment(self.send_button)
         self.send_button.bind(on_release=lambda *_args: self.submit_text())
         self.input_row.add_widget(self.send_button)
         self.add_widget(self.input_row)
@@ -869,22 +2493,125 @@ class GameScreen(BoxLayout):
                 background_normal="",
                 background_color=(0.48, 0.36, 0.18, 1),
                 color=(1, 0.94, 0.78, 1),
-                font_size="12sp",
+                font_size=self.COMMAND_BUTTON_FONT_SIZE,
+                halign="center",
+                valign="middle",
             )
             self._apply_font(button, "ui")
+            self._bind_fixed_button_alignment(button)
             button.bind(on_release=lambda _btn, value=command: self.submit_direct(value))
             self.command_buttons.append(button)
             self.commands.add_widget(button)
         self.add_widget(self.commands)
-        self._apply_text_window_mode(combat_active=False)
+        self._apply_text_window_mode(side_visible=False)
         self.apply_theme()
+        self._schedule_button_font_sync()
 
     def _sync_status_label(self, instance: Label, _value) -> None:
         instance.text_size = (instance.width, None)
 
+    def _sync_side_command_title_label(self, instance: Label, _value) -> None:
+        instance.text_size = (instance.width, None)
+
+    def _set_side_command_header_visible(self, visible: bool) -> None:
+        self.side_command_header.height = dp(34) if visible else 0
+        self.side_command_header.opacity = 1 if visible else 0
+        self.side_command_header.disabled = not visible
+
+    def _active_scaled_buttons(self) -> list[Button]:
+        return [
+            button
+            for button in self.option_buttons
+            if button.parent is not None and button.width > 0 and button.height > 0
+        ]
+
+    def _button_inner_size(self, button: Button) -> tuple[float, float]:
+        width = max(1.0, float(button.width) - dp(self.BUTTON_TEXT_HORIZONTAL_PADDING))
+        height = max(1.0, float(button.height) - dp(self.BUTTON_TEXT_VERTICAL_PADDING))
+        return (width, height)
+
+    def _sync_button_text_size(self, button: Button) -> None:
+        width, height = self._button_inner_size(button)
+        button.text_size = (width, height)
+
+    def _bind_fixed_button_alignment(self, button: Button) -> None:
+        button.halign = "center"
+        button.valign = "middle"
+        self._sync_button_text_size(button)
+        button.bind(size=lambda instance, _value: self._sync_button_text_size(instance))
+
+    def _bind_button_font_scaling(self, button: Button) -> None:
+        if button in self._button_font_bindings:
+            return
+        bindings: list[tuple[str, int]] = []
+        for property_name in ("size", "text"):
+            uid = button.fbind(property_name, self._schedule_button_font_sync)
+            if uid:
+                bindings.append((property_name, uid))
+        self._button_font_bindings[button] = bindings
+        self._sync_button_text_size(button)
+        self._schedule_button_font_sync()
+
+    def _unbind_button_font_scaling(self, buttons: list[Button]) -> None:
+        for button in buttons:
+            for property_name, uid in self._button_font_bindings.pop(button, []):
+                button.unbind_uid(property_name, uid)
+
+    def _schedule_button_font_sync(self, *_args) -> None:
+        if self._button_font_syncing or self._button_font_sync_event is not None:
+            return
+        self._button_font_sync_event = Clock.schedule_once(self._sync_button_font_sizes, 0)
+
+    def _button_font_fits(self, button: Button, font_size: float) -> bool:
+        available_width, available_height = self._button_inner_size(button)
+        original_font_size = button.font_size
+        original_text_size = button.text_size
+        button.font_size = font_size
+        button.text_size = (available_width, None)
+        button.texture_update()
+        texture_width, texture_height = button.texture_size
+        button.font_size = original_font_size
+        button.text_size = original_text_size
+        button.texture_update()
+        return texture_width <= available_width + 1 and texture_height <= available_height + 1
+
+    def _sync_button_font_sizes(self, _dt=None) -> None:
+        self._button_font_sync_event = None
+        buttons = self._active_scaled_buttons()
+        if not buttons:
+            return
+
+        self._button_font_syncing = True
+        try:
+            low = sp(self.BUTTON_FONT_MIN_SP)
+            high = sp(self.BUTTON_FONT_MAX_SP)
+            for _step in range(8):
+                midpoint = (low + high) / 2
+                if all(self._button_font_fits(button, midpoint) for button in buttons):
+                    low = midpoint
+                else:
+                    high = midpoint
+            chosen_size = low
+            for button in buttons:
+                button.font_size = chosen_size
+                self._sync_button_text_size(button)
+                button.texture_update()
+        finally:
+            self._button_font_syncing = False
+
     def set_kivy_dark_mode_enabled(self, enabled: bool) -> None:
         self.kivy_dark_mode_enabled = bool(enabled)
         self.apply_theme()
+
+    def set_kivy_fullscreen_enabled(self, enabled: bool) -> None:
+        self.kivy_fullscreen_enabled = bool(enabled)
+        self.apply_kivy_fullscreen()
+
+    def apply_kivy_fullscreen(self) -> None:
+        try:
+            Window.fullscreen = "auto" if self.kivy_fullscreen_enabled else False
+        except Exception:
+            pass
 
     def apply_theme(self) -> None:
         theme = self.theme
@@ -904,6 +2631,10 @@ class GameScreen(BoxLayout):
         self.log_label.color = theme["text"]
         self.prompt_label.color = theme["prompt"]
         self.combat_stats_label.color = theme["text"]
+        self.side_command_title_label.color = theme["title"]
+        self.side_command_close_button.background_color = theme["command_bg"]
+        self.side_command_close_button.color = theme["command_text"]
+        self.native_map_view.set_dark_mode(self.kivy_dark_mode_enabled)
         self.text_input.background_color = theme["input_bg"]
         self.text_input.foreground_color = theme["input_text"]
         self.text_input.cursor_color = theme["cursor"]
@@ -913,14 +2644,49 @@ class GameScreen(BoxLayout):
             button.background_color = theme["command_bg"]
             button.color = theme["command_text"]
         for button in self.option_buttons:
-            button.background_color = theme["choice_bg"]
-            button.color = theme["choice_text"]
+            role = getattr(button, "_kivy_choice_role", "choice")
+            if role == "end_turn":
+                button.background_color = theme["choice_end_turn_bg"]
+                button.color = theme["choice_end_turn_text"]
+            elif role == "back":
+                button.background_color = theme["choice_back_bg"]
+                button.color = theme["choice_back_text"]
+            elif role == "combat_group":
+                button.background_color = theme["choice_group_bg"]
+                button.color = theme["choice_group_text"]
+            else:
+                button.background_color = theme["choice_bg"]
+                button.color = theme["choice_text"]
 
     def _sync_log_viewport_height(self, *_args) -> None:
         self.log_viewport.height = max(self.log_scroll.height, self.log_label.height)
 
     def active_game(self) -> "ClickableTextDnDGame | None":
         return self.bridge.game
+
+    def show_native_overworld_map(self, blueprint, state, *, title: str, done_event: Event | None = None) -> None:
+        if not self.side_panel_allowed() or self.combat_active():
+            self._complete_log_append(done_event)
+            return
+        self.update_combat_layout()
+        self._side_panel_mode = "command"
+        self._side_command_title = title
+        self._set_side_command_header_visible(True)
+        self.side_command_title_label.text = escape_kivy_markup(title)
+        self.native_map_view.show_overworld(title=title, blueprint=blueprint, state=state)
+        self._complete_log_append(done_event)
+
+    def show_native_dungeon_map(self, dungeon, state, *, title: str, done_event: Event | None = None) -> None:
+        if not self.side_panel_allowed() or self.combat_active():
+            self._complete_log_append(done_event)
+            return
+        self.update_combat_layout()
+        self._side_panel_mode = "command"
+        self._side_command_title = title
+        self._set_side_command_header_visible(True)
+        self.side_command_title_label.text = escape_kivy_markup(title)
+        self.native_map_view.show_dungeon(title=title, dungeon=dungeon, state=state)
+        self._complete_log_append(done_event)
 
     def set_active_combat_actor(self, name: str) -> None:
         self._active_combat_actor_name = name
@@ -930,32 +2696,55 @@ class GameScreen(BoxLayout):
         game = self.active_game()
         return bool(game is not None and getattr(game, "_in_combat", False))
 
+    def side_panel_allowed(self) -> bool:
+        game = self.active_game()
+        return bool(
+            game is not None
+            and getattr(game, "state", None) is not None
+            and not getattr(game, "_at_title_screen", False)
+        )
+
     def update_combat_layout(self) -> None:
-        active = self.combat_active()
-        if active == self._combat_mode_enabled:
-            self._apply_text_window_mode(combat_active=active)
-            if active:
+        side_visible = self.side_panel_allowed()
+        combat_active = self.combat_active()
+        if side_visible == self._side_panel_visible and combat_active == self._combat_mode_enabled:
+            self._apply_text_window_mode(side_visible=side_visible)
+            if side_visible:
                 self.refresh_combat_panel()
             return
-        self._combat_mode_enabled = active
-        self._apply_text_window_mode(combat_active=active)
-        if active:
-            self.left_column.size_hint_x = 0.5
+
+        self._side_panel_visible = side_visible
+        self._combat_mode_enabled = combat_active
+        self._apply_text_window_mode(side_visible=side_visible)
+        if side_visible:
+            self.left_column.size_hint_x = 0.6
+            self.combat_panel.size_hint_x = 0.4
             if self.combat_panel.parent is None:
                 self.main_body.add_widget(self.combat_panel)
-            self.status_label.text = "Combat: story on the left, stats on the right, choices below."
+            self.status_label.text = (
+                "Combat: story on the left, stats on the right, choices below."
+                if combat_active
+                else "Story on the left. Party, maps, and command screens on the right."
+            )
             self.refresh_combat_panel()
             return
+
         if self.combat_panel.parent is self.main_body:
             self.main_body.remove_widget(self.combat_panel)
         self.left_column.size_hint_x = 1
         self._active_combat_actor_name = ""
         self._clear_combat_resource_animation()
+        self._clear_defeated_enemy_fades()
+        self.native_map_view.hide_map()
         self.combat_stats_label.text = ""
+        self._side_panel_mode = "default"
+        self._side_command_lines = []
+        self._side_command_title = ""
+        self._set_side_command_header_visible(False)
 
-    def _apply_text_window_mode(self, *, combat_active: bool) -> None:
+    def _apply_text_window_mode(self, *, side_visible: bool) -> None:
         self.log_label.font_size = (
-            self.SPLIT_TEXT_WINDOW_FONT_SIZE if combat_active else self.SINGLE_TEXT_WINDOW_FONT_SIZE
+            self.SPLIT_TEXT_WINDOW_FONT_SIZE if side_visible else self.SINGLE_TEXT_WINDOW_FONT_SIZE
         )
         self.log_label.halign = "left"
         self.log_label._sync_text_size()
@@ -963,16 +2752,118 @@ class GameScreen(BoxLayout):
         self._sync_log_viewport_height()
 
     def refresh_combat_panel(self) -> None:
+        if not self.side_panel_allowed():
+            self._clear_combat_resource_animation()
+            self._clear_defeated_enemy_fades()
+            self.native_map_view.hide_map()
+            self._set_side_command_header_visible(False)
+            return
         if not self.combat_active():
             self._clear_combat_resource_animation()
+            self._clear_defeated_enemy_fades()
+            if self._side_panel_mode == "command":
+                self._render_side_command()
+            else:
+                self._render_party_stats_panel()
             return
         self._sync_combat_resource_targets()
         self._render_combat_panel()
 
+    def restore_default_side_panel(self) -> None:
+        if not self.side_panel_allowed() or self.combat_active():
+            return
+        if self._side_panel_mode != "default":
+            self._side_panel_mode = "default"
+            self._side_command_title = ""
+            self._side_command_lines = []
+        self.native_map_view.hide_map()
+        self._set_side_command_header_visible(False)
+        self.refresh_combat_panel()
+
+    def close_side_command_panel(self) -> None:
+        self.skip_current_animation()
+        self.bridge.close_side_command()
+        self._side_panel_mode = "default"
+        self._side_command_title = ""
+        self._side_command_lines = []
+        self.native_map_view.hide_map()
+        self._set_side_command_header_visible(False)
+        if not self.side_panel_allowed():
+            return
+        if self.combat_active():
+            self._render_combat_panel()
+        else:
+            self._render_party_stats_panel()
+
+    def begin_side_command(self, title: str, *, done_event: Event | None = None) -> None:
+        if not self.side_panel_allowed():
+            self._complete_log_append(done_event)
+            return
+        self.update_combat_layout()
+        self._side_panel_mode = "command"
+        self._side_command_title = title
+        self._side_command_lines = []
+        self._clear_combat_resource_animation()
+        self.native_map_view.hide_map()
+        self._set_side_command_header_visible(True)
+        self.side_command_title_label.text = escape_kivy_markup(title)
+        self._render_side_command()
+        self._complete_log_append(done_event)
+
+    def append_side_output(self, markup: str, *, done_event: Event | None = None) -> None:
+        if not self.side_panel_allowed():
+            self._complete_log_append(done_event)
+            return
+        self.update_combat_layout()
+        if self._side_panel_mode != "command":
+            self._side_panel_mode = "command"
+            self._side_command_title = "Command"
+            self._side_command_lines = []
+        if markup:
+            self.native_map_view.hide_map()
+            self._side_command_lines.append(markup)
+            if len(self._side_command_lines) > self.MAX_LOG_ENTRIES:
+                self._side_command_lines = self._side_command_lines[-self.MAX_LOG_ENTRIES :]
+        self._render_side_command()
+        self._complete_log_append(done_event)
+
+    def prepare_combat_transition(self, *, done_event: Event | None = None, ending: bool = False) -> None:
+        self.update_combat_layout()
+        if self.combat_active():
+            self._side_panel_mode = "default"
+            self._sync_combat_resource_targets()
+            if ending:
+                self._snap_combat_resource_display_to_targets()
+            else:
+                self._render_combat_panel()
+        delay = self.COMBAT_EXIT_TRANSITION_SECONDS if ending else self.COMBAT_ENTRY_TRANSITION_SECONDS
+        self._complete_log_append(done_event, delay=delay)
+
     def _render_combat_panel(self, *, scroll_to_top: bool = True) -> None:
+        self._side_panel_mode = "default"
+        self.native_map_view.hide_map()
+        self._set_side_command_header_visible(False)
+        self._sync_defeated_enemy_fades()
         self.combat_stats_label.text = self.build_combat_stats_markup()
         if not scroll_to_top:
             return
+        Clock.schedule_once(lambda _dt: setattr(self.combat_stats_scroll, "scroll_y", 1), 0)
+
+    def _render_side_command(self) -> None:
+        title = escape_kivy_markup(self._side_command_title or "Command")
+        self._set_side_command_header_visible(True)
+        self.side_command_title_label.text = title
+        body = "\n".join(line for line in self._side_command_lines if line).strip()
+        if body:
+            self.combat_stats_label.text = body
+        else:
+            self.combat_stats_label.text = "[color=#8f7d62]Waiting for command output.[/color]"
+        Clock.schedule_once(lambda _dt: setattr(self.combat_stats_scroll, "scroll_y", 1), 0)
+
+    def _render_party_stats_panel(self) -> None:
+        self.native_map_view.hide_map()
+        self._set_side_command_header_visible(False)
+        self.combat_stats_label.text = self.build_party_stats_markup()
         Clock.schedule_once(lambda _dt: setattr(self.combat_stats_scroll, "scroll_y", 1), 0)
 
     def _clear_combat_resource_animation(self) -> None:
@@ -982,6 +2873,95 @@ class GameScreen(BoxLayout):
         self._combat_resource_animation_event = None
         self._combat_resource_display_values.clear()
         self._combat_resource_targets.clear()
+
+    def _clear_defeated_enemy_fades(self) -> None:
+        event = self._defeated_enemy_fade_event
+        if event is not None:
+            event.cancel()
+        self._defeated_enemy_fade_event = None
+        self._defeated_enemy_fade_elapsed.clear()
+        self._hidden_defeated_enemy_ids.clear()
+
+    def _enemy_defeated(self, enemy) -> bool:
+        return bool(getattr(enemy, "dead", False) or int(getattr(enemy, "current_hp", 0) or 0) <= 0)
+
+    def _enemy_fade_key(self, enemy) -> int:
+        return id(enemy)
+
+    def _enemy_fade_opacity(self, enemy) -> float:
+        key = self._enemy_fade_key(enemy)
+        if key in self._hidden_defeated_enemy_ids:
+            return 0.0
+        elapsed = self._defeated_enemy_fade_elapsed.get(key)
+        if elapsed is None or elapsed <= 0:
+            return 1.0
+        return max(0.0, 1.0 - (elapsed / max(0.01, self.DEFEATED_ENEMY_FADE_SECONDS)))
+
+    def _start_defeated_enemy_fade_animation(self) -> None:
+        if self._defeated_enemy_fade_event is not None or not self._defeated_enemy_fade_elapsed:
+            return
+        self._defeated_enemy_fade_event = Clock.schedule_interval(
+            self._advance_defeated_enemy_fade,
+            self.DEFEATED_ENEMY_FADE_INTERVAL_SECONDS,
+        )
+
+    def _sync_defeated_enemy_fades(self) -> None:
+        if not self.combat_active():
+            self._clear_defeated_enemy_fades()
+            return
+        game = self.active_game()
+        enemies = list(getattr(game, "_active_combat_enemies", []) or []) if game is not None else []
+        active_ids = {self._enemy_fade_key(enemy) for enemy in enemies}
+        for key in list(self._defeated_enemy_fade_elapsed):
+            if key not in active_ids:
+                del self._defeated_enemy_fade_elapsed[key]
+        self._hidden_defeated_enemy_ids.intersection_update(active_ids)
+
+        for enemy in enemies:
+            key = self._enemy_fade_key(enemy)
+            if not self._enemy_defeated(enemy):
+                self._defeated_enemy_fade_elapsed.pop(key, None)
+                self._hidden_defeated_enemy_ids.discard(key)
+                continue
+            if key in self._hidden_defeated_enemy_ids or key in self._defeated_enemy_fade_elapsed:
+                continue
+            current_hp = int(getattr(enemy, "current_hp", 0) or 0)
+            displayed_hp = self._displayed_combat_resource_value(enemy, "hp", current_hp)
+            if displayed_hp <= 0:
+                self._defeated_enemy_fade_elapsed[key] = -self.DEFEATED_ENEMY_HOLD_SECONDS
+        self._start_defeated_enemy_fade_animation()
+
+    def _advance_defeated_enemy_fade(self, dt) -> bool:
+        if not self.combat_active():
+            self._clear_defeated_enemy_fades()
+            return False
+        remaining = False
+        for key in list(self._defeated_enemy_fade_elapsed):
+            elapsed = self._defeated_enemy_fade_elapsed[key] + dt
+            if elapsed >= self.DEFEATED_ENEMY_FADE_SECONDS:
+                del self._defeated_enemy_fade_elapsed[key]
+                self._hidden_defeated_enemy_ids.add(key)
+            else:
+                self._defeated_enemy_fade_elapsed[key] = elapsed
+                remaining = True
+        self._render_combat_panel(scroll_to_top=False)
+        remaining = remaining or bool(self._defeated_enemy_fade_elapsed)
+        if not remaining:
+            self._defeated_enemy_fade_event = None
+        return remaining
+
+    def _skip_defeated_enemy_fade_animation(self) -> bool:
+        if not self._defeated_enemy_fade_elapsed:
+            return False
+        event = self._defeated_enemy_fade_event
+        if event is not None:
+            event.cancel()
+        self._hidden_defeated_enemy_ids.update(self._defeated_enemy_fade_elapsed)
+        self._defeated_enemy_fade_elapsed.clear()
+        self._defeated_enemy_fade_event = None
+        if self.combat_active():
+            self._render_combat_panel(scroll_to_top=False)
+        return True
 
     def _combat_resource_key(self, combatant, resource_name: str) -> tuple[int, str]:
         return (id(combatant), resource_name)
@@ -994,8 +2974,6 @@ class GameScreen(BoxLayout):
         combatants.extend(list(getattr(game, "_active_combat_enemies", []) or []))
         entries: list[tuple[object, str, int, int]] = []
         for combatant in combatants:
-            if getattr(combatant, "dead", False):
-                continue
             max_hp = max(1, int(getattr(combatant, "max_hp", 1) or 1))
             current_hp = max(0, min(int(getattr(combatant, "current_hp", 0) or 0), max_hp))
             entries.append((combatant, "hp", current_hp, max_hp))
@@ -1037,6 +3015,15 @@ class GameScreen(BoxLayout):
             self.COMBAT_RESOURCE_ANIMATION_INTERVAL_SECONDS,
         )
 
+    def _snap_combat_resource_display_to_targets(self) -> None:
+        event = self._combat_resource_animation_event
+        if event is not None:
+            event.cancel()
+        self._combat_resource_animation_event = None
+        for key, target in self._combat_resource_targets.items():
+            self._combat_resource_display_values[key] = target
+        self._render_combat_panel(scroll_to_top=False)
+
     def _advance_combat_resource_animation(self, _dt) -> bool:
         if not self.combat_active():
             self._clear_combat_resource_animation()
@@ -1074,12 +3061,8 @@ class GameScreen(BoxLayout):
         return "f87171"
 
     def stat_bar_markup(self, current: int, maximum: int, *, width: int = 14, color: str | None = None) -> str:
-        maximum = max(1, int(maximum))
-        current = max(0, min(int(current), maximum))
-        filled = max(0, min(width, int(round((current / maximum) * width))))
-        empty = width - filled
         resolved_color = color or self.health_color(current, maximum)
-        return f"|[color=#{resolved_color}]{'#' * filled}[/color][color=#3b3428]{'-' * empty}[/color]| {current}/{maximum}"
+        return kivy_resource_bar_markup(current, maximum, width=width, color=resolved_color)
 
     def combatant_conditions_text(self, game: "ClickableTextDnDGame", combatant) -> str:
         conditions: list[str] = []
@@ -1113,9 +3096,11 @@ class GameScreen(BoxLayout):
         raw_name = str(getattr(combatant, "name", "Unknown"))
         public_name = game.public_character_name(raw_name) if hasattr(game, "public_character_name") else raw_name
         name_color = "f87171" if enemy else "67e8f9"
+        current_hp = int(getattr(combatant, "current_hp", 0) or 0)
+        if getattr(combatant, "dead", False) or current_hp <= 0:
+            name_color = "8f7d62"
         if raw_name == self._active_combat_actor_name:
             name_color = "facc15"
-        current_hp = int(getattr(combatant, "current_hp", 0) or 0)
         hp = self.stat_bar_markup(
             self._displayed_combat_resource_value(combatant, "hp", current_hp),
             getattr(combatant, "max_hp", 1),
@@ -1143,20 +3128,58 @@ class GameScreen(BoxLayout):
         conditions = self.combatant_conditions_text(game, combatant)
         if conditions:
             lines.append(f"[size=14sp][color=#d8b4fe]{escape_kivy_markup(conditions)}[/color][/size]")
-        return "\n".join(lines)
+        markup = "\n".join(lines)
+        if enemy:
+            opacity = self._enemy_fade_opacity(combatant)
+            if opacity < 1.0:
+                return fade_kivy_markup(markup, opacity, default_color="8f7d62")
+        return markup
 
     def build_combat_group_markup(self, title: str, combatants: list, *, enemy: bool) -> str:
         game = self.active_game()
         if game is None:
             return ""
-        living = [combatant for combatant in combatants if not getattr(combatant, "dead", False)]
         title_color = "f87171" if enemy else "67e8f9"
         lines = [f"[b][color=#{title_color}]{title}[/color][/b]"]
-        if not living:
+        visible_combatants = [
+            combatant
+            for combatant in combatants
+            if not enemy or self._enemy_fade_key(combatant) not in self._hidden_defeated_enemy_ids
+        ]
+        if not visible_combatants:
             lines.append("[color=#8f7d62]None standing.[/color]")
         else:
-            for combatant in living:
+            for combatant in visible_combatants:
                 lines.append(self.combatant_markup(game, combatant, enemy=enemy))
+        return "\n\n".join(lines)
+
+    def build_party_stats_markup(self) -> str:
+        game = self.active_game()
+        if game is None or getattr(game, "state", None) is None:
+            return "[color=#8f7d62]No active party.[/color]"
+        state = game.state
+        scene_labels = getattr(game, "SCENE_LABELS", {})
+        current_scene = str(getattr(state, "current_scene", ""))
+        location = scene_labels.get(current_scene, current_scene.replace("_", " ").title() or "Adventure")
+        act_labels = getattr(game, "ACT_LABELS", {})
+        act_text = f"Act {act_labels.get(getattr(state, 'current_act', '?'), getattr(state, 'current_act', '?'))}"
+        supply_getter = getattr(game, "current_supply_points", None)
+        supplies = supply_getter() if callable(supply_getter) else "?"
+        header = (
+            f"[size=20sp][b][color=#facc15]Party[/color][/b][/size]\n"
+            f"[size=14sp][color=#8f7d62]{escape_kivy_markup(act_text)} | {escape_kivy_markup(location)}[/color][/size]\n"
+            f"[size=14sp][color=#d6c59a]Gold {getattr(state, 'gold', 0)} | Short rests {getattr(state, 'short_rests_remaining', 0)} | Supplies {supplies}[/color][/size]"
+        )
+        objective_getter = getattr(game, "hud_objective_label", None)
+        objective = objective_getter() if callable(objective_getter) else ""
+        lines = [header]
+        if objective:
+            lines.append(f"[size=14sp][color=#b8a98d]Objective: {escape_kivy_markup(objective)}[/color][/size]")
+        party_members = list(state.party_members())
+        if party_members:
+            lines.append(self.build_combat_group_markup("Active Party", party_members, enemy=False))
+        else:
+            lines.append("[color=#8f7d62]No one is in the active party.[/color]")
         return "\n\n".join(lines)
 
     def build_combat_stats_markup(self) -> str:
@@ -1173,18 +3196,42 @@ class GameScreen(BoxLayout):
         )
         heroes = list(getattr(game, "_active_combat_heroes", []) or [])
         enemies = list(getattr(game, "_active_combat_enemies", []) or [])
-        return "\n\n".join(
-            [
-                header,
-                self.build_combat_group_markup("Party", heroes, enemy=False),
-                self.build_combat_group_markup("Enemies", enemies, enemy=True),
-            ]
-        )
+        sections = [
+            header,
+            self.build_combat_group_markup("Party", heroes, enemy=False),
+            self.build_combat_group_markup("Enemies", enemies, enemy=True),
+        ]
+        return "\n\n".join(sections)
 
     def append_output(self, text: object, *, done_event: Event | None = None) -> None:
         self.update_combat_layout()
         markup, animated = format_kivy_log_entry(text)
         self.append_log(markup, done_event=done_event, animated=animated)
+
+    def show_dice_animation_frame(
+        self,
+        markup: str,
+        *,
+        final: bool = False,
+        done_event: Event | None = None,
+    ) -> None:
+        self.update_combat_layout()
+        if self._dice_animation_line_index is None or self._dice_animation_line_index >= len(self._log_lines):
+            self._dice_animation_line_index = len(self._log_lines)
+            self._append_log_entry(markup)
+        else:
+            self._log_lines[self._dice_animation_line_index] = markup
+            self._render_log()
+        if final:
+            self._dice_animation_line_index = None
+        self._complete_log_append(done_event)
+
+    def append_dice_result(self, markup: str, *, done_event: Event | None = None) -> None:
+        self._dice_animation_line_index = None
+        self.update_combat_layout()
+        if markup:
+            self._append_log_entry(markup)
+        self._complete_log_append(done_event)
 
     def append_log(
         self,
@@ -1195,14 +3242,20 @@ class GameScreen(BoxLayout):
         fast_reveal: bool = False,
     ) -> None:
         if not text or not self.typing_animation_enabled or not animated or visible_markup_length(text) <= 8:
+            combat_delay = self.combat_active()
             delay = kivy_non_dialogue_reveal_delay(
                 text,
                 animated=animated,
                 enabled=bool(text and self.typing_animation_enabled),
                 fast=fast_reveal,
+                combat=combat_delay,
             )
             if delay > 0:
-                self._append_fading_log_entry(text, done_event=done_event, duration=delay)
+                if combat_delay:
+                    self._append_log_entry(text)
+                    self._complete_log_append(done_event, delay=delay)
+                else:
+                    self._append_fading_log_entry(text, done_event=done_event, duration=delay)
             else:
                 self._append_log_entry(text)
                 self._complete_log_append(done_event)
@@ -1214,22 +3267,44 @@ class GameScreen(BoxLayout):
         entry_index = len(self._log_lines)
         self._append_log_entry(fade_kivy_markup(text, 0.0))
         elapsed = 0.0
+        self._fade_animation_index = entry_index
+        self._fade_animation_markup = text
+        self._fade_animation_done_event = done_event
 
         def advance_fade(dt) -> bool:
             nonlocal elapsed
             if entry_index >= len(self._log_lines):
-                self._complete_log_append(done_event)
+                self._finish_fade_animation()
                 return False
             elapsed += dt
             progress = 1.0 if duration <= 0 else min(1.0, elapsed / duration)
             self._log_lines[entry_index] = text if progress >= 1.0 else fade_kivy_markup(text, progress)
             self._render_log()
             if progress >= 1.0:
-                self._complete_log_append(done_event)
+                self._finish_fade_animation()
                 return False
             return True
 
-        Clock.schedule_interval(advance_fade, self.NON_DIALOGUE_FADE_INTERVAL_SECONDS)
+        self._fade_animation_event = Clock.schedule_interval(advance_fade, self.NON_DIALOGUE_FADE_INTERVAL_SECONDS)
+
+    def _finish_fade_animation(self) -> bool:
+        entry_index = self._fade_animation_index
+        if entry_index is None:
+            return False
+        event = self._fade_animation_event
+        if event is not None:
+            event.cancel()
+        if 0 <= entry_index < len(self._log_lines):
+            self._log_lines[entry_index] = self._fade_animation_markup
+            self._render_log()
+        done_event = self._fade_animation_done_event
+        self._fade_animation_event = None
+        self._fade_animation_index = None
+        self._fade_animation_markup = ""
+        self._fade_animation_done_event = None
+        if done_event is not None:
+            done_event.set()
+        return True
 
     def _complete_log_append(self, done_event: Event | None, *, delay: float = 0.0) -> None:
         if done_event is None:
@@ -1237,7 +3312,27 @@ class GameScreen(BoxLayout):
         if delay <= 0:
             done_event.set()
             return
-        Clock.schedule_once(lambda _dt: done_event.set(), delay)
+
+        def complete_after_delay(_dt) -> None:
+            self._delayed_done_events = [
+                (event, scheduled_event)
+                for event, scheduled_event in self._delayed_done_events
+                if event is not done_event
+            ]
+            done_event.set()
+
+        scheduled = Clock.schedule_once(complete_after_delay, delay)
+        self._delayed_done_events.append((done_event, scheduled))
+
+    def _complete_delayed_log_appends(self) -> bool:
+        if not self._delayed_done_events:
+            return False
+        delayed = self._delayed_done_events
+        self._delayed_done_events = []
+        for done_event, scheduled_event in delayed:
+            scheduled_event.cancel()
+            done_event.set()
+        return True
 
     def typing_wait_timeout(self, text: object) -> float:
         markup, animated = format_kivy_log_entry(text)
@@ -1251,6 +3346,7 @@ class GameScreen(BoxLayout):
                 animated=animated,
                 enabled=bool(markup and self.typing_animation_enabled),
                 fast=fast_reveal,
+                combat=self.combat_active(),
             )
             return max(8, reveal_delay + 1.0)
         typing_start = dialogue_typing_start_index(markup)
@@ -1347,10 +3443,58 @@ class GameScreen(BoxLayout):
         self._finish_typing_current()
         return True
 
+    def _skip_combat_resource_animation(self) -> bool:
+        if self._combat_resource_animation_event is None:
+            return False
+        self._snap_combat_resource_display_to_targets()
+        return True
+
+    def wait_for_animation_skip(self, duration: float) -> bool:
+        duration = max(0.0, float(duration))
+        if duration <= 0:
+            return False
+        self._animation_sleep_event.clear()
+        self._animation_sleep_active = True
+        try:
+            return self._animation_sleep_event.wait(duration)
+        finally:
+            self._animation_sleep_active = False
+            self._animation_sleep_event.clear()
+
+    def skip_current_animation(self) -> bool:
+        skipped = False
+        skipped = self.skip_current_typing_animation() or skipped
+        skipped = self._finish_fade_animation() or skipped
+        skipped = self._complete_delayed_log_appends() or skipped
+        skipped = self._skip_combat_resource_animation() or skipped
+        skipped = self._skip_defeated_enemy_fade_animation() or skipped
+        if self._animation_sleep_active:
+            self._animation_sleep_event.set()
+            skipped = True
+        return skipped
+
     def _handle_window_key_down(self, _window, key, _scancode, _codepoint, _modifiers) -> bool:
         if key in (13, 271):
-            return self.skip_current_typing_animation()
+            return self.skip_current_animation()
         return False
+
+    def _touch_hits_side_command_close_button(self, touch) -> bool:
+        button = getattr(self, "side_command_close_button", None)
+        if (
+            button is None
+            or self._side_panel_mode != "command"
+            or self.side_command_header.disabled
+            or self.side_command_header.opacity <= 0
+        ):
+            return False
+        return bool(button.collide_point(*touch.pos))
+
+    def on_touch_down(self, touch) -> bool:
+        if self._touch_hits_side_command_close_button(touch):
+            return super().on_touch_down(touch)
+        if self.skip_current_animation():
+            return True
+        return super().on_touch_down(touch)
 
     def _scroll_log_to_bottom(self) -> None:
         self.log_scroll.scroll_y = 1 if self.log_viewport.height <= self.log_scroll.height + dp(1) else 0
@@ -1360,6 +3504,8 @@ class GameScreen(BoxLayout):
         self.prompt_label.text = ansi_to_kivy_markup(prompt)
         if self.combat_active():
             self.status_label.text = "Combat: story on the left, stats on the right, choices below."
+        elif self.side_panel_allowed():
+            self.status_label.text = "Story on the left. Party, maps, and command screens on the right."
         else:
             self.status_label.text = "Click a choice button or type a number / command."
         self._rebuild_options(options)
@@ -1369,7 +3515,11 @@ class GameScreen(BoxLayout):
     def show_text_prompt(self, prompt: str) -> None:
         self.update_combat_layout()
         self.prompt_label.text = ansi_to_kivy_markup(prompt)
-        self.status_label.text = "Type a response below. Commands like save and journal still work."
+        self.status_label.text = (
+            "Type below. Command screens use the right panel."
+            if self.side_panel_allowed()
+            else "Type a response below. Commands like save and journal still work."
+        )
         self._rebuild_options([])
         self.text_input.hint_text = "Type your answer here"
         Clock.schedule_once(lambda _dt: self._focus_text_input(), 0)
@@ -1393,11 +3543,11 @@ class GameScreen(BoxLayout):
     def _option_grid_shape(self, option_count: int) -> tuple[int, int]:
         if option_count <= 0:
             return (0, 1)
-        if option_count <= 4:
+        if option_count == 1:
             columns = 1
-        elif option_count <= 12:
+        elif option_count <= 4:
             columns = 2
-        elif option_count <= 24:
+        elif option_count <= 9:
             columns = 3
         else:
             columns = 4
@@ -1406,11 +3556,11 @@ class GameScreen(BoxLayout):
 
     def _option_shell_height(self, rows: int) -> float:
         if rows <= 0:
-            return dp(36)
+            return dp(44)
         row_height = self.OPTION_BUTTON_MIN_HEIGHT
-        vertical_padding = 12
+        vertical_padding = 14
         gaps = max(0, rows - 1) * self.OPTION_BUTTON_ROW_GAP
-        return dp(min(178, vertical_padding + rows * row_height + gaps))
+        return dp(min(260, vertical_padding + rows * row_height + gaps))
 
     def _compact_option_markup(self, index: int, option: str, columns: int) -> str:
         plain = plain_combat_status_text(" ".join(strip_ansi(option).split()))
@@ -1424,17 +3574,35 @@ class GameScreen(BoxLayout):
             f" {escape_kivy_markup(rest)}"
         )
 
+    def _choice_button_role(self, option: str) -> str:
+        plain = plain_combat_status_text(" ".join(strip_ansi(option).split())).strip().lower()
+        tag_match = re.match(r"^\[([^\]]+)\]", plain)
+        if tag_match and tag_match.group(1) in {
+            "action",
+            "bonus action",
+            "item",
+            "social",
+            "escape",
+        }:
+            return "combat_group"
+        plain = re.sub(r"^\[[^\]]+\]\s*", "", plain).strip()
+        if plain == "end turn":
+            return "end_turn"
+        if plain == "back":
+            return "back"
+        return "choice"
+
     def _sync_choice_button_text_size(self, button: Button, *_args) -> None:
-        button.text_size = (max(0, button.width - dp(12)), max(0, button.height - dp(4)))
+        self._sync_button_text_size(button)
 
     def _rebuild_options(self, options: list[str]) -> None:
+        self._unbind_button_font_scaling(self.option_buttons)
         self.options_grid.clear_widgets()
         self.option_buttons = []
         rows, columns = self._option_grid_shape(len(options))
         self.options_grid.rows = rows or 1
         self.options_grid.cols = columns
         self.options_shell.height = self._option_shell_height(rows)
-        font_size = "15sp" if columns >= 3 else "16sp"
         for index, option in enumerate(options, start=1):
             button = Button(
                 text=self._compact_option_markup(index, option, columns),
@@ -1442,24 +3610,25 @@ class GameScreen(BoxLayout):
                 background_normal="",
                 background_color=(0.20, 0.42, 0.34, 1),
                 color=(1, 0.98, 0.94, 1),
-                font_size=font_size,
-                halign="left",
+                halign="center",
                 valign="middle",
             )
+            button._kivy_choice_role = self._choice_button_role(option)
             self._apply_font(button, "ui")
-            button.bind(size=lambda instance, _value: self._sync_choice_button_text_size(instance))
             self._sync_choice_button_text_size(button)
+            self._bind_button_font_scaling(button)
             button.bind(on_release=lambda _btn, value=str(index): self.submit_direct(value))
             self.option_buttons.append(button)
             self.options_grid.add_widget(button)
         self.apply_theme()
+        self._schedule_button_font_sync()
 
     def submit_direct(self, value: str) -> None:
         self.text_input.text = ""
         self.bridge.submit(value)
 
     def submit_text(self) -> None:
-        if self.skip_current_typing_animation():
+        if self.skip_current_animation():
             return
         value = self.text_input.text.strip()
         if not value:

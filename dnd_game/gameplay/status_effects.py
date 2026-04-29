@@ -98,13 +98,6 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
         "ac_bonus": 1,
         "defense_bonus_percent": 5,
     },
-    "guard_stance": {
-        "name": "Guard Stance",
-        "combat_only": True,
-        "defense_bonus_percent": 20,
-        "stability_bonus": 2,
-        "attack_penalty": 2,
-    },
     "stance_guard": {
         "name": "Guard Stance",
         "combat_only": True,
@@ -334,7 +327,7 @@ class StatusEffectMixin:
     def apply_status(self, actor, status: str, duration: int, *, source: str = "") -> None:
         definition = self.status_definition(status)
         if status in STANCE_STATUS_NAMES:
-            for stance_status in (*STANCE_STATUS_NAMES, "guard_stance"):
+            for stance_status in STANCE_STATUS_NAMES:
                 if stance_status != status:
                     actor.conditions.pop(stance_status, None)
         if status in {"charmed", "frightened"} and "dark_devotion" in getattr(actor, "features", []):

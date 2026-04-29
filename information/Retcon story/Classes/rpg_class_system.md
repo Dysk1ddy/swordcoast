@@ -56,7 +56,7 @@ Detailed mage design now lives in `mage_archetype_v1.md`. This short index keeps
 ### 🛡️ Tank — Spellguard
 - Converts mana into shields  
 - Reflects or absorbs incoming spells  
-- Can “anchor” to reduce ally damage nearby  
+- Can anchor wards to draw attacks and reduce ally damage nearby  
 
 **Identity:** Magical damage sponge  
 

@@ -154,7 +154,7 @@ Failure causes self-damage, Reeling, Charge leak, or field instability by channe
 
 ### Combat Read
 
-Spellguards are ward tanks. They turn Charge into layered protection, catch hostile channels, and anchor allies inside safer space. Their Defense comes from projected shells rather than steel.
+Spellguards are ward tanks. They turn Charge into layered protection, catch hostile channels, and anchor allies inside safer space. Their Defense comes from projected shells, pressure lines, and enemy eyes pulled to the brightest ward.
 
 The Spellguard's best turn feels like a door drawn in the air. The enemy can see the party through it. Getting through is the problem.
 
@@ -164,7 +164,7 @@ The Spellguard's best turn feels like a door drawn in the air. The enemy can see
 | --- | --- |
 | Party role | Tank |
 | Damage style | reflected pressure, pulse counters, ward bursts |
-| Protection style | wards, anchors, redirects, damage splitting |
+| Protection style | wards, anchors, ward-draw, redirects, damage splitting |
 | Preferred armor | warded coats, light armor, focus bracers |
 | Preferred focuses | shields of glass, iron rings, rods, chalk lines, sigil plates |
 | Primary stats | Instinct or Reason |
@@ -194,6 +194,8 @@ Effects:
 
 - target gains Ward equal to `2 + casting stat modifier`
 - target gains `+5%` Defense against physical damage while Ward remains
+- target pulls enemy priority while Ward remains
+- enemies attacking another ally take `-1` Accuracy if they can perceive the shell
 - first hostile channel against the target grants the Spellguard `1` Focus
 - if the shell breaks from a single hit, the attacker becomes Reeling 1
 
@@ -201,10 +203,10 @@ Effects:
 
 | Technique | Tier | Cost | Effect |
 | --- | ---: | --- | --- |
-| Anchor Shell | signature | bonus action, 3 Charge | Grant Ward and `+5%` Defense to self or ally. |
+| Anchor Shell | signature | bonus action, 3 Charge | Grant Ward and `+5%` Defense to self or ally. While Ward remains, the shelled target pulls enemy priority. |
 | Ward Shell | 1 | reaction, 2 Charge | Reduce incoming damage by `1d6 + casting stat modifier`. |
 | Lockstep Field | 1 | action, 3 Charge | Adjacent allies gain Guarded 1 and `+1` Stability. |
-| Blue Glass Palm | 1 | action, 1 Charge | Minor force pulse. On hit or failed Resist Check, apply Reeling 1. |
+| Blue Glass Palm | 1 | action, 1 Charge | Minor force pulse. On failed Resist Check, apply Reeling 1 and Fixated 1 on the Spellguard. |
 | Brace The Pattern | 1 | bonus action | Gain `+2` to the next channel maintenance check. |
 | Catch Spark | 2 | reaction, 3 Charge | Reduce elemental or force channel damage. If reduced to `0`, gain `1` Focus. |
 | Return The Edge | 2 | 2 Focus | After a ward absorbs damage, deal small force damage to the attacker. |
@@ -237,7 +239,7 @@ Effects:
 
 ### Spellguard Combat Loop
 
-1. Place Anchor Shell on the ally most likely to be hit.
+1. Place Anchor Shell on the ally meant to catch pressure.
 2. Ground when a large channel or boss turn is coming.
 3. Use reactions to catch spikes.
 4. Build Focus from absorbed damage and hostile channels.

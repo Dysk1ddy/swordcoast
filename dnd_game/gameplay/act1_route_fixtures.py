@@ -14,12 +14,13 @@ from ..content import (
 )
 from ..game import TextDnDGame
 from ..models import GameState
-from .combat_simulator import RouteChainEncounterSpec
+from .combat_simulator import RouteChainEncounterSpec, RouteChainSimulation, simulate_route_chain
 
 
 PLAYER_ID = "player"
 CANONICAL_ACT1_ROUTE_KEY = "canonical_full_clear"
 ACT1_BASELINE_INVENTORY = {"potion_healing": 2, "bread_round": 4, "camp_stew_jar": 3}
+ACT1_ATTRITION_DAMAGE_MULTIPLIER = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,37 @@ class Act1RouteFixture:
     @property
     def segment_keys(self) -> tuple[str, ...]:
         return tuple(segment.key for segment in self.segments)
+
+
+@dataclass(frozen=True, slots=True)
+class Act1RouteSegmentBalanceReport:
+    segment_key: str
+    title: str
+    party_level: int
+    party_size: int
+    encounter_count: int
+    total_expected_party_damage_applied: int
+    rest_decisions: tuple[str, ...]
+    short_rest_count: int
+    long_rest_count: int
+    blocked_rest_count: int
+    deferred_wave_count: int
+    minimum_survival_margin_rounds: float
+    longest_clear_rounds: float
+    final_party_hp: int
+    final_party_max_hp: int
+    final_lowest_hp_percent: float
+    final_magic_points: int
+    final_maximum_magic_points: int
+    final_supply_points: int
+    max_enemy_defense_percent: int
+    max_enemy_avoidance: int
+
+    @property
+    def final_party_hp_percent(self) -> float:
+        if self.final_party_max_hp <= 0:
+            return 0.0
+        return self.final_party_hp / self.final_party_max_hp
 
 
 def enemy(template: str, name: str | None = None, *, max_hp: int | None = None, current_hp: int | None = None, hp_delta: int = 0) -> EnemyFixture:
@@ -492,8 +524,98 @@ def build_act1_route_game(segment: Act1RouteSegmentFixture, route: Act1RouteFixt
     return game, party
 
 
+def simulate_act1_route_segment(
+    segment: Act1RouteSegmentFixture,
+    route: Act1RouteFixture | None = None,
+    *,
+    party_damage_multiplier: float = ACT1_ATTRITION_DAMAGE_MULTIPLIER,
+    spend_party_resources: bool = True,
+    seed: int = 49217,
+) -> RouteChainSimulation:
+    route = route or CANONICAL_ACT1_ROUTE
+    game, party = build_act1_route_game(segment, route, seed=seed)
+    return simulate_route_chain(
+        game,
+        segment.title,
+        party,
+        segment.build_route_specs(),
+        party_damage_multiplier=party_damage_multiplier,
+        spend_party_resources=spend_party_resources,
+    )
+
+
+def build_act1_segment_balance_report(segment: Act1RouteSegmentFixture, chain: RouteChainSimulation) -> Act1RouteSegmentBalanceReport:
+    final_snapshot = chain.final_snapshot
+    return Act1RouteSegmentBalanceReport(
+        segment_key=segment.key,
+        title=segment.title,
+        party_level=segment.party_level,
+        party_size=segment.expected_party_size,
+        encounter_count=len(segment.encounters),
+        total_expected_party_damage_applied=chain.total_expected_party_damage_applied,
+        rest_decisions=chain.rest_decisions,
+        short_rest_count=chain.short_rest_count,
+        long_rest_count=chain.long_rest_count,
+        blocked_rest_count=chain.blocked_rest_count,
+        deferred_wave_count=chain.deferred_wave_count,
+        minimum_survival_margin_rounds=chain.minimum_survival_margin_rounds,
+        longest_clear_rounds=max((step.encounter.rounds_to_clear for step in chain.steps), default=0.0),
+        final_party_hp=int(final_snapshot.get("party_hp", 0)),
+        final_party_max_hp=int(final_snapshot.get("party_max_hp", 0)),
+        final_lowest_hp_percent=float(final_snapshot.get("lowest_hp_percent", 0.0)),
+        final_magic_points=int(final_snapshot.get("magic_points", 0)),
+        final_maximum_magic_points=int(final_snapshot.get("maximum_magic_points", 0)),
+        final_supply_points=int(final_snapshot.get("supply_points", 0)),
+        max_enemy_defense_percent=max((step.encounter.max_enemy_defense_percent for step in chain.steps), default=0),
+        max_enemy_avoidance=max((step.encounter.max_enemy_avoidance for step in chain.steps), default=0),
+    )
+
+
+def act1_route_attrition_report(
+    route: Act1RouteFixture | None = None,
+    *,
+    party_damage_multiplier: float = ACT1_ATTRITION_DAMAGE_MULTIPLIER,
+    spend_party_resources: bool = True,
+    seed: int = 49217,
+) -> tuple[Act1RouteSegmentBalanceReport, ...]:
+    route = route or CANONICAL_ACT1_ROUTE
+    reports: list[Act1RouteSegmentBalanceReport] = []
+    for segment in route.segments:
+        chain = simulate_act1_route_segment(
+            segment,
+            route,
+            party_damage_multiplier=party_damage_multiplier,
+            spend_party_resources=spend_party_resources,
+            seed=seed,
+        )
+        reports.append(build_act1_segment_balance_report(segment, chain))
+    return tuple(reports)
+
+
+def format_act1_route_attrition_report(reports: tuple[Act1RouteSegmentBalanceReport, ...]) -> str:
+    lines = [
+        "Segment | Lv | Party | Fights | Damage | Rests | Margin | Final HP | MP",
+        "--- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---:",
+    ]
+    for report in reports:
+        rests = ",".join(report.rest_decisions) if report.rest_decisions else "none"
+        lines.append(
+            f"{report.segment_key} | "
+            f"{report.party_level} | "
+            f"{report.party_size} | "
+            f"{report.encounter_count} | "
+            f"{report.total_expected_party_damage_applied} | "
+            f"{rests} | "
+            f"{report.minimum_survival_margin_rounds:.2f} | "
+            f"{report.final_party_hp}/{report.final_party_max_hp} | "
+            f"{report.final_magic_points}/{report.final_maximum_magic_points}"
+        )
+    return "\n".join(lines)
+
+
 __all__ = [
     "ACT1_BASELINE_INVENTORY",
+    "ACT1_ATTRITION_DAMAGE_MULTIPLIER",
     "ACT1_ROUTE_FIXTURES",
     "CANONICAL_ACT1_ROUTE",
     "CANONICAL_ACT1_ROUTE_KEY",
@@ -501,10 +623,15 @@ __all__ = [
     "Act1RouteEncounterFixture",
     "Act1RouteFixture",
     "Act1RouteSegmentFixture",
+    "Act1RouteSegmentBalanceReport",
     "EnemyFixture",
     "act1_route_fixture",
     "act1_route_fixtures",
+    "act1_route_attrition_report",
+    "build_act1_segment_balance_report",
     "build_act1_route_game",
     "build_act1_route_party",
     "build_act1_route_player",
+    "format_act1_route_attrition_report",
+    "simulate_act1_route_segment",
 ]

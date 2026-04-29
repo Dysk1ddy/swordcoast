@@ -17,6 +17,9 @@ ANSI_COLOR_HEX = {
 }
 KIVY_NON_DIALOGUE_PARAGRAPH_DELAY_SECONDS = 0.75
 KIVY_COMMAND_PARAGRAPH_DELAY_SECONDS = 0.18
+KIVY_COMBAT_PARAGRAPH_DELAY_SECONDS = 0.22
+KIVY_DICE_INITIAL_FRAME_WEIGHT = 0.045
+KIVY_DICE_SLOWDOWN_WEIGHT = 3.4
 
 
 TAG_NAME_RE = re.compile(r"^/?([a-zA-Z]+)")
@@ -147,9 +150,11 @@ def should_buffer_kivy_non_dialogue_output(
     animated: bool,
     source_text: object = "",
     enabled: bool = True,
+    in_combat: bool = False,
 ) -> bool:
     return bool(
         enabled
+        and not in_combat
         and markup
         and not animated
         and visible_markup_length(markup) > 0
@@ -190,14 +195,71 @@ def kivy_non_dialogue_reveal_delay(
     animated: bool,
     enabled: bool = True,
     fast: bool = False,
+    combat: bool = False,
 ) -> float:
     if not enabled or animated:
         return 0.0
     paragraphs = [part for part in re.split(r"\n\s*\n+", visible_markup_text(markup).strip()) if part.strip()]
     if not paragraphs:
         return 0.0
-    seconds_per_paragraph = KIVY_COMMAND_PARAGRAPH_DELAY_SECONDS if fast else KIVY_NON_DIALOGUE_PARAGRAPH_DELAY_SECONDS
+    if fast:
+        seconds_per_paragraph = KIVY_COMMAND_PARAGRAPH_DELAY_SECONDS
+    elif combat:
+        seconds_per_paragraph = KIVY_COMBAT_PARAGRAPH_DELAY_SECONDS
+    else:
+        seconds_per_paragraph = KIVY_NON_DIALOGUE_PARAGRAPH_DELAY_SECONDS
     return seconds_per_paragraph * len(paragraphs)
+
+
+def kivy_resource_bar_markup(
+    current: int,
+    maximum: int,
+    *,
+    width: int = 14,
+    color: str = "7ee787",
+    empty_color: str = "3b3428",
+) -> str:
+    maximum = max(1, int(maximum))
+    current = max(0, min(int(current), maximum))
+    width = max(1, int(width))
+    filled = max(0, min(width, int(round((current / maximum) * width))))
+    empty = width - filled
+    fill = "█" * filled
+    remainder = "░" * empty
+    return f"[color=#{color}]{fill}[/color][color=#{empty_color}]{remainder}[/color] {current}/{maximum}"
+
+
+def kivy_dice_animation_allowed(
+    *,
+    in_combat: bool,
+    style: str | None = None,
+    outcome_kind: str | None = None,
+) -> bool:
+    if style == "initiative" or outcome_kind == "initiative":
+        return True
+    return not in_combat
+
+
+def kivy_dice_frame_delays(frame_count: int, duration: float) -> list[float]:
+    frame_count = max(1, int(frame_count))
+    duration = max(0.0, float(duration))
+    weights = [
+        KIVY_DICE_INITIAL_FRAME_WEIGHT
+        + ((index / max(1, frame_count - 1)) ** KIVY_DICE_SLOWDOWN_WEIGHT) * 3.2
+        for index in range(frame_count)
+    ]
+    total = sum(weights) or 1.0
+    return [(weight / total) * duration for weight in weights]
+
+
+def kivy_dice_highlight_index(rolls: list[int], kept: int | None = None) -> int | None:
+    if not rolls:
+        return None
+    if kept is not None:
+        for index, value in enumerate(rolls):
+            if value == kept:
+                return index
+    return max(range(len(rolls)), key=lambda index: rolls[index])
 
 
 def fade_kivy_markup(markup: str, opacity: float, *, default_color: str = "ffffff") -> str:

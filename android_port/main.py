@@ -8,7 +8,7 @@ import traceback
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.metrics import dp
+from kivy.metrics import dp, sp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
@@ -191,6 +191,10 @@ class AndroidTextDnDGame(TextDnDGame):
 
 
 class GameScreen(BoxLayout):
+    BUTTON_FONT_MIN_SP = 7
+    BUTTON_FONT_MAX_SP = 24
+    BUTTON_TEXT_HORIZONTAL_PADDING = 16
+    BUTTON_TEXT_VERTICAL_PADDING = 8
     COMMANDS = [
         "help",
         "save",
@@ -204,6 +208,11 @@ class GameScreen(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=dp(12), spacing=dp(10), **kwargs)
         self._log_lines: list[str] = []
+        self.command_buttons: list[Button] = []
+        self.option_buttons: list[Button] = []
+        self._button_font_bindings: dict[Button, list[tuple[str, int]]] = {}
+        self._button_font_sync_event = None
+        self._button_font_syncing = False
         self.bridge = MobileGameBridge(self)
         self._build_ui()
 
@@ -277,7 +286,7 @@ class GameScreen(BoxLayout):
         )
         self.text_input.bind(on_text_validate=lambda *_args: self.submit_text())
         input_row.add_widget(self.text_input)
-        send_button = Button(
+        self.send_button = Button(
             text="Send",
             size_hint_x=None,
             width=dp(96),
@@ -285,8 +294,9 @@ class GameScreen(BoxLayout):
             background_color=(0.36, 0.22, 0.08, 1),
             color=(1, 0.98, 0.94, 1),
         )
-        send_button.bind(on_release=lambda *_args: self.submit_text())
-        input_row.add_widget(send_button)
+        self._bind_button_font_scaling(self.send_button)
+        self.send_button.bind(on_release=lambda *_args: self.submit_text())
+        input_row.add_widget(self.send_button)
         self.add_widget(input_row)
 
         commands = GridLayout(cols=4, spacing=dp(8), size_hint_y=None, height=dp(108))
@@ -297,12 +307,95 @@ class GameScreen(BoxLayout):
                 background_color=(0.74, 0.58, 0.37, 1),
                 color=(0.16, 0.11, 0.07, 1),
             )
+            self._bind_button_font_scaling(button)
             button.bind(on_release=lambda _btn, value=command: self.submit_direct(value))
+            self.command_buttons.append(button)
             commands.add_widget(button)
         self.add_widget(commands)
+        self._schedule_button_font_sync()
 
     def _sync_status_label(self, instance: Label, _value) -> None:
         instance.text_size = (instance.width, None)
+
+    def _active_scaled_buttons(self) -> list[Button]:
+        buttons: list[Button] = []
+        send_button = getattr(self, "send_button", None)
+        if send_button is not None:
+            buttons.append(send_button)
+        buttons.extend(self.command_buttons)
+        buttons.extend(self.option_buttons)
+        return [button for button in buttons if button.parent is not None and button.width > 0 and button.height > 0]
+
+    def _button_inner_size(self, button: Button) -> tuple[float, float]:
+        width = max(1.0, float(button.width) - dp(self.BUTTON_TEXT_HORIZONTAL_PADDING))
+        height = max(1.0, float(button.height) - dp(self.BUTTON_TEXT_VERTICAL_PADDING))
+        return (width, height)
+
+    def _sync_button_text_size(self, button: Button) -> None:
+        width, height = self._button_inner_size(button)
+        if getattr(button, "_aethrune_dynamic_height", False):
+            button.text_size = (width, None)
+            return
+        button.text_size = (width, height)
+
+    def _bind_button_font_scaling(self, button: Button) -> None:
+        if button in self._button_font_bindings:
+            return
+        bindings: list[tuple[str, int]] = []
+        for property_name in ("size", "text"):
+            uid = button.fbind(property_name, self._schedule_button_font_sync)
+            if uid:
+                bindings.append((property_name, uid))
+        self._button_font_bindings[button] = bindings
+        self._sync_button_text_size(button)
+        self._schedule_button_font_sync()
+
+    def _unbind_button_font_scaling(self, buttons: list[Button]) -> None:
+        for button in buttons:
+            for property_name, uid in self._button_font_bindings.pop(button, []):
+                button.unbind_uid(property_name, uid)
+
+    def _schedule_button_font_sync(self, *_args) -> None:
+        if self._button_font_syncing or self._button_font_sync_event is not None:
+            return
+        self._button_font_sync_event = Clock.schedule_once(self._sync_button_font_sizes, 0)
+
+    def _button_font_fits(self, button: Button, font_size: float) -> bool:
+        available_width, available_height = self._button_inner_size(button)
+        original_font_size = button.font_size
+        original_text_size = button.text_size
+        button.font_size = font_size
+        button.text_size = (available_width, None)
+        button.texture_update()
+        texture_width, texture_height = button.texture_size
+        button.font_size = original_font_size
+        button.text_size = original_text_size
+        button.texture_update()
+        return texture_width <= available_width + 1 and texture_height <= available_height + 1
+
+    def _sync_button_font_sizes(self, _dt=None) -> None:
+        self._button_font_sync_event = None
+        buttons = self._active_scaled_buttons()
+        if not buttons:
+            return
+
+        self._button_font_syncing = True
+        try:
+            low = sp(self.BUTTON_FONT_MIN_SP)
+            high = sp(self.BUTTON_FONT_MAX_SP)
+            for _step in range(8):
+                midpoint = (low + high) / 2
+                if all(self._button_font_fits(button, midpoint) for button in buttons):
+                    low = midpoint
+                else:
+                    high = midpoint
+            chosen_size = low
+            for button in buttons:
+                button.font_size = chosen_size
+                self._sync_button_text_size(button)
+                button.texture_update()
+        finally:
+            self._button_font_syncing = False
 
     def append_log(self, text: str) -> None:
         self._log_lines.append(text)
@@ -342,7 +435,9 @@ class GameScreen(BoxLayout):
         self.text_input.focus = True
 
     def _rebuild_options(self, options: list[str]) -> None:
+        self._unbind_button_font_scaling(self.option_buttons)
         self.options_grid.clear_widgets()
+        self.option_buttons = []
         for index, option in enumerate(options, start=1):
             button = WrappedButton(
                 text=f"{index}. {option}",
@@ -353,8 +448,13 @@ class GameScreen(BoxLayout):
                 valign="middle",
                 size_hint_y=None,
             )
+            button._aethrune_dynamic_height = True
+            self._sync_button_text_size(button)
+            self._bind_button_font_scaling(button)
             button.bind(on_release=lambda _btn, value=str(index): self.submit_direct(value))
+            self.option_buttons.append(button)
             self.options_grid.add_widget(button)
+        self._schedule_button_font_sync()
 
     def submit_direct(self, value: str) -> None:
         self.text_input.text = ""

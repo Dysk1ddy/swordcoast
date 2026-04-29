@@ -3,6 +3,7 @@
   "music_enabled": true,
   "dice_animations_enabled": true,
   "dice_animation_mode": "full",
+  "difficulty_mode": "standard",
   "typed_dialogue_enabled": true,
   "pacing_pauses_enabled": true,
   "staggered_reveals_enabled": true,

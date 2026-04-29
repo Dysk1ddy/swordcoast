@@ -750,6 +750,9 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(ally.resources["ward"], 5)
         self.assertTrue(game.has_status(ally, "anchor_shell"))
         self.assertEqual(game.effective_defense_percent(ally, damage_type="slashing"), defense_before + 5)
+        self.assertIs(game.ward_draw_priority_target([mage, ally]), ally)
+        self.assertEqual(game.attack_focus_modifier(attacker, mage), -1)
+        self.assertEqual(game.attack_focus_modifier(attacker, ally), 0)
 
         actual = game.apply_damage(ally, 10, damage_type="slashing", source_actor=attacker, apply_defense=True)
 
@@ -810,6 +813,10 @@ class CombatResolverTests(unittest.TestCase):
             "Mage",
             {"STR": 8, "DEX": 14, "CON": 13, "INT": 16, "WIS": 12, "CHA": 10},
         )
+        _, ally = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
         target = create_enemy("bandit")
         mage.features.append("blue_glass_palm")
         game._in_combat = True
@@ -823,6 +830,10 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(mage.resources["mp"], 12)
         self.assertEqual(target.current_hp, before_hp - 4)
         self.assertTrue(game.has_status(target, "reeling"))
+        self.assertTrue(game.target_is_fixated_by(mage, target))
+        self.assertIs(game.fixated_priority_target(target, [ally, mage]), mage)
+        self.assertEqual(game.attack_focus_modifier(target, ally), -2)
+        self.assertEqual(game.attack_focus_modifier(target, mage), 0)
 
     def test_arcanist_training_adds_arc_pattern_charge_and_combat_options(self) -> None:
         game, mage = build_game_with_player(

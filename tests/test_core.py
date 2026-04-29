@@ -102,8 +102,12 @@ from dnd_game.ui.kivy_markup import (
     dialogue_typing_start_index,
     fade_kivy_markup,
     format_kivy_log_entry,
+    kivy_dice_animation_allowed,
+    kivy_dice_frame_delays,
+    kivy_dice_highlight_index,
     kivy_non_dialogue_reveal_delay,
     kivy_output_is_header,
+    kivy_resource_bar_markup,
     plain_combat_status_text,
     reveal_kivy_markup,
     should_buffer_kivy_non_dialogue_output,
@@ -341,6 +345,10 @@ class CoreTests(unittest.TestCase):
             kivy_non_dialogue_reveal_delay("First paragraph.\n\nSecond paragraph.", animated=False, fast=True),
             0.36,
         )
+        self.assertAlmostEqual(
+            kivy_non_dialogue_reveal_delay("First paragraph.\n\nSecond paragraph.", animated=False, combat=True),
+            0.44,
+        )
         self.assertEqual(kivy_non_dialogue_reveal_delay(dialogue, animated=dialogue_animated), 0.0)
         self.assertEqual(kivy_non_dialogue_reveal_delay("", animated=False), 0.0)
 
@@ -374,6 +382,43 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(
             should_buffer_kivy_non_dialogue_output(header, animated=header_animated, source_text="=== Crossing ===")
         )
+        self.assertFalse(
+            should_buffer_kivy_non_dialogue_output(
+                narration,
+                animated=narration_animated,
+                source_text="The road bends through wet ash.",
+                in_combat=True,
+            )
+        )
+
+    def test_kivy_resource_bar_markup_uses_block_bars(self) -> None:
+        rendered = kivy_resource_bar_markup(3, 4, width=4, color="f87171")
+        visible = visible_markup_text(rendered)
+
+        self.assertIn("[color=#f87171]███[/color]", rendered)
+        self.assertIn("[color=#3b3428]░[/color]", rendered)
+        self.assertNotIn("#", visible)
+        self.assertTrue(rendered.endswith(" 3/4"))
+
+    def test_kivy_dice_animation_gate_skips_combat_except_initiative(self) -> None:
+        self.assertTrue(kivy_dice_animation_allowed(in_combat=False, style="skill"))
+        self.assertFalse(kivy_dice_animation_allowed(in_combat=True, style="attack"))
+        self.assertFalse(kivy_dice_animation_allowed(in_combat=True, outcome_kind="save"))
+        self.assertTrue(kivy_dice_animation_allowed(in_combat=True, style="initiative"))
+        self.assertTrue(kivy_dice_animation_allowed(in_combat=True, outcome_kind="initiative"))
+
+    def test_kivy_dice_frame_delays_speed_up_then_slow_down(self) -> None:
+        delays = kivy_dice_frame_delays(8, 1.2)
+
+        self.assertEqual(len(delays), 8)
+        self.assertAlmostEqual(sum(delays), 1.2)
+        self.assertLess(delays[0], delays[-1])
+        self.assertLess(delays[1], delays[-2])
+
+    def test_kivy_dice_highlight_index_prefers_kept_then_highest(self) -> None:
+        self.assertEqual(kivy_dice_highlight_index([4, 17], kept=17), 1)
+        self.assertEqual(kivy_dice_highlight_index([12, 5, 9]), 0)
+        self.assertIsNone(kivy_dice_highlight_index([]))
 
     def test_kivy_dialogue_typewriter_starts_after_speaker_name(self) -> None:
         dialogue, animated = format_kivy_log_entry('Elira Dawnmantle: "Wash your hands first."')
@@ -11115,7 +11160,7 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         enemy = create_enemy("bandit")
-        answers = iter(["6", "1", "1", "1"])
+        answers = iter(["5", "1", "1", "1"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8151))
         game.state = GameState(player=player, current_scene="road_ambush")
         game.perform_weapon_attack = lambda attacker, target, heroes, enemies, dodging: setattr(target, "current_hp", target.current_hp - 1)
@@ -11240,14 +11285,14 @@ class CoreTests(unittest.TestCase):
                 "Use an Item",
                 game.skill_tag("PERSUASION / INTIMIDATION", "Attempt Parley"),
                 game.skill_tag("STEALTH", "Try to Flee"),
-                "Take Guarded Stance",
+                "Take Guard Stance",
                 "Pulse Restore (4 MP)",
                 "End Turn",
             ]
         )
 
         self.assertEqual(indexed[1], f"Strike with {player.weapon.name}")
-        self.assertEqual(indexed[2], "Take Guarded Stance")
+        self.assertEqual(indexed[2], "Take Guard Stance")
         self.assertEqual(indexed[3], "Pulse Restore (4 MP)")
         self.assertEqual(indexed[4], "Use an Item")
         self.assertEqual(indexed[5], game.skill_tag("PERSUASION / INTIMIDATION", "Attempt Parley"))
@@ -11283,7 +11328,7 @@ class CoreTests(unittest.TestCase):
         ally = create_tolan_ironshield()
         ally.current_hp = max(1, ally.current_hp - 5)
         enemy = create_enemy("bandit")
-        answers = iter(["8", "2", "2", "1"])
+        answers = iter(["7", "2", "2", "1"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(8155))
         game.state = GameState(player=player, companions=[ally], current_scene="road_ambush")
         game.saving_throw = lambda actor, ability, dc, context, against_poison=False: False
@@ -11460,7 +11505,7 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(game.skill_check(player, "Athletics", 1, context="to step over a twig"))
         self.assertFalse(game.saving_throw(player, "DEX", 1, context="against a harmless puff of dust"))
 
-    def test_guarded_stance_imposes_strain_on_visible_attackers(self) -> None:
+    def test_dodge_action_imposes_strain_on_visible_attackers(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -11478,7 +11523,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(advantage, -1)
 
-    def test_guarded_stance_does_not_penalize_unseen_invisible_attackers(self) -> None:
+    def test_dodge_action_does_not_penalize_unseen_invisible_attackers(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -11497,7 +11542,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(advantage, 1)
 
-    def test_guarded_stance_grants_advantage_on_dex_saving_throws(self) -> None:
+    def test_dodge_action_grants_advantage_on_dex_saving_throws(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -15543,13 +15588,13 @@ class CoreTests(unittest.TestCase):
         options = [
             f"Strike with {player.weapon.name}",
             "Use an Item",
-            "Take Guarded Stance",
+            "Take Guard Stance",
             "End Turn",
         ]
 
         selected = game.choose_grouped_combat_option("Your turn.", options, actor=player, heroes=[player], enemies=[enemy])
 
-        self.assertEqual(selected, "Take Guarded Stance")
+        self.assertEqual(selected, "Take Guard Stance")
 
     def test_keyboard_combat_menu_uses_normal_screen_for_meta_windows(self) -> None:
         if not RICH_AVAILABLE:
@@ -16143,7 +16188,7 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         enemy = create_enemy("goblin_skirmisher")
-        answers = iter(["1", "2", "10"])
+        answers = iter(["1", "2", "9"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(42))
         game.state = GameState(player=player, current_scene="road_ambush")
         called: list[str] = []
