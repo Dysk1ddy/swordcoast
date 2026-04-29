@@ -102,6 +102,7 @@ from dnd_game.ui.kivy_markup import (
     dialogue_typing_start_index,
     fade_kivy_markup,
     format_kivy_log_entry,
+    format_kivy_prompt_markup,
     kivy_dice_animation_allowed,
     kivy_dice_frame_delays,
     kivy_dice_highlight_index,
@@ -317,6 +318,20 @@ class CoreTests(unittest.TestCase):
         self.assertIn("&bl;ATHLETICS&br;", rendered)
         self.assertIn("[/color]", rendered)
 
+    def test_kivy_prompt_uses_numeric_colored_action_counters(self) -> None:
+        rendered = format_kivy_prompt_markup(
+            "Your turn, \x1b[36mVelkor\x1b[0m. Actions left: 1. Bonus action: ready."
+        )
+
+        self.assertIn("[color=#44d7e8]Velkor[/color]", rendered)
+        self.assertIn("Actions left: [b][color=#facc15]1[/color][/b].", rendered)
+        self.assertIn("Bonus actions: [b][color=#facc15]1[/color][/b].", rendered)
+        self.assertNotIn("Bonus action: ready", rendered)
+
+        spent = format_kivy_prompt_markup("Your turn, Velkor. Actions left: 0. Bonus action: spent.")
+        self.assertIn("Actions left: [b][color=#facc15]0[/color][/b].", spent)
+        self.assertIn("Bonus actions: [b][color=#facc15]0[/color][/b].", spent)
+
     def test_kivy_log_entry_formats_banners_and_reveals_without_broken_tags(self) -> None:
         banner, animated = format_kivy_log_entry("=== Aethrune ===")
         partial = reveal_kivy_markup("[color=#facc15]Road[/color]", 2)
@@ -493,6 +508,13 @@ class CoreTests(unittest.TestCase):
 
         with self.assertRaises(gameplay_base.GameInterrupted):
             game.read_input("> ")
+
+    def test_read_input_prints_separator_after_response(self) -> None:
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(900511))
+
+        self.assertEqual(game.read_input("> "), "1")
+        self.assertEqual(log, [""])
 
     def test_id_alias_layer_resolves_planned_and_active_ids(self) -> None:
         self.assertEqual(canonical_scene_id("greywake_briefing"), "greywake_briefing")

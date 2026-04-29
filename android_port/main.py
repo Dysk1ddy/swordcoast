@@ -98,6 +98,7 @@ class MobileGameBridge:
             return
         self.waiting_for_input = False
         Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
+        Clock.schedule_once(lambda _dt: self.screen.mark_input_separator_pending())
         self._responses.put(value)
 
 
@@ -208,6 +209,7 @@ class GameScreen(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation="vertical", padding=dp(12), spacing=dp(10), **kwargs)
         self._log_lines: list[str] = []
+        self._input_separator_pending = False
         self.command_buttons: list[Button] = []
         self.option_buttons: list[Button] = []
         self._button_font_bindings: dict[Button, list[tuple[str, int]]] = {}
@@ -398,9 +400,16 @@ class GameScreen(BoxLayout):
             self._button_font_syncing = False
 
     def append_log(self, text: str) -> None:
+        if text and self._input_separator_pending:
+            if self._log_lines and self._log_lines[-1] != "":
+                self._log_lines.append("")
+            self._input_separator_pending = False
         self._log_lines.append(text)
         self.log_label.text = "\n".join(self._log_lines).strip("\n")
         Clock.schedule_once(lambda _dt: self._scroll_log_to_bottom(), 0)
+
+    def mark_input_separator_pending(self) -> None:
+        self._input_separator_pending = True
 
     def _scroll_log_to_bottom(self) -> None:
         self.log_scroll.scroll_y = 0

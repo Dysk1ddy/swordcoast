@@ -24,6 +24,14 @@ KIVY_DICE_SLOWDOWN_WEIGHT = 3.4
 
 TAG_NAME_RE = re.compile(r"^/?([a-zA-Z]+)")
 COLOR_TAG_RE = re.compile(r"\[color=#(?P<rgb>[0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?\]")
+COMBAT_TURN_PROMPT_RE = re.compile(
+    r"^(?P<prefix>.*?\bActions left:\s*)"
+    r"(?P<actions>\d+)"
+    r"(?P<separator>\.\s*)"
+    r"Bonus action:\s*"
+    r"(?P<bonus>ready|spent)"
+    r"(?P<suffix>\.)$"
+)
 DIALOGUE_PREFIX_RE = re.compile(r'^[^:\n]{1,42}:\s+"')
 RESOURCE_BAR_RE = re.compile(
     r"\b(?P<label>[A-Za-z][A-Za-z0-9 /'_-]{0,32})\s+\[[^\]\n]*\]\s*"
@@ -87,6 +95,25 @@ def ansi_to_kivy_markup(text: object) -> str:
     if active_color:
         output.append("[/color]")
     return "".join(output)
+
+
+def format_kivy_prompt_markup(text: object) -> str:
+    raw = str(text)
+    match = COMBAT_TURN_PROMPT_RE.match(raw)
+    if match is None:
+        return ansi_to_kivy_markup(raw)
+
+    actions = match.group("actions")
+    bonus_actions = "1" if match.group("bonus") == "ready" else "0"
+    counter_color = "facc15"
+    return (
+        ansi_to_kivy_markup(match.group("prefix")) +
+        f"[b][color=#{counter_color}]{escape_kivy_markup(actions)}[/color][/b]"
+        f"{ansi_to_kivy_markup(match.group('separator'))}"
+        "Bonus actions: "
+        f"[b][color=#{counter_color}]{bonus_actions}[/color][/b]"
+        f"{ansi_to_kivy_markup(match.group('suffix'))}"
+    )
 
 
 def plain_combat_status_text(text: object) -> str:

@@ -45,6 +45,7 @@ from .ui.kivy_markup import (
     dialogue_typing_start_index,
     escape_kivy_markup,
     fade_kivy_markup,
+    format_kivy_prompt_markup,
     format_kivy_log_entry,
     kivy_dice_animation_allowed,
     kivy_dice_frame_delays,
@@ -56,6 +57,14 @@ from .ui.kivy_markup import (
     should_buffer_kivy_non_dialogue_output,
     visible_markup_length,
     visible_markup_text,
+)
+from .ui.examine import (
+    ExamineEntry,
+    character_examine_entry,
+    examine_entry_for_text,
+    feature_examine_entry,
+    resource_examine_entry,
+    status_examine_entry,
 )
 
 
@@ -134,6 +143,7 @@ KIVY_DICE_COLOR_HEX = {
     "yellow": "facc15",
 }
 KIVY_SIDE_COMMAND_CLOSE_TOKEN = "__aethrune_kivy_close_side_command__"
+KIVY_EXAMINE_HOLD_SECONDS = 1.25
 
 
 class KivySideCommandClosed(Exception):
@@ -212,6 +222,78 @@ class WrappedLabel(Label):
         self.height = max(dp(32), self.texture_size[1] + dp(12))
 
 
+class ExaminableWrappedLabel(WrappedLabel):
+    def __init__(self, *, hold_seconds: float = KIVY_EXAMINE_HOLD_SECONDS, **kwargs):
+        self._examine_hold_seconds = float(hold_seconds)
+        self._examine_ref_touch_uid = None
+        self._examine_ref_name: str | None = None
+        self._examine_ref_event = None
+        super().__init__(**kwargs)
+
+    def _touch_uid(self, touch) -> object:
+        return getattr(touch, "uid", id(touch))
+
+    def _touch_is_right_click(self, touch) -> bool:
+        return str(getattr(touch, "button", "")).lower() == "right"
+
+    def _ref_at_touch(self, touch) -> str | None:
+        if not self.collide_point(*touch.pos):
+            return None
+        self.texture_update()
+        if not self.refs:
+            return None
+        tx, ty = touch.pos
+        tx -= self.center_x - self.texture_size[0] / 2.0
+        ty -= self.center_y - self.texture_size[1] / 2.0
+        ty = self.texture_size[1] - ty
+        for ref_name, zones in self.refs.items():
+            for zone in zones:
+                x1, y1, x2, y2 = zone
+                if x1 <= tx <= x2 and y1 <= ty <= y2:
+                    return str(ref_name)
+        return None
+
+    def _cancel_examine_ref_hold(self) -> None:
+        if self._examine_ref_event is not None:
+            self._examine_ref_event.cancel()
+        self._examine_ref_event = None
+        self._examine_ref_touch_uid = None
+        self._examine_ref_name = None
+
+    def _trigger_examine_ref_hold(self, _dt) -> None:
+        ref_name = self._examine_ref_name
+        self._examine_ref_event = None
+        if ref_name:
+            self.dispatch("on_ref_press", ref_name)
+
+    def on_touch_down(self, touch) -> bool:
+        ref_name = self._ref_at_touch(touch)
+        if ref_name is None:
+            return super().on_touch_down(touch)
+        if self._touch_is_right_click(touch):
+            self.dispatch("on_ref_press", ref_name)
+            return True
+        self._cancel_examine_ref_hold()
+        self._examine_ref_touch_uid = self._touch_uid(touch)
+        self._examine_ref_name = ref_name
+        self._examine_ref_event = Clock.schedule_once(
+            self._trigger_examine_ref_hold,
+            self._examine_hold_seconds,
+        )
+        return True
+
+    def on_touch_move(self, touch) -> bool:
+        if self._touch_uid(touch) == self._examine_ref_touch_uid and self._ref_at_touch(touch) != self._examine_ref_name:
+            self._cancel_examine_ref_hold()
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch) -> bool:
+        if self._touch_uid(touch) == self._examine_ref_touch_uid:
+            self._cancel_examine_ref_hold()
+            return True
+        return super().on_touch_up(touch)
+
+
 class WrappedButton(Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -224,6 +306,77 @@ class WrappedButton(Button):
 
     def _sync_height(self, *_args) -> None:
         self.height = max(dp(38), self.texture_size[1] + dp(14))
+
+
+class ExaminableButton(Button):
+    def __init__(
+        self,
+        *,
+        examine_callback=None,
+        hold_seconds: float = KIVY_EXAMINE_HOLD_SECONDS,
+        **kwargs,
+    ):
+        self.examine_callback = examine_callback
+        self._examine_hold_seconds = float(hold_seconds)
+        self._examine_touch_uid = None
+        self._examine_hold_event = None
+        self._examine_hold_triggered = False
+        super().__init__(**kwargs)
+
+    def _touch_uid(self, touch) -> object:
+        return getattr(touch, "uid", id(touch))
+
+    def _touch_is_right_click(self, touch) -> bool:
+        return str(getattr(touch, "button", "")).lower() == "right"
+
+    def _cancel_examine_hold(self) -> None:
+        if self._examine_hold_event is not None:
+            self._examine_hold_event.cancel()
+        self._examine_hold_event = None
+
+    def _open_examine(self) -> None:
+        callback = self.examine_callback
+        if callable(callback):
+            callback()
+
+    def _trigger_examine_hold(self, _dt) -> None:
+        self._examine_hold_event = None
+        self._examine_hold_triggered = True
+        self.state = "normal"
+        self._open_examine()
+
+    def on_touch_down(self, touch) -> bool:
+        if not self.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
+        if self._touch_is_right_click(touch):
+            self._open_examine()
+            return True
+        self._cancel_examine_hold()
+        self._examine_touch_uid = self._touch_uid(touch)
+        self._examine_hold_triggered = False
+        self._examine_hold_event = Clock.schedule_once(
+            self._trigger_examine_hold,
+            self._examine_hold_seconds,
+        )
+        return super().on_touch_down(touch)
+
+    def on_touch_move(self, touch) -> bool:
+        if self._touch_uid(touch) == self._examine_touch_uid and not self.collide_point(*touch.pos):
+            self._cancel_examine_hold()
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch) -> bool:
+        if self._touch_uid(touch) == self._examine_touch_uid:
+            self._cancel_examine_hold()
+            triggered = self._examine_hold_triggered
+            self._examine_touch_uid = None
+            self._examine_hold_triggered = False
+            if triggered:
+                if getattr(touch, "grab_current", None) is self:
+                    touch.ungrab(self)
+                self.state = "normal"
+                return True
+        return super().on_touch_up(touch)
 
 
 class PanelBox(BoxLayout):
@@ -842,9 +995,30 @@ class ClickableGameBridge:
         Clock.schedule_once(lambda _dt: self.screen.append_side_output(markup, done_event=done))
         done.wait(timeout=1.0)
 
-    def show_dice_animation_frame(self, markup: str, *, final: bool = False) -> None:
+    def show_dice_animation_frame(
+        self,
+        markup: str,
+        *,
+        final: bool = False,
+        use_tray: bool = False,
+        tray_height: float | None = None,
+        tray_parts: tuple[str, str, str] | None = None,
+        pulse_scale: float = 1.0,
+        core_slot_width: float | None = None,
+    ) -> None:
         done = Event()
-        Clock.schedule_once(lambda _dt: self.screen.show_dice_animation_frame(markup, final=final, done_event=done))
+        Clock.schedule_once(
+            lambda _dt: self.screen.show_dice_animation_frame(
+                markup,
+                final=final,
+                use_tray=use_tray,
+                tray_height=tray_height,
+                tray_parts=tray_parts,
+                pulse_scale=pulse_scale,
+                core_slot_width=core_slot_width,
+                done_event=done,
+            )
+        )
         done.wait(timeout=1.0)
 
     def append_dice_result(self, markup: str) -> None:
@@ -897,6 +1071,7 @@ class ClickableGameBridge:
         self.waiting_for_input = False
         self._fast_reveal_until_next_prompt = self.value_requests_fast_reveal(value)
         Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
+        Clock.schedule_once(lambda _dt: self.screen.mark_input_separator_pending())
         self._responses.put(value)
 
     def close_side_command(self) -> None:
@@ -907,6 +1082,7 @@ class ClickableGameBridge:
             return
         self.waiting_for_input = False
         Clock.schedule_once(lambda _dt: self.screen.clear_prompt())
+        Clock.schedule_once(lambda _dt: self.screen.mark_input_separator_pending())
         self._responses.put(KIVY_SIDE_COMMAND_CLOSE_TOKEN)
 
     def show_combat_actor(self, actor) -> None:
@@ -993,6 +1169,13 @@ class ClickableTextDnDGame(TextDnDGame):
             self._loaded_kivy_fullscreen_preference = bool(data[self.KIVY_FULLSCREEN_SETTING_KEY])
         return settings
 
+    @classmethod
+    def default_settings_payload(cls) -> dict[str, object]:
+        payload = super().default_settings_payload()
+        payload[cls.KIVY_DARK_MODE_SETTING_KEY] = cls.DEFAULT_KIVY_DARK_MODE_ENABLED
+        payload[cls.KIVY_FULLSCREEN_SETTING_KEY] = cls.DEFAULT_KIVY_FULLSCREEN_ENABLED
+        return payload
+
     def current_settings_payload(self) -> dict[str, object]:
         payload = super().current_settings_payload()
         payload[self.KIVY_DARK_MODE_SETTING_KEY] = bool(
@@ -1025,6 +1208,7 @@ class ClickableTextDnDGame(TextDnDGame):
             return
         expression = str(payload.get("expression", "roll"))
         sides = int(payload.get("sides", 20) or 20)
+        value_width = max(2, len(str(max(1, sides))))
         modifier = int(payload.get("modifier", 0) or 0)
         display_modifier = payload.get("display_modifier")
         effective_modifier = modifier if display_modifier is None else int(display_modifier)
@@ -1112,6 +1296,7 @@ class ClickableTextDnDGame(TextDnDGame):
                         advantage_state=advantage_state,
                     ),
                     pop_scale=self._kivy_dice_live_pop_scale(index, frames),
+                    value_width=value_width,
                 )
                 if self.sleep_for_dice_animation(delay):
                     skipped = True
@@ -1161,6 +1346,7 @@ class ClickableTextDnDGame(TextDnDGame):
                         highlight_index=final_highlight_index,
                         highlight_color=winner_color,
                         pop_scale=pop_scale,
+                        value_width=value_width,
                         clear_animation=False,
                     )
                     skipped = self.sleep_for_dice_animation(pause)
@@ -1193,36 +1379,128 @@ class ClickableTextDnDGame(TextDnDGame):
                     fallback=self._kivy_dice_accent(kind, style, outcome_kind),
                 ),
                 pop_scale=1.0,
-                clear_animation=True,
+                value_width=value_width,
+                clear_animation=not show_total_frame,
             )
-            if show_total_frame and self._dice_total_reveal_pause_seconds > 0:
-                self.sleep_for_animation(self._dice_total_reveal_pause_seconds, require_animation=True)
-            if kind == "d20" and show_total_frame:
-                self.render_dice_animation_total_frame(
-                    rolls=list(rolls),
-                    kept=kept if kept is not None else rolls[-1],
-                    modifier=effective_modifier,
-                    rerolls=list(rerolls),
-                    target_number=target_number,
-                    target_label=target_label,
-                    context_label=context_label,
-                    expression=expression,
-                    style=style,
-                    outcome_kind=outcome_kind,
-                    critical=critical,
-                    advantage_state=advantage_state,
-                )
-            elif show_total_frame:
-                self.render_roll_animation_total_frame(
-                    rolls=list(rolls),
-                    modifier=effective_modifier,
-                    rerolls=list(rerolls),
-                    context_label=context_label,
-                    expression=expression,
-                    style=style,
-                    outcome_kind=outcome_kind,
-                    critical=critical,
-                )
+            if show_total_frame:
+                total_skipped = bool(skipped)
+                if not total_skipped and self._dice_total_reveal_pause_seconds > 0:
+                    total_skipped = self.sleep_for_animation(
+                        self._dice_total_reveal_pause_seconds,
+                        require_animation=True,
+                    )
+                if not total_skipped:
+                    self.render_dice_animation_frame(
+                        final_label,
+                        rolls,
+                        kind=kind,
+                        final=True,
+                        modifier=effective_modifier,
+                        kept=kept,
+                        rerolls=rerolls,
+                        style=style,
+                        outcome_kind=outcome_kind,
+                        target_number=target_number,
+                        target_label=target_label,
+                        show_total=False,
+                        total_reveal_stage=1,
+                        context_label=context_label,
+                        highlight_index=kivy_dice_highlight_index(rolls, kept),
+                        highlight_color=self._kivy_dice_winner_color(
+                            kind=kind,
+                            rolls=rolls,
+                            modifier=effective_modifier,
+                            kept=kept,
+                            target_number=target_number,
+                            style=style,
+                            outcome_kind=outcome_kind,
+                            critical=critical,
+                            fallback=self._kivy_dice_accent(kind, style, outcome_kind),
+                        ),
+                        pop_scale=1.0,
+                        value_width=value_width,
+                        clear_animation=False,
+                    )
+                    total_skipped = self.sleep_for_dice_animation(0.12)
+                if total_skipped:
+                    total_pop_frames = ((1.0, 0.0),)
+                else:
+                    total_pop_frames = (
+                        (1.26, 0.045),
+                        (0.92, 0.035),
+                        (1.10, 0.035),
+                        (1.0, 0.0),
+                    )
+                total_reveal_cleared = False
+                for total_pop_scale, pause in total_pop_frames:
+                    self.render_dice_animation_frame(
+                        final_label,
+                        rolls,
+                        kind=kind,
+                        final=True,
+                        modifier=effective_modifier,
+                        kept=kept,
+                        rerolls=rerolls,
+                        style=style,
+                        outcome_kind=outcome_kind,
+                        target_number=target_number,
+                        target_label=target_label,
+                        show_total=False,
+                        total_reveal_stage=2,
+                        total_pop_scale=total_pop_scale,
+                        context_label=context_label,
+                        highlight_index=kivy_dice_highlight_index(rolls, kept),
+                        highlight_color=self._kivy_dice_winner_color(
+                            kind=kind,
+                            rolls=rolls,
+                            modifier=effective_modifier,
+                            kept=kept,
+                            target_number=target_number,
+                            style=style,
+                            outcome_kind=outcome_kind,
+                            critical=critical,
+                            fallback=self._kivy_dice_accent(kind, style, outcome_kind),
+                        ),
+                        pop_scale=1.0,
+                        value_width=value_width,
+                        clear_animation=pause <= 0,
+                    )
+                    total_reveal_cleared = pause <= 0
+                    if pause > 0 and self.sleep_for_dice_animation(pause):
+                        break
+                if not total_reveal_cleared:
+                    self.render_dice_animation_frame(
+                        final_label,
+                        rolls,
+                        kind=kind,
+                        final=True,
+                        modifier=effective_modifier,
+                        kept=kept,
+                        rerolls=rerolls,
+                        style=style,
+                        outcome_kind=outcome_kind,
+                        target_number=target_number,
+                        target_label=target_label,
+                        show_total=False,
+                        total_reveal_stage=2,
+                        total_pop_scale=1.0,
+                        context_label=context_label,
+                        highlight_index=kivy_dice_highlight_index(rolls, kept),
+                        highlight_color=self._kivy_dice_winner_color(
+                            kind=kind,
+                            rolls=rolls,
+                            modifier=effective_modifier,
+                            kept=kept,
+                            target_number=target_number,
+                            style=style,
+                            outcome_kind=outcome_kind,
+                            critical=critical,
+                            fallback=self._kivy_dice_accent(kind, style, outcome_kind),
+                        ),
+                        pop_scale=1.0,
+                        value_width=value_width,
+                        clear_animation=True,
+                    )
             if self._dice_animation_final_pause_seconds > 0:
                 self.sleep_for_animation(self._dice_animation_final_pause_seconds, require_animation=True)
         finally:
@@ -1326,15 +1604,16 @@ class ClickableTextDnDGame(TextDnDGame):
         highlight_color: str | None = None,
         pop_scale: float = 1.0,
         muted: bool = False,
+        width: int = 2,
     ) -> str:
-        escaped = escape_kivy_markup(str(value))
+        del pop_scale
+        escaped = escape_kivy_markup(str(value).rjust(max(1, int(width))))
         if muted:
             return f"[color=#8f7d62]{escaped}[/color]"
         if not highlighted:
             return escaped
-        size = max(13, int(round(20 * max(0.68, pop_scale))))
         color = highlight_color or accent
-        return f"[size={size}sp][b][color=#{color}]{escaped}[/color][/b][/size]"
+        return f"[b][color=#{color}]{escaped}[/color][/b]"
 
     def _kivy_dice_frame_core(
         self,
@@ -1347,7 +1626,9 @@ class ClickableTextDnDGame(TextDnDGame):
         highlight_color: str | None = None,
         pop_scale: float = 1.0,
         accent: str = "facc15",
+        value_width: int = 2,
     ) -> str:
+        value_width = max(1, int(value_width))
         if kind == "d20":
             if len(rolls) == 1:
                 value = self._kivy_dice_value_markup(
@@ -1356,6 +1637,7 @@ class ClickableTextDnDGame(TextDnDGame):
                     accent=accent,
                     highlight_color=highlight_color,
                     pop_scale=pop_scale,
+                    width=value_width,
                 )
                 return f"Die: {value}"
             lanes: list[str] = []
@@ -1368,6 +1650,7 @@ class ClickableTextDnDGame(TextDnDGame):
                     highlight_color=highlight_color,
                     pop_scale=pop_scale,
                     muted=final and highlight_index is not None and highlight_index != index,
+                    width=value_width,
                 )
                 lane = f"Die {chr(65 + index)}: {rendered}"
                 if kept_index == index:
@@ -1381,10 +1664,47 @@ class ClickableTextDnDGame(TextDnDGame):
                 accent=accent,
                 highlight_color=highlight_color,
                 pop_scale=pop_scale,
+                width=value_width,
             )
             for index, value in enumerate(rolls)
         ]
         return " + ".join(parts)
+
+    def _kivy_dice_base_value(self, kind: str, rolls: list[int], kept: int | None) -> int:
+        if kind == "d20":
+            return kept if kept is not None else (rolls[-1] if rolls else 0)
+        return sum(rolls)
+
+    def _kivy_dice_bonus_markup(self, modifier: int) -> str:
+        if modifier > 0:
+            return f"[color=#8f7d62]Bonus[/color] [color=#d6c59a]+{modifier}[/color]"
+        if modifier < 0:
+            return f"[color=#8f7d62]Bonus[/color] [color=#d6c59a]{modifier}[/color]"
+        return ""
+
+    def _kivy_dice_total_markup(
+        self,
+        total: int,
+        *,
+        color: str,
+        pop_scale: float,
+    ) -> str:
+        del pop_scale
+        escaped = escape_kivy_markup(str(total))
+        return f"[b][color=#{color}]{escaped}[/color][/b]"
+
+    def _kivy_dice_core_slot_width(self, kind: str, roll_count: int, value_width: int) -> float:
+        value = "9" * max(1, int(value_width))
+        roll_count = max(1, int(roll_count))
+        if kind == "d20":
+            if roll_count == 1:
+                visible = f"Die: {value}"
+            else:
+                lanes = [f"Die {chr(65 + index)}: {value} [kept]" for index in range(roll_count)]
+                visible = " | ".join(lanes)
+        else:
+            visible = " + ".join(value for _index in range(roll_count))
+        return min(430.0, max(78.0, len(visible) * 8.5 + 24.0))
 
     def render_dice_animation_frame(
         self,
@@ -1405,6 +1725,9 @@ class ClickableTextDnDGame(TextDnDGame):
         highlight_index: int | None = None,
         highlight_color: str | None = None,
         pop_scale: float = 1.0,
+        total_reveal_stage: int = 0,
+        total_pop_scale: float = 1.0,
+        value_width: int = 2,
         clear_animation: bool | None = None,
     ) -> None:
         rerolls = rerolls or []
@@ -1418,22 +1741,48 @@ class ClickableTextDnDGame(TextDnDGame):
             highlight_color=highlight_color,
             pop_scale=pop_scale,
             accent=accent,
+            value_width=value_width,
         )
         prefix = escape_kivy_markup(strip_ansi(str(context_label or label)))
-        text = f"{prefix}: {core}"
-        if target_number is not None:
-            text += f" vs {escape_kivy_markup(str(target_label or target_number))}"
-        if final and show_total:
-            text += f" | {escape_kivy_markup(self.dice_breakdown_text(kind, rolls, modifier=modifier, kept=kept))}"
-            total = (kept if kind == "d20" and kept is not None else (rolls[-1] if kind == "d20" else sum(rolls))) + modifier
-            total_markup = escape_kivy_markup(str(total))
-            if highlight_color:
-                total_markup = f"[b][color=#{highlight_color}]{total_markup}[/color][/b]"
-            text += f" = {total_markup}"
+        suffix_parts: list[str] = []
+        if target_number is not None and total_reveal_stage < 2:
+            suffix_parts.append(f"vs {escape_kivy_markup(str(target_label or target_number))}")
+        if final and (show_total or total_reveal_stage > 0):
+            bonus_markup = self._kivy_dice_bonus_markup(modifier)
+            if bonus_markup and (show_total or total_reveal_stage > 0):
+                suffix_parts.append(bonus_markup)
+            if show_total or total_reveal_stage >= 2:
+                total = self._kivy_dice_base_value(kind, rolls, kept) + modifier
+                total_color = highlight_color or accent
+                total_markup = (
+                    self._kivy_dice_total_markup(total, color=total_color, pop_scale=total_pop_scale)
+                    if total_reveal_stage >= 2
+                    else f"[b][color=#{total_color}]{escape_kivy_markup(str(total))}[/color][/b]"
+                )
+                if bonus_markup:
+                    suffix_parts.append(f"[color=#8f7d62]=[/color] {total_markup}")
+                else:
+                    suffix_parts.append(f"[color=#8f7d62]Total[/color] {total_markup}")
+                if target_number is not None and total_reveal_stage >= 2:
+                    suffix_parts.append(f"[color=#8f7d62]vs[/color] {escape_kivy_markup(str(target_label or target_number))}")
         if final and rerolls:
-            text += f" | reroll {escape_kivy_markup(', '.join(f'{old}->{new}' for old, new in rerolls))}"
+            suffix_parts.append(f"reroll {escape_kivy_markup(', '.join(f'{old}->{new}' for old, new in rerolls))}")
+        suffix = "  ".join(suffix_parts)
+        text = f"{prefix}: {core}"
+        if suffix:
+            text += f" | {suffix}"
         markup = self._kivy_mono_span(f"[b][color=#{accent}]{text}[/color][/b]")
-        self.bridge.show_dice_animation_frame(markup, final=final if clear_animation is None else clear_animation)
+        prefix_markup = self._kivy_mono_span(f"[b][color=#{accent}]{prefix}: [/color][/b]")
+        core_markup = self._kivy_mono_span(f"[b][color=#{accent}]{core}[/color][/b]")
+        suffix_markup = self._kivy_mono_span(f"[b][color=#{accent}]{suffix}[/color][/b]") if suffix else ""
+        self.bridge.show_dice_animation_frame(
+            markup,
+            final=final if clear_animation is None else clear_animation,
+            use_tray=True,
+            tray_parts=(prefix_markup, core_markup, suffix_markup),
+            pulse_scale=pop_scale,
+            core_slot_width=self._kivy_dice_core_slot_width(kind, len(rolls), value_width),
+        )
 
     def render_dice_result_panel(
         self,
@@ -1485,7 +1834,6 @@ class ClickableTextDnDGame(TextDnDGame):
                 f"{escape_kivy_markup(self.dice_animation_final_label(kind, expression, style=style, critical=critical, advantage_state=advantage_state))}"
             ),
             f"[color=#8f7d62]Dice[/color]: {dice_markup}",
-            f"[color=#8f7d62]Breakdown[/color]: {escape_kivy_markup(self.dice_breakdown_text(kind, rolls, modifier=modifier, kept=kept))}",
             f"[color=#8f7d62]Total[/color]: [b][color=#{outcome_hex}]{total}[/color][/b]",
         ]
         if target_number is not None:
@@ -1508,6 +1856,25 @@ class ClickableTextDnDGame(TextDnDGame):
             return value.center(width)
         return value.ljust(width)
 
+    def _kivy_markup_table_cell(
+        self,
+        text: object,
+        width: int,
+        *,
+        align: str = "left",
+        color: str | None = None,
+        bold: bool = False,
+        size_sp: int | None = None,
+    ) -> str:
+        cell = escape_kivy_markup(self._kivy_table_cell(text, width, align=align))
+        if color:
+            cell = f"[color=#{color}]{cell}[/color]"
+        if bold:
+            cell = f"[b]{cell}[/b]"
+        if size_sp is not None:
+            cell = f"[size={size_sp}sp]{cell}[/size]"
+        return cell
+
     def _kivy_initiative_actor_color(self, actor) -> str:
         enemies = list(getattr(self, "_active_combat_enemies", []) or [])
         if actor in enemies or "enemy" in set(getattr(actor, "tags", []) or []):
@@ -1527,17 +1894,25 @@ class ClickableTextDnDGame(TextDnDGame):
             ),
         )
 
-    def _kivy_initiative_status_markup(self, entry: dict[str, object], *, final: bool, leader: bool) -> str:
+    def _kivy_initiative_status_details(self, entry: dict[str, object], *, final: bool, leader: bool) -> tuple[str, str, bool]:
         if not final:
-            return "[color=#d6c59a]Rolling[/color]" if leader else "[color=#8f7d62]Rolling[/color]"
+            return ("Rolling", "d6c59a" if leader else "8f7d62", leader)
         note = self.initiative_entry_note(entry)
         if note == "Natural 20":
-            return "[b][color=#facc15]Natural 20[/color][/b]"
+            return ("Natural 20", "facc15", True)
         if note == "Natural 1":
-            return "[b][color=#f87171]Natural 1[/color][/b]"
+            return ("Natural 1", "f87171", True)
         if leader:
-            return "[b][color=#86efac]First move[/color][/b]"
-        return "[color=#8f7d62]Ready[/color]"
+            return ("First move", "86efac", True)
+        return ("Ready", "8f7d62", False)
+
+    def _kivy_initiative_status_markup(self, entry: dict[str, object], *, final: bool, leader: bool) -> str:
+        text, color, bold = self._kivy_initiative_status_details(entry, final=final, leader=leader)
+        markup = f"[color=#{color}]{escape_kivy_markup(text)}[/color]"
+        return f"[b]{markup}[/b]" if bold else markup
+
+    def _kivy_initiative_tray_height(self, entries: list[dict[str, object]]) -> int:
+        return min(320, max(150, 104 + 24 * max(1, len(entries))))
 
     def _kivy_initiative_panel_markup(
         self,
@@ -1549,49 +1924,68 @@ class ClickableTextDnDGame(TextDnDGame):
         frame_count: int = 1,
         pop_scale: float | None = None,
     ) -> str:
+        del frame_index, frame_count, pop_scale
         display_rolls = shown_rolls or [getattr(entry["outcome"], "kept", 0) for entry in entries]
         leader_index = self._kivy_initiative_leader_index(entries, display_rolls)
         title = "Initiative Order" if final else "Rolling Initiative"
-        subtitle = "Highest total acts first" if final else "Dice are settling into turn order"
+        subtitle = "Highest total acts first" if final else "Dice settling into turn order"
         lines = [
-            f"[size=20sp][b][color=#facc15]{title}[/color][/b][/size]",
-            f"[size=13sp][color=#8f7d62]{subtitle}[/color][/size]",
+            f"[size=18sp][b][color=#facc15]{title}[/color][/b][/size]",
+            f"[size=12sp][color=#8f7d62]{subtitle}[/color][/size]",
+            (
+                f"[color=#8f7d62]"
+                f"{self._kivy_table_cell('#', 2, align='right')} | "
+                f"{self._kivy_table_cell('Combatant', 19)} | "
+                f"{self._kivy_table_cell('Roll', 4, align='right')} | "
+                f"{self._kivy_table_cell('Mod', 4, align='right')} | "
+                f"{self._kivy_table_cell('Total', 5, align='right')} | "
+                f"{self._kivy_table_cell('Status', 11)}"
+                f"[/color]"
+            ),
+            f"[color=#4b3f30]{'--+-' + '-' * 19 + '-+-' + '-' * 4 + '-+-' + '-' * 4 + '-+-' + '-' * 5 + '-+-' + '-' * 11}[/color]",
         ]
-        live_pop = self._kivy_dice_live_pop_scale(frame_index, frame_count)
         for index, (entry, shown) in enumerate(zip(entries, display_rolls), start=1):
             actor = entry["actor"]
             modifier = int(entry["modifier"])
             total = int(entry["total"]) if final else int(shown) + modifier
             is_leader = leader_index == index - 1
-            actor_name = escape_kivy_markup(strip_ansi(self.initiative_actor_summary_name(actor)))
+            actor_name = strip_ansi(self.initiative_actor_summary_name(actor))
             actor_color = self._kivy_initiative_actor_color(actor)
             rank_color = "facc15" if is_leader else "8f7d62"
-            row_pop = pop_scale if final and is_leader else (live_pop if is_leader else 1.0)
             winner_color = "facc15" if is_leader else "d6c59a"
-            roll_markup = self._kivy_dice_value_markup(
+            roll_cell = self._kivy_markup_table_cell(
                 int(shown),
-                highlighted=is_leader,
-                accent="d6c59a",
-                highlight_color=winner_color,
-                pop_scale=row_pop,
-                muted=final and not is_leader,
+                4,
+                align="right",
+                color=winner_color if is_leader else "b8a98d",
+                bold=is_leader,
             )
-            total_text = escape_kivy_markup(str(total))
-            if is_leader:
-                total_size = max(14, int(round(19 * max(0.76, row_pop))))
-                total_markup = f"[size={total_size}sp][b][color=#{winner_color}]{total_text}[/color][/b][/size]"
-            else:
-                total_markup = f"[color=#b8a98d]{total_text}[/color]"
-            status = self._kivy_initiative_status_markup(entry, final=final, leader=is_leader)
+            total_cell = self._kivy_markup_table_cell(
+                total,
+                5,
+                align="right",
+                color=winner_color if is_leader else "b8a98d",
+                bold=is_leader,
+            )
+            status_text, status_color, status_bold = self._kivy_initiative_status_details(
+                entry,
+                final=final,
+                leader=is_leader,
+            )
             lines.append(
-                "\n"
-                f"[b][color=#{rank_color}]{index}[/color][/b] "
-                f"[b][color=#{actor_color}]{actor_name}[/color][/b]\n"
-                f"   [color=#8f7d62]Roll[/color] {roll_markup}  "
-                f"[color=#8f7d62]Mod[/color] [color=#d6c59a]{modifier:+d}[/color]  "
-                f"[color=#8f7d62]Total[/color] {total_markup}  {status}"
+                f"{self._kivy_markup_table_cell(index, 2, align='right', color=rank_color, bold=is_leader)}"
+                f" [color=#8f7d62]|[/color] "
+                f"{self._kivy_markup_table_cell(actor_name, 19, color=actor_color, bold=is_leader)}"
+                f" [color=#8f7d62]|[/color] "
+                f"{roll_cell}"
+                f" [color=#8f7d62]|[/color] "
+                f"{self._kivy_markup_table_cell(f'{modifier:+d}', 4, align='right', color='d6c59a')}"
+                f" [color=#8f7d62]|[/color] "
+                f"{total_cell}"
+                f" [color=#8f7d62]|[/color] "
+                f"{self._kivy_markup_table_cell(status_text, 11, color=status_color, bold=status_bold)}"
             )
-        return "\n".join(lines)
+        return self._kivy_mono_span("\n".join(lines))
 
     def build_initiative_panel_lines(
         self,
@@ -1612,7 +2006,9 @@ class ClickableTextDnDGame(TextDnDGame):
         del previous_line_count
         markup = "\n".join(lines)
         final = "Initiative Order" in visible_markup_text(markup)
-        self.bridge.show_dice_animation_frame(markup, final=final)
+        line_count = visible_markup_text(markup).count("\n") + 1
+        tray_height = min(320, max(150, 28 + 24 * line_count))
+        self.bridge.show_dice_animation_frame(markup, final=final, use_tray=True, tray_height=tray_height)
 
     def render_kivy_initiative_panel(
         self,
@@ -1633,7 +2029,12 @@ class ClickableTextDnDGame(TextDnDGame):
             frame_count=frame_count,
             pop_scale=pop_scale,
         )
-        self.bridge.show_dice_animation_frame(markup, final=final if clear_animation is None else clear_animation)
+        self.bridge.show_dice_animation_frame(
+            markup,
+            final=final if clear_animation is None else clear_animation,
+            use_tray=True,
+            tray_height=self._kivy_initiative_tray_height(entries),
+        )
 
     def animate_initiative_rolls(self, entries: list[dict[str, object]]) -> None:
         if not self.animate_dice or not entries:
@@ -2119,6 +2520,9 @@ class ClickableTextDnDGame(TextDnDGame):
 
 
 class GameScreen(BoxLayout):
+    F11_KEY_CODE = 292
+    F11_FALLBACK_KEY_CODE = 65480
+    F11_SCANCODES = {68, 87}
     MAX_LOG_ENTRIES = 900
     TYPEWRITER_INTERVAL_SECONDS = 0.035
     TYPEWRITER_CHARS_PER_TICK = 1
@@ -2140,6 +2544,9 @@ class GameScreen(BoxLayout):
     BUTTON_FONT_MAX_SP = 24
     BUTTON_TEXT_HORIZONTAL_PADDING = 16
     BUTTON_TEXT_VERTICAL_PADDING = 8
+    DICE_ANIMATION_TRAY_HEIGHT = 58
+    DICE_ANIMATION_TRAY_MAX_HEIGHT = 320
+    DICE_ANIMATION_TRAY_HIDE_SECONDS = 2.0
     SEND_BUTTON_FONT_SIZE = "14sp"
     COMMAND_BUTTON_FONT_SIZE = "12sp"
     COMMANDS = [
@@ -2197,6 +2604,8 @@ class GameScreen(BoxLayout):
         "choice_end_turn_text": (1, 0.94, 0.90, 1),
         "choice_back_bg": (0.20, 0.28, 0.42, 1),
         "choice_back_text": (0.92, 0.96, 1, 1),
+        "dice_tray": (0.105, 0.085, 0.055, 1),
+        "dice_tray_text": (0.96, 0.86, 0.62, 1),
     }
     LIGHT_THEME = {
         "window": (0.93, 0.89, 0.80, 1),
@@ -2223,11 +2632,14 @@ class GameScreen(BoxLayout):
         "choice_end_turn_text": (0.12, 0.04, 0.03, 1),
         "choice_back_bg": (0.45, 0.57, 0.74, 1),
         "choice_back_text": (0.04, 0.07, 0.12, 1),
+        "dice_tray": (0.82, 0.73, 0.55, 1),
+        "dice_tray_text": (0.18, 0.12, 0.06, 1),
     }
 
     def __init__(self, *, load_save: str | None = None, **kwargs):
         super().__init__(orientation="vertical", padding=dp(8), spacing=dp(6), **kwargs)
         self._log_lines: list[str] = []
+        self._input_separator_pending = False
         self._typing_queue: list[tuple[str, Event | None]] = []
         self._typing_current_markup: str | None = None
         self._typing_current_event: Event | None = None
@@ -2236,6 +2648,8 @@ class GameScreen(BoxLayout):
         self._typing_visible_characters = 0
         self._typing_total_characters = 0
         self._dice_animation_line_index: int | None = None
+        self._dice_tray_active = False
+        self._dice_tray_hide_event = None
         self._fade_animation_event = None
         self._fade_animation_index: int | None = None
         self._fade_animation_markup = ""
@@ -2255,6 +2669,10 @@ class GameScreen(BoxLayout):
         self._side_panel_mode = "default"
         self._side_command_title = ""
         self._side_command_lines: list[str] = []
+        self._examine_panel_visible = False
+        self._examine_ref_entries: dict[str, ExamineEntry] = {}
+        self._examine_ref_counter = 0
+        self._current_option_rows = 0
         self.kivy_dark_mode_enabled = self.load_kivy_dark_mode_setting()
         self.kivy_fullscreen_enabled = self.load_kivy_fullscreen_setting()
         self.command_buttons: list[Button] = []
@@ -2365,6 +2783,70 @@ class GameScreen(BoxLayout):
         self.log_label.bind(height=self._sync_log_viewport_height)
         self.log_scroll.add_widget(self.log_viewport)
         self.log_shell.add_widget(self.log_scroll)
+        self.dice_animation_tray = PanelBox(
+            orientation="vertical",
+            size_hint_y=None,
+            height=0,
+            padding=[dp(8), dp(4), dp(8), dp(4)],
+            background_color=(0.105, 0.085, 0.055, 1),
+            radius=5,
+            opacity=0,
+            disabled=True,
+        )
+        self.dice_animation_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.86, 0.62, 1),
+            font_size="15sp",
+            halign="left",
+            valign="middle",
+            size_hint=(1, 1),
+        )
+        self._apply_font(self.dice_animation_label, "mono")
+        self.dice_animation_label.bind(size=self._sync_dice_animation_label)
+        self.dice_animation_tray.add_widget(self.dice_animation_label)
+        self.dice_roll_row = BoxLayout(
+            orientation="horizontal",
+            spacing=dp(4),
+            size_hint_y=None,
+            height=0,
+            opacity=0,
+            disabled=True,
+        )
+        self.dice_roll_prefix_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.86, 0.62, 1),
+            font_size="15sp",
+            halign="left",
+            valign="middle",
+            size_hint_x=None,
+            width=0,
+        )
+        self.dice_roll_core_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.86, 0.62, 1),
+            font_size="15sp",
+            halign="center",
+            valign="middle",
+            size_hint_x=None,
+            width=dp(96),
+        )
+        self.dice_roll_suffix_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.86, 0.62, 1),
+            font_size="15sp",
+            halign="left",
+            valign="middle",
+        )
+        for label in (self.dice_roll_prefix_label, self.dice_roll_core_label, self.dice_roll_suffix_label):
+            self._apply_font(label, "mono")
+            label.bind(size=self._sync_dice_roll_label)
+            self.dice_roll_row.add_widget(label)
+        self.dice_animation_tray.add_widget(self.dice_roll_row)
+        self.log_shell.add_widget(self.dice_animation_tray)
         self.left_column.add_widget(self.log_shell)
 
         self.prompt_label = WrappedLabel(
@@ -2380,16 +2862,79 @@ class GameScreen(BoxLayout):
         )
         self._apply_font(self.prompt_label, "ui")
 
-        self.options_shell = PanelBox(
-            orientation="vertical",
+        self.options_area = BoxLayout(
+            orientation="horizontal",
             size_hint_y=None,
             height=dp(142),
+            spacing=dp(8),
+        )
+
+        self.options_shell = PanelBox(
+            orientation="vertical",
+            size_hint=(1, 1),
             padding=[dp(6), dp(6), dp(6), dp(6)],
             background_color=(0.11, 0.13, 0.10, 1),
             radius=6,
         )
         self.options_grid = GridLayout(cols=1, spacing=dp(self.OPTION_BUTTON_ROW_GAP), size_hint=(1, 1))
         self.options_shell.add_widget(self.options_grid)
+        self.options_area.add_widget(self.options_shell)
+
+        self.examine_shell = PanelBox(
+            orientation="vertical",
+            size_hint=(0.4, 1),
+            padding=[dp(8), dp(6), dp(8), dp(8)],
+            spacing=dp(5),
+            background_color=(0.075, 0.075, 0.085, 1),
+            radius=6,
+            opacity=0,
+            disabled=True,
+        )
+        self.examine_header = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(30),
+            spacing=dp(6),
+        )
+        self.examine_title_label = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.78, 0.28, 1),
+            font_size="16sp",
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        self._apply_font(self.examine_title_label, "ui")
+        self.examine_title_label.bind(size=self._sync_examine_title_label)
+        self.examine_close_button = Button(
+            text="X",
+            size_hint_x=None,
+            width=dp(32),
+            background_normal="",
+            background_color=(0.48, 0.36, 0.18, 1),
+            color=(1, 0.94, 0.78, 1),
+            font_size="14sp",
+            bold=True,
+        )
+        self._apply_font(self.examine_close_button, "ui")
+        self.examine_close_button.bind(on_release=lambda *_args: self.close_examine_panel())
+        self.examine_header.add_widget(self.examine_title_label)
+        self.examine_header.add_widget(self.examine_close_button)
+        self.examine_label = WrappedLabel(
+            text="",
+            markup=True,
+            color=(0.92, 0.86, 0.74, 1),
+            font_size="13sp",
+            halign="left",
+            valign="top",
+            size_hint_y=None,
+        )
+        self._apply_font(self.examine_label, "ui")
+        self.examine_scroll = ScrollView(do_scroll_x=False, bar_width=dp(5))
+        self.examine_scroll.add_widget(self.examine_label)
+        self.examine_shell.add_widget(self.examine_header)
+        self.examine_shell.add_widget(self.examine_scroll)
 
         self.combat_panel = PanelBox(
             orientation="vertical",
@@ -2398,7 +2943,7 @@ class GameScreen(BoxLayout):
             background_color=(0.075, 0.075, 0.085, 1),
             radius=6,
         )
-        self.combat_stats_label = WrappedLabel(
+        self.combat_stats_label = ExaminableWrappedLabel(
             text="",
             markup=True,
             color=(0.92, 0.86, 0.74, 1),
@@ -2408,6 +2953,7 @@ class GameScreen(BoxLayout):
             size_hint_y=None,
         )
         self._apply_font(self.combat_stats_label, "mono")
+        self.combat_stats_label.bind(on_ref_press=lambda _label, ref_name: self.show_examine_ref(str(ref_name)))
         self.side_command_header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -2450,7 +2996,7 @@ class GameScreen(BoxLayout):
         self.combat_panel.add_widget(self.combat_stats_scroll)
         self.add_widget(self.main_body)
         self.add_widget(self.prompt_label)
-        self.add_widget(self.options_shell)
+        self.add_widget(self.options_area)
 
         self.input_row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(6))
         self.text_input = TextInput(
@@ -2512,6 +3058,25 @@ class GameScreen(BoxLayout):
 
     def _sync_side_command_title_label(self, instance: Label, _value) -> None:
         instance.text_size = (instance.width, None)
+
+    def _sync_examine_title_label(self, instance: Label, _value) -> None:
+        instance.text_size = (instance.width, None)
+
+    def _sync_dice_animation_label(self, instance: Label, _value=None) -> None:
+        instance.text_size = (
+            max(1, instance.width - dp(8)),
+            max(1, instance.height - dp(4)),
+        )
+
+    def _sync_dice_roll_label(self, instance: Label, _value=None) -> None:
+        instance.text_size = (
+            max(1, instance.width - dp(4)),
+            max(1, instance.height - dp(4)),
+        )
+
+    def _fit_label_to_texture_width(self, instance: Label, maximum_width: float) -> None:
+        instance.texture_update()
+        instance.width = min(maximum_width, max(dp(1), instance.texture_size[0] + dp(6)))
 
     def _set_side_command_header_visible(self, visible: bool) -> None:
         self.side_command_header.height = dp(34) if visible else 0
@@ -2607,6 +3172,42 @@ class GameScreen(BoxLayout):
         self.kivy_fullscreen_enabled = bool(enabled)
         self.apply_kivy_fullscreen()
 
+    def _set_active_game_fullscreen_preference(self, enabled: bool) -> bool:
+        game = self.active_game()
+        if game is None:
+            return False
+        game._kivy_fullscreen_preference = bool(enabled)
+        game.persist_settings()
+        return True
+
+    def persist_kivy_fullscreen_setting(self) -> None:
+        if self._set_active_game_fullscreen_preference(self.kivy_fullscreen_enabled):
+            return
+        settings_path = Path.cwd() / "saves" / "settings.json"
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        data[self.KIVY_FULLSCREEN_SETTING_KEY] = self.kivy_fullscreen_enabled
+        try:
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
+    def toggle_kivy_fullscreen_from_shortcut(self) -> None:
+        self.set_kivy_fullscreen_enabled(not self.kivy_fullscreen_enabled)
+        self.persist_kivy_fullscreen_setting()
+
+    def is_fullscreen_shortcut(self, key, scancode, codepoint) -> bool:
+        if key in {self.F11_KEY_CODE, self.F11_FALLBACK_KEY_CODE}:
+            return True
+        if scancode in self.F11_SCANCODES:
+            return True
+        return str(codepoint).strip().lower() == "f11"
+
     def apply_kivy_fullscreen(self) -> None:
         try:
             Window.fullscreen = "auto" if self.kivy_fullscreen_enabled else False
@@ -2622,18 +3223,27 @@ class GameScreen(BoxLayout):
         for panel, key in (
             (self.header, "header"),
             (self.log_shell, "panel"),
+            (self.dice_animation_tray, "dice_tray"),
             (self.options_shell, "options"),
             (self.combat_panel, "combat"),
+            (self.examine_shell, "combat"),
         ):
             panel.set_background_color(theme[key])
         self.title_label.color = theme["title"]
         self.status_label.color = theme["status"]
         self.log_label.color = theme["text"]
+        self.dice_animation_label.color = theme["dice_tray_text"]
+        for label in (self.dice_roll_prefix_label, self.dice_roll_core_label, self.dice_roll_suffix_label):
+            label.color = theme["dice_tray_text"]
         self.prompt_label.color = theme["prompt"]
         self.combat_stats_label.color = theme["text"]
         self.side_command_title_label.color = theme["title"]
         self.side_command_close_button.background_color = theme["command_bg"]
         self.side_command_close_button.color = theme["command_text"]
+        self.examine_title_label.color = theme["title"]
+        self.examine_label.color = theme["text"]
+        self.examine_close_button.background_color = theme["command_bg"]
+        self.examine_close_button.color = theme["command_text"]
         self.native_map_view.set_dark_mode(self.kivy_dark_mode_enabled)
         self.text_input.background_color = theme["input_bg"]
         self.text_input.foreground_color = theme["input_text"]
@@ -2737,6 +3347,7 @@ class GameScreen(BoxLayout):
         self._clear_defeated_enemy_fades()
         self.native_map_view.hide_map()
         self.combat_stats_label.text = ""
+        self._clear_dice_tray()
         self._side_panel_mode = "default"
         self._side_command_lines = []
         self._side_command_title = ""
@@ -2749,6 +3360,8 @@ class GameScreen(BoxLayout):
         self.log_label.halign = "left"
         self.log_label._sync_text_size()
         self.log_label._sync_height()
+        if not self._dice_tray_active:
+            self._set_dice_tray_reserved(False)
         self._sync_log_viewport_height()
 
     def refresh_combat_panel(self) -> None:
@@ -2794,6 +3407,65 @@ class GameScreen(BoxLayout):
             self._render_combat_panel()
         else:
             self._render_party_stats_panel()
+
+    def _examine_entry_markup(self, entry: ExamineEntry) -> str:
+        lines = [
+            f"[size=18sp][b][color=#facc15]{escape_kivy_markup(entry.title)}[/color][/b][/size]",
+            f"[size=12sp][color=#8f7d62]{escape_kivy_markup(entry.category)}[/color][/size]",
+            "",
+            escape_kivy_markup(entry.description),
+        ]
+        detail_lines = [detail for detail in entry.details if detail]
+        if detail_lines:
+            lines.append("")
+            lines.extend(f"[color=#d6c59a]{escape_kivy_markup(detail)}[/color]" for detail in detail_lines)
+        return "\n".join(lines)
+
+    def show_examine_entry(self, entry: ExamineEntry) -> None:
+        self._examine_panel_visible = True
+        self.examine_title_label.text = escape_kivy_markup(entry.title)
+        self.examine_label.text = self._examine_entry_markup(entry)
+        self.examine_label._sync_text_size()
+        self.examine_label._sync_height()
+        self._sync_options_area_layout()
+        Clock.schedule_once(lambda _dt: setattr(self.examine_scroll, "scroll_y", 1), 0)
+
+    def close_examine_panel(self) -> None:
+        self._examine_panel_visible = False
+        self.examine_title_label.text = ""
+        self.examine_label.text = ""
+        self._sync_options_area_layout()
+
+    def show_option_examine(self, option: str, index: int) -> None:
+        del index
+        self.show_examine_entry(examine_entry_for_text(option, game=self.active_game()))
+
+    def show_examine_ref(self, ref_name: str) -> None:
+        entry = self._examine_ref_entries.get(ref_name)
+        if entry is not None:
+            self.show_examine_entry(entry)
+
+    def _reset_examine_refs(self) -> None:
+        self._examine_ref_entries = {}
+        self._examine_ref_counter = 0
+
+    def _register_examine_ref(self, entry: ExamineEntry) -> str:
+        self._examine_ref_counter += 1
+        ref_name = f"examine_{self._examine_ref_counter}"
+        self._examine_ref_entries[ref_name] = entry
+        return ref_name
+
+    def _examine_ref_markup(
+        self,
+        label: str,
+        entry: ExamineEntry,
+        *,
+        color: str,
+        bold: bool = False,
+    ) -> str:
+        ref_name = self._register_examine_ref(entry)
+        body = f"[ref={ref_name}][color=#{color}]{escape_kivy_markup(label)}[/color][/ref]"
+        return f"[b]{body}[/b]" if bold else body
 
     def begin_side_command(self, title: str, *, done_event: Event | None = None) -> None:
         if not self.side_panel_allowed():
@@ -2844,12 +3516,14 @@ class GameScreen(BoxLayout):
         self.native_map_view.hide_map()
         self._set_side_command_header_visible(False)
         self._sync_defeated_enemy_fades()
+        self._reset_examine_refs()
         self.combat_stats_label.text = self.build_combat_stats_markup()
         if not scroll_to_top:
             return
         Clock.schedule_once(lambda _dt: setattr(self.combat_stats_scroll, "scroll_y", 1), 0)
 
     def _render_side_command(self) -> None:
+        self._reset_examine_refs()
         title = escape_kivy_markup(self._side_command_title or "Command")
         self._set_side_command_header_visible(True)
         self.side_command_title_label.text = title
@@ -2861,6 +3535,7 @@ class GameScreen(BoxLayout):
         Clock.schedule_once(lambda _dt: setattr(self.combat_stats_scroll, "scroll_y", 1), 0)
 
     def _render_party_stats_panel(self) -> None:
+        self._reset_examine_refs()
         self.native_map_view.hide_map()
         self._set_side_command_header_visible(False)
         self.combat_stats_label.text = self.build_party_stats_markup()
@@ -3079,11 +3754,34 @@ class GameScreen(BoxLayout):
             conditions.append(str(status_name(name) if callable(status_name) else name.replace("_", " ").title()))
         return ", ".join(conditions)
 
+    def combatant_conditions_markup(self, game: "ClickableTextDnDGame", combatant) -> str:
+        conditions: list[str] = []
+        status_name = getattr(game, "status_name", None)
+        total_charges = getattr(game, "total_arcanist_pattern_charges", None)
+        for name, value in getattr(combatant, "conditions", {}).items():
+            if value == 0:
+                continue
+            if name == "pattern_charge" and callable(total_charges):
+                charges = total_charges(combatant)
+                if not charges:
+                    continue
+                label = f"Pattern Charge {charges}"
+            else:
+                label = str(status_name(name) if callable(status_name) else name.replace("_", " ").title())
+            entry = status_examine_entry(name) or feature_examine_entry(name)
+            if entry is None:
+                conditions.append(escape_kivy_markup(label))
+            else:
+                conditions.append(self._examine_ref_markup(label, entry, color="d8b4fe"))
+        return ", ".join(conditions)
+
     def combatant_resource_text(self, combatant) -> str:
         resources = getattr(combatant, "resources", {}) or {}
         maximums = getattr(combatant, "max_resources", {}) or {}
         parts: list[str] = []
         for key in sorted(set(resources) | set(maximums)):
+            if key == "mp":
+                continue
             current = int(resources.get(key, 0) or 0)
             maximum = int(maximums.get(key, 0) or 0)
             if current <= 0 and maximum <= 0:
@@ -3091,6 +3789,41 @@ class GameScreen(BoxLayout):
             label = key.replace("_", " ").title()
             parts.append(f"{label} {current}/{maximum}" if maximum else f"{label} {current}")
         return " | ".join(parts)
+
+    def combatant_resource_markup(self, combatant) -> str:
+        resources = getattr(combatant, "resources", {}) or {}
+        maximums = getattr(combatant, "max_resources", {}) or {}
+        parts: list[str] = []
+        for key in sorted(set(resources) | set(maximums)):
+            if key == "mp":
+                continue
+            current = int(resources.get(key, 0) or 0)
+            maximum = int(maximums.get(key, 0) or 0)
+            if current <= 0 and maximum <= 0:
+                continue
+            label = key.replace("_", " ").title()
+            value = f"{current}/{maximum}" if maximum else f"{current}"
+            entry = resource_examine_entry(key)
+            if entry is None:
+                parts.append(f"{escape_kivy_markup(label)} {escape_kivy_markup(value)}")
+            else:
+                parts.append(f"{self._examine_ref_markup(entry.title, entry, color='d6c59a')} {escape_kivy_markup(value)}")
+        return " | ".join(parts)
+
+    def combatant_feature_markup(self, combatant, *, limit: int = 5) -> str:
+        features = [str(feature) for feature in getattr(combatant, "features", []) if str(feature).strip()]
+        if not features:
+            return ""
+        parts: list[str] = []
+        for feature_id in features[:limit]:
+            entry = feature_examine_entry(feature_id)
+            if entry is None:
+                parts.append(escape_kivy_markup(feature_id.replace("_", " ").title()))
+            else:
+                parts.append(self._examine_ref_markup(entry.title, entry, color="d8b4fe"))
+        if len(features) > limit:
+            parts.append(escape_kivy_markup(f"+{len(features) - limit} more"))
+        return ", ".join(parts)
 
     def combatant_markup(self, game: "ClickableTextDnDGame", combatant, *, enemy: bool) -> str:
         raw_name = str(getattr(combatant, "name", "Unknown"))
@@ -3101,6 +3834,12 @@ class GameScreen(BoxLayout):
             name_color = "8f7d62"
         if raw_name == self._active_combat_actor_name:
             name_color = "facc15"
+        name_markup = self._examine_ref_markup(
+            public_name,
+            character_examine_entry(combatant, game=game),
+            color=name_color,
+            bold=True,
+        )
         hp = self.stat_bar_markup(
             self._displayed_combat_resource_value(combatant, "hp", current_hp),
             getattr(combatant, "max_hp", 1),
@@ -3113,7 +3852,7 @@ class GameScreen(BoxLayout):
             defense_summary = f" | {strip_ansi(combat_defense_summary(combatant))}"
         status = " DEAD" if getattr(combatant, "dead", False) else " DOWN" if getattr(combatant, "current_hp", 0) <= 0 else ""
         lines = [
-            f"[b][color=#{name_color}]{escape_kivy_markup(public_name)}[/color][/b]"
+            f"{name_markup}"
             f" [size=14sp][color=#b8a98d]Lv {getattr(combatant, 'level', '?')} AC {ac}{defense_summary}{temp}{status}[/color][/size]",
             f"[size=14sp]HP: {hp}[/size]",
         ]
@@ -3121,13 +3860,18 @@ class GameScreen(BoxLayout):
         if max_mp > 0:
             current_mp = current_magic_points(combatant)
             displayed_mp = self._displayed_combat_resource_value(combatant, "mp", current_mp)
-            lines.append(f"[size=14sp]MP: {self.stat_bar_markup(displayed_mp, max_mp, color='60a5fa')}[/size]")
-        resources = self.combatant_resource_text(combatant)
+            mp_entry = resource_examine_entry("mp")
+            mp_label = self._examine_ref_markup("MP", mp_entry, color="60a5fa") if mp_entry is not None else "MP"
+            lines.append(f"[size=14sp]{mp_label}: {self.stat_bar_markup(displayed_mp, max_mp, color='60a5fa')}[/size]")
+        resources = self.combatant_resource_markup(combatant)
         if resources:
-            lines.append(f"[size=14sp][color=#d6c59a]{escape_kivy_markup(resources)}[/color][/size]")
-        conditions = self.combatant_conditions_text(game, combatant)
+            lines.append(f"[size=14sp][color=#d6c59a]{resources}[/color][/size]")
+        conditions = self.combatant_conditions_markup(game, combatant)
         if conditions:
-            lines.append(f"[size=14sp][color=#d8b4fe]{escape_kivy_markup(conditions)}[/color][/size]")
+            lines.append(f"[size=14sp][color=#d8b4fe]{conditions}[/color][/size]")
+        features = self.combatant_feature_markup(combatant)
+        if features:
+            lines.append(f"[size=13sp][color=#8f7d62]Traits[/color]: {features}[/size]")
         markup = "\n".join(lines)
         if enemy:
             opacity = self._enemy_fade_opacity(combatant)
@@ -3213,9 +3957,25 @@ class GameScreen(BoxLayout):
         markup: str,
         *,
         final: bool = False,
+        use_tray: bool = False,
+        tray_height: float | None = None,
+        tray_parts: tuple[str, str, str] | None = None,
+        pulse_scale: float = 1.0,
+        core_slot_width: float | None = None,
         done_event: Event | None = None,
     ) -> None:
         self.update_combat_layout()
+        if use_tray:
+            self._show_dice_tray_frame(
+                markup,
+                final=final,
+                tray_height=tray_height,
+                tray_parts=tray_parts,
+                pulse_scale=pulse_scale,
+                core_slot_width=core_slot_width,
+            )
+            self._complete_log_append(done_event)
+            return
         if self._dice_animation_line_index is None or self._dice_animation_line_index >= len(self._log_lines):
             self._dice_animation_line_index = len(self._log_lines)
             self._append_log_entry(markup)
@@ -3225,6 +3985,106 @@ class GameScreen(BoxLayout):
         if final:
             self._dice_animation_line_index = None
         self._complete_log_append(done_event)
+
+    def _dice_tray_height_for_markup(self, markup: str, tray_height: float | None = None) -> float:
+        if tray_height is not None:
+            return min(float(self.DICE_ANIMATION_TRAY_MAX_HEIGHT), max(float(self.DICE_ANIMATION_TRAY_HEIGHT), float(tray_height)))
+        line_count = visible_markup_text(markup).count("\n") + 1
+        if line_count <= 2:
+            return float(self.DICE_ANIMATION_TRAY_HEIGHT)
+        return min(float(self.DICE_ANIMATION_TRAY_MAX_HEIGHT), max(150.0, 28.0 + 24.0 * line_count))
+
+    def _cancel_dice_tray_hide(self) -> None:
+        if self._dice_tray_hide_event is not None:
+            self._dice_tray_hide_event.cancel()
+            self._dice_tray_hide_event = None
+
+    def _schedule_dice_tray_hide(self) -> None:
+        self._cancel_dice_tray_hide()
+
+        def hide_tray(_dt) -> None:
+            self._dice_tray_hide_event = None
+            self._clear_dice_tray()
+
+        self._dice_tray_hide_event = Clock.schedule_once(hide_tray, self.DICE_ANIMATION_TRAY_HIDE_SECONDS)
+
+    def _set_dice_tray_reserved(self, reserved: bool, *, tray_height: float | None = None) -> None:
+        height = float(self.DICE_ANIMATION_TRAY_HEIGHT if tray_height is None else tray_height)
+        self.dice_animation_tray.height = dp(height) if reserved else 0
+        self._sync_log_viewport_height()
+
+    def _set_dice_tray_visible(self, visible: bool, *, tray_height: float | None = None) -> None:
+        self._dice_tray_active = visible
+        self._set_dice_tray_reserved(visible, tray_height=tray_height)
+        self.dice_animation_tray.opacity = 1 if visible else 0
+        self.dice_animation_tray.disabled = not visible
+
+    def _set_dice_tray_content_mode(self, mode: str) -> None:
+        row_visible = mode == "row"
+        self.dice_animation_label.opacity = 0 if row_visible else 1
+        self.dice_animation_label.disabled = row_visible
+        self.dice_animation_label.size_hint_y = None if row_visible else 1
+        self.dice_animation_label.height = 0 if row_visible else max(dp(1), self.dice_animation_tray.height)
+        self.dice_roll_row.opacity = 1 if row_visible else 0
+        self.dice_roll_row.disabled = not row_visible
+        self.dice_roll_row.size_hint_y = 1 if row_visible else None
+        self.dice_roll_row.height = max(dp(1), self.dice_animation_tray.height) if row_visible else 0
+
+    def _show_dice_tray_row(
+        self,
+        tray_parts: tuple[str, str, str],
+        *,
+        pulse_scale: float,
+        core_slot_width: float | None,
+    ) -> None:
+        prefix, core, suffix = tray_parts
+        self._set_dice_tray_content_mode("row")
+        self.dice_roll_prefix_label.text = prefix
+        self.dice_roll_core_label.text = core
+        self.dice_roll_suffix_label.text = suffix
+        self._fit_label_to_texture_width(self.dice_roll_prefix_label, self.width * 0.44)
+        self.dice_roll_core_label.width = dp(max(78.0, float(core_slot_width or 96.0)))
+        self.dice_roll_core_label.font_size = f"{max(13.0, min(24.0, 15.0 * max(0.84, pulse_scale))):.1f}sp"
+        for label in (self.dice_roll_prefix_label, self.dice_roll_core_label, self.dice_roll_suffix_label):
+            self._sync_dice_roll_label(label)
+
+    def _show_dice_tray_frame(
+        self,
+        markup: str,
+        *,
+        final: bool,
+        tray_height: float | None = None,
+        tray_parts: tuple[str, str, str] | None = None,
+        pulse_scale: float = 1.0,
+        core_slot_width: float | None = None,
+    ) -> None:
+        self._cancel_dice_tray_hide()
+        resolved_height = self._dice_tray_height_for_markup(markup, tray_height)
+        if not self._dice_tray_active:
+            self._set_dice_tray_visible(True, tray_height=resolved_height)
+        else:
+            self._set_dice_tray_reserved(True, tray_height=resolved_height)
+        if tray_parts is None:
+            self._set_dice_tray_content_mode("label")
+            self.dice_animation_label.text = markup
+            self._sync_dice_animation_label(self.dice_animation_label)
+        else:
+            self._show_dice_tray_row(
+                tray_parts,
+                pulse_scale=pulse_scale,
+                core_slot_width=core_slot_width,
+            )
+        if final:
+            self._schedule_dice_tray_hide()
+
+    def _clear_dice_tray(self) -> None:
+        self._cancel_dice_tray_hide()
+        self.dice_animation_label.text = ""
+        self.dice_roll_prefix_label.text = ""
+        self.dice_roll_core_label.text = ""
+        self.dice_roll_suffix_label.text = ""
+        self._set_dice_tray_content_mode("label")
+        self._set_dice_tray_visible(False)
 
     def append_dice_result(self, markup: str, *, done_event: Event | None = None) -> None:
         self._dice_animation_line_index = None
@@ -3334,6 +4194,9 @@ class GameScreen(BoxLayout):
             done_event.set()
         return True
 
+    def mark_input_separator_pending(self) -> None:
+        self._input_separator_pending = True
+
     def typing_wait_timeout(self, text: object) -> float:
         markup, animated = format_kivy_log_entry(text)
         return self.typing_wait_timeout_markup(markup, animated=animated)
@@ -3361,6 +4224,10 @@ class GameScreen(BoxLayout):
         return max(8, estimated_seconds)
 
     def _append_log_entry(self, text: str) -> None:
+        if text and self._input_separator_pending:
+            if self._log_lines and self._log_lines[-1] != "":
+                self._log_lines.append("")
+            self._input_separator_pending = False
         self._log_lines.append(text)
         if len(self._log_lines) > self.MAX_LOG_ENTRIES:
             self._log_lines = self._log_lines[-self.MAX_LOG_ENTRIES :]
@@ -3473,7 +4340,10 @@ class GameScreen(BoxLayout):
             skipped = True
         return skipped
 
-    def _handle_window_key_down(self, _window, key, _scancode, _codepoint, _modifiers) -> bool:
+    def _handle_window_key_down(self, _window, key, scancode, codepoint, _modifiers) -> bool:
+        if self.is_fullscreen_shortcut(key, scancode, codepoint):
+            self.toggle_kivy_fullscreen_from_shortcut()
+            return True
         if key in (13, 271):
             return self.skip_current_animation()
         return False
@@ -3489,8 +4359,14 @@ class GameScreen(BoxLayout):
             return False
         return bool(button.collide_point(*touch.pos))
 
+    def _touch_hits_examine_close_button(self, touch) -> bool:
+        button = getattr(self, "examine_close_button", None)
+        if button is None or not self._examine_panel_visible or self.examine_shell.disabled:
+            return False
+        return bool(button.collide_point(*touch.pos))
+
     def on_touch_down(self, touch) -> bool:
-        if self._touch_hits_side_command_close_button(touch):
+        if self._touch_hits_side_command_close_button(touch) or self._touch_hits_examine_close_button(touch):
             return super().on_touch_down(touch)
         if self.skip_current_animation():
             return True
@@ -3501,7 +4377,7 @@ class GameScreen(BoxLayout):
 
     def show_choice_prompt(self, prompt: str, options: list[str]) -> None:
         self.update_combat_layout()
-        self.prompt_label.text = ansi_to_kivy_markup(prompt)
+        self.prompt_label.text = format_kivy_prompt_markup(prompt)
         if self.combat_active():
             self.status_label.text = "Combat: story on the left, stats on the right, choices below."
         elif self.side_panel_allowed():
@@ -3514,7 +4390,7 @@ class GameScreen(BoxLayout):
 
     def show_text_prompt(self, prompt: str) -> None:
         self.update_combat_layout()
-        self.prompt_label.text = ansi_to_kivy_markup(prompt)
+        self.prompt_label.text = format_kivy_prompt_markup(prompt)
         self.status_label.text = (
             "Type below. Command screens use the right panel."
             if self.side_panel_allowed()
@@ -3562,6 +4438,26 @@ class GameScreen(BoxLayout):
         gaps = max(0, rows - 1) * self.OPTION_BUTTON_ROW_GAP
         return dp(min(260, vertical_padding + rows * row_height + gaps))
 
+    def _sync_options_area_layout(self, rows: int | None = None) -> None:
+        if rows is None:
+            rows = self._current_option_rows
+        option_height = self._option_shell_height(rows)
+        examine_floor = dp(170) if self._examine_panel_visible else dp(44)
+        self.options_area.height = max(option_height, examine_floor)
+        self.options_shell.size_hint_x = 0.6 if self._examine_panel_visible else 1
+        if self._examine_panel_visible:
+            if self.examine_shell.parent is None:
+                self.options_area.add_widget(self.examine_shell)
+            self.examine_shell.opacity = 1
+            self.examine_shell.disabled = False
+            self.examine_label._sync_text_size()
+            self.examine_label._sync_height()
+        else:
+            if self.examine_shell.parent is self.options_area:
+                self.options_area.remove_widget(self.examine_shell)
+            self.examine_shell.opacity = 0
+            self.examine_shell.disabled = True
+
     def _compact_option_markup(self, index: int, option: str, columns: int) -> str:
         plain = plain_combat_status_text(" ".join(strip_ansi(option).split()))
         number = f"[b][color=#facc15]{index}.[/color][/b] "
@@ -3600,13 +4496,15 @@ class GameScreen(BoxLayout):
         self.options_grid.clear_widgets()
         self.option_buttons = []
         rows, columns = self._option_grid_shape(len(options))
+        self._current_option_rows = rows
         self.options_grid.rows = rows or 1
         self.options_grid.cols = columns
-        self.options_shell.height = self._option_shell_height(rows)
+        self._sync_options_area_layout(rows)
         for index, option in enumerate(options, start=1):
-            button = Button(
+            button = ExaminableButton(
                 text=self._compact_option_markup(index, option, columns),
                 markup=True,
+                examine_callback=lambda value=option, option_index=index: self.show_option_examine(value, option_index),
                 background_normal="",
                 background_color=(0.20, 0.42, 0.34, 1),
                 color=(1, 0.98, 0.94, 1),

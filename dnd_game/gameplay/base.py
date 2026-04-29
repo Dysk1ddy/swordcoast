@@ -740,7 +740,9 @@ class GameBase:
         self._animation_skip_latched = False
         self._animation_skip_scope_depth = 0
         try:
-            return self.input_fn(prompt)
+            value = self.input_fn(prompt)
+            self.output_fn("")
+            return value
         except KeyboardInterrupt as exc:
             self.output_fn("")
             raise GameInterrupted() from exc
