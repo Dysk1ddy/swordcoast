@@ -1,13 +1,12 @@
 {
   "sound_effects_enabled": false,
-  "music_enabled": true,
-  "dice_animations_enabled": true,
-  "dice_animation_mode": "full",
+  "music_enabled": false,
   "difficulty_mode": "standard",
   "typed_dialogue_enabled": true,
   "pacing_pauses_enabled": true,
   "staggered_reveals_enabled": true,
   "animations_and_delays_enabled": true,
+  "karmic_dice_enabled": true,
   "kivy_dark_mode_enabled": true,
-  "kivy_fullscreen_enabled": true
+  "kivy_fullscreen_enabled": false
 }

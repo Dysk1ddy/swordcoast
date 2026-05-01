@@ -331,13 +331,8 @@ class GameIOMixin:
 
     def title_screen_presentation_summary(self) -> str:
         presentation = "On" if getattr(self, "_animations_and_delays_preference", False) else "Off"
-        dice_mode_label = (
-            self.dice_animation_mode_label()
-            if callable(getattr(self, "dice_animation_mode_label", None))
-            else ("On" if getattr(self, "_dice_animations_preference", False) else "Off")
-        )
         typed = "On" if getattr(self, "_typed_dialogue_preference", getattr(self, "type_dialogue", False)) else "Off"
-        return f"Animations {presentation} | Dice {dice_mode_label} | Typed Text {typed}"
+        return f"Animations {presentation} | Roll Tables On | Typed Text {typed}"
 
     def title_screen_campaign_summary(self) -> str:
         return "Acts I and II playable; later acts scaffolded"

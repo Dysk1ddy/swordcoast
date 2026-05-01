@@ -18,6 +18,7 @@ from .status_effects import STANCE_STATUS_BY_KEY, STANCE_STATUS_NAMES
 
 PHYSICAL_DEFENSE_DAMAGE_TYPES = {"", "slashing", "piercing", "bludgeoning"}
 BASE_ATTACK_TARGET_NUMBER = 8
+KARMIC_DICE_DEBT_CAP = 0.95
 STANCE_LABELS = {
     "neutral": "Neutral",
     "guard": "Guard",
@@ -70,6 +71,15 @@ class DamageResolution:
     hp_damage: int = 0
     glance: bool = False
     wound: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SavingThrowOutcome:
+    success: bool
+    margin: int
+    total: int | None = None
+    dc: int = 0
+    automatic: bool = False
 
 
 class CombatResolutionMixin:
@@ -379,6 +389,9 @@ class CombatResolutionMixin:
         if int(getattr(target, "conditions", {}).get("armor_broken", 0)) > 0:
             total += 10
         total += self.status_value(target, "armor_break_percent")
+        chipped_stacks = max(0, min(2, int(getattr(target, "conditions", {}).get("chipped_armor", 0) or 0)))
+        if chipped_stacks > 1:
+            total += (chipped_stacks - 1) * 5
         if source_actor is not None:
             for bonuses in (source_actor.equipment_bonuses, source_actor.gear_bonuses, source_actor.relationship_bonuses):
                 total += int(bonuses.get("armor_break_percent", 0))
@@ -920,7 +933,16 @@ class CombatResolutionMixin:
             total = d20.kept + total_modifier
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and total < target_number):
-                self.say(f"{channel} snaps past {self.style_name(target)} without finding a mark.")
+                if not self.handle_empty_hostile_attack(
+                    actor,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source=channel,
+                    physical=False,
+                    allow_pressure=d20.kept != 1,
+                ):
+                    self.say(f"{channel} snaps past {self.style_name(target)} without finding a mark.")
                 return True
             damage_bonus = max(0, actor.ability_mod("INT")) + self.spell_damage_bonus(actor)
             damage_roll = self.roll_with_display_bonus(
@@ -940,6 +962,7 @@ class CombatResolutionMixin:
             if actual > 0 and target.is_conscious():
                 self.add_arcanist_pattern_charge(actor, target, source=channel)
             self.maybe_gain_mage_focus_from_channel(actor, target, source=channel)
+            self.record_karmic_hostile_action_result(actor, meaningful=True)
             return True
         finally:
             self.break_invisibility_from_hostile_action(actor)
@@ -1753,18 +1776,328 @@ class CombatResolutionMixin:
         return max(warded, key=lambda candidate: (int(candidate.resources.get("ward", 0)), candidate.current_hp))
 
     def attack_focus_modifier(self, attacker, target) -> int:
+        modifier = 0
         if self.has_status(attacker, "fixated"):
             fixated_id, fixated_by = self.fixated_source(attacker)
             if fixated_id is not None:
-                return 0 if id(target) == fixated_id else -2
+                return modifier if id(target) == fixated_id else modifier - 2
             if fixated_by and getattr(target, "name", None) != fixated_by:
-                return -2
-            return 0
+                return modifier - 2
+            return modifier
         if "enemy" in getattr(attacker, "tags", []):
             draw_target = self.ward_draw_priority_target(getattr(self, "_active_combat_heroes", []) or [])
             if draw_target is not None and target is not draw_target:
-                return -1
+                return modifier - 1
+        return modifier
+
+    def enemy_uses_ordinary_variance_profile(self, actor) -> bool:
+        tags = set(getattr(actor, "tags", []))
+        if "enemy" not in tags or "leader" in tags:
+            return False
+        return int(getattr(actor, "level", 1) or 1) <= 4
+
+    def karmic_dice_variance_protection_enabled(self) -> bool:
+        enabled = getattr(self, "current_karmic_dice_enabled", None)
+        return bool(enabled() if callable(enabled) else getattr(self, "karmic_dice_enabled", True))
+
+    def karmic_dice_bucket_for(self, actor, *, outcome_kind: str | None = None, style: str | None = None) -> str | None:
+        if outcome_kind == "initiative" or style == "initiative":
+            return None
+        if outcome_kind == "check" and not getattr(self, "_in_combat", False):
+            return "dialogue"
+        if self.is_party_member_actor(actor):
+            return "party"
+        if "enemy" in getattr(actor, "tags", []):
+            return "enemy"
+        return "ally"
+
+    def karmic_dice_bucket_state(self, bucket: str) -> dict[str, float]:
+        debts = getattr(self, "_karmic_dice_debts", None)
+        if not isinstance(debts, dict):
+            debts = {}
+            self._karmic_dice_debts = debts
+        state = debts.get(bucket)
+        if not isinstance(state, dict):
+            state = {"failure": 0.0, "success": 0.0}
+            debts[bucket] = state
+        state["failure"] = max(0.0, min(KARMIC_DICE_DEBT_CAP, float(state.get("failure", 0.0))))
+        state["success"] = max(0.0, min(KARMIC_DICE_DEBT_CAP, float(state.get("success", 0.0))))
+        return state
+
+    def karmic_base_d20_distribution(self, actor) -> dict[int, float]:
+        if "lucky" not in getattr(actor, "features", []):
+            return {value: 1 / 20 for value in range(1, 21)}
+        return {1: 1 / 400, **{value: 21 / 400 for value in range(2, 21)}}
+
+    def karmic_kept_d20_distribution(self, actor, advantage_state: int) -> dict[int, float]:
+        base = self.karmic_base_d20_distribution(actor)
+        if advantage_state == 0:
+            return base
+        distribution: dict[int, float] = {}
+        for first, first_probability in base.items():
+            for second, second_probability in base.items():
+                kept = max(first, second) if advantage_state > 0 else min(first, second)
+                distribution[kept] = distribution.get(kept, 0.0) + first_probability * second_probability
+        return distribution
+
+    def karmic_success_values(
+        self,
+        actor,
+        *,
+        target_number: int,
+        modifier: int,
+        outcome_kind: str | None = None,
+        style: str | None = None,
+    ) -> tuple[int, ...]:
+        attack_roll = outcome_kind == "attack" or style == "attack"
+        critical_threshold = self.critical_threshold(actor) if attack_roll else 21
+        success_values: list[int] = []
+        for value in range(1, 21):
+            success = value + modifier >= target_number
+            if attack_roll:
+                if value == 1:
+                    success = False
+                elif value >= critical_threshold:
+                    success = True
+            if success:
+                success_values.append(value)
+        return tuple(success_values)
+
+    def karmic_d20_success_profile(
+        self,
+        actor,
+        advantage_state: int,
+        *,
+        target_number: int,
+        modifier: int,
+        outcome_kind: str | None = None,
+        style: str | None = None,
+    ) -> tuple[float, tuple[int, ...], tuple[int, ...]]:
+        success_values = self.karmic_success_values(
+            actor,
+            target_number=target_number,
+            modifier=modifier,
+            outcome_kind=outcome_kind,
+            style=style,
+        )
+        success_set = set(success_values)
+        failure_values = tuple(value for value in range(1, 21) if value not in success_set)
+        distribution = self.karmic_kept_d20_distribution(actor, advantage_state)
+        success_probability = sum(distribution.get(value, 0.0) for value in success_values)
+        return max(0.0, min(1.0, success_probability)), success_values, failure_values
+
+    def karmic_force_chance(self, debt: float, desired_probability: float) -> float:
+        if debt <= 0.0 or desired_probability <= 0.0:
+            return 0.0
+        if debt >= 1.0:
+            return 1.0
+        return max(0.0, min(1.0, desired_probability / max(0.0001, 1.0 - debt)))
+
+    def karmic_forced_rolls(self, kept: int, advantage_state: int) -> list[int]:
+        return [kept, kept] if advantage_state != 0 else [kept]
+
+    def record_karmic_d20_result(
+        self,
+        bucket: str,
+        *,
+        success: bool,
+        success_probability: float,
+        forced: str | None = None,
+    ) -> None:
+        state = self.karmic_dice_bucket_state(bucket)
+        success_probability = max(0.0, min(1.0, success_probability))
+        failure_probability = 1.0 - success_probability
+        if success:
+            drain = 2 * failure_probability if forced == "success" else success_probability
+            state["failure"] = max(0.0, float(state.get("failure", 0.0)) - drain)
+            if failure_probability > 0.0:
+                state["success"] = min(KARMIC_DICE_DEBT_CAP, float(state.get("success", 0.0)) + failure_probability)
+            return
+        drain = 2 * success_probability if forced == "failure" else failure_probability
+        state["success"] = max(0.0, float(state.get("success", 0.0)) - drain)
+        if success_probability > 0.0:
+            state["failure"] = min(KARMIC_DICE_DEBT_CAP, float(state.get("failure", 0.0)) + success_probability)
+
+    def animate_karmic_d20_outcome(
+        self,
+        outcome: D20Outcome,
+        *,
+        advantage_state: int,
+        target_number: int | None,
+        target_label: str | None,
+        modifier: int,
+        context_label: str | None,
+        style: str | None,
+        outcome_kind: str | None,
+    ) -> None:
+        animator = getattr(self.rng, "dice_roll_animator", None)
+        if not callable(animator):
+            return
+        animator(
+            kind="d20",
+            expression="d20",
+            sides=20,
+            rolls=list(outcome.rolls),
+            modifier=modifier,
+            critical=False,
+            advantage_state=advantage_state,
+            rerolls=[],
+            kept=outcome.kept,
+            target_number=target_number,
+            target_label=target_label,
+            context_label=context_label,
+            style=style,
+            outcome_kind=outcome_kind,
+        )
+
+    def karmic_forced_d20_outcome(
+        self,
+        actor,
+        advantage_state: int,
+        *,
+        target_number: int | None,
+        target_label: str | None,
+        modifier: int,
+        context_label: str | None,
+        style: str | None,
+        outcome_kind: str | None,
+    ) -> D20Outcome | None:
+        if target_number is None or not self.karmic_dice_variance_protection_enabled():
+            return None
+        bucket = self.karmic_dice_bucket_for(actor, outcome_kind=outcome_kind, style=style)
+        if bucket is None:
+            return None
+        success_probability, success_values, failure_values = self.karmic_d20_success_profile(
+            actor,
+            advantage_state,
+            target_number=target_number,
+            modifier=modifier,
+            outcome_kind=outcome_kind,
+            style=style,
+        )
+        failure_probability = 1.0 - success_probability
+        state = self.karmic_dice_bucket_state(bucket)
+        failure_debt = float(state.get("failure", 0.0))
+        success_debt = float(state.get("success", 0.0))
+        if success_values:
+            force_success_chance = self.karmic_force_chance(failure_debt, success_probability)
+            if force_success_chance > 0.0 and self.rng.random() < force_success_chance:
+                kept = self.rng.choice(success_values)
+                outcome = D20Outcome(
+                    kept=kept,
+                    rolls=self.karmic_forced_rolls(kept, advantage_state),
+                    rerolls=[],
+                    advantage_state=advantage_state,
+                )
+                self.record_karmic_d20_result(
+                    bucket,
+                    success=True,
+                    success_probability=success_probability,
+                    forced="success",
+                )
+                self.animate_karmic_d20_outcome(
+                    outcome,
+                    advantage_state=advantage_state,
+                    target_number=target_number,
+                    target_label=target_label,
+                    modifier=modifier,
+                    context_label=context_label,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                )
+                return outcome
+        if failure_values:
+            force_failure_chance = self.karmic_force_chance(success_debt, failure_probability)
+            if force_failure_chance > 0.0 and self.rng.random() < force_failure_chance:
+                kept = self.rng.choice(failure_values)
+                outcome = D20Outcome(
+                    kept=kept,
+                    rolls=self.karmic_forced_rolls(kept, advantage_state),
+                    rerolls=[],
+                    advantage_state=advantage_state,
+                )
+                self.record_karmic_d20_result(
+                    bucket,
+                    success=False,
+                    success_probability=success_probability,
+                    forced="failure",
+                )
+                self.animate_karmic_d20_outcome(
+                    outcome,
+                    advantage_state=advantage_state,
+                    target_number=target_number,
+                    target_label=target_label,
+                    modifier=modifier,
+                    context_label=context_label,
+                    style=style,
+                    outcome_kind=outcome_kind,
+                )
+                return outcome
+        return None
+
+    def record_karmic_d20_outcome(
+        self,
+        actor,
+        outcome: D20Outcome,
+        advantage_state: int,
+        *,
+        target_number: int | None,
+        modifier: int,
+        outcome_kind: str | None = None,
+        style: str | None = None,
+    ) -> None:
+        if target_number is None or not self.karmic_dice_variance_protection_enabled():
+            return
+        bucket = self.karmic_dice_bucket_for(actor, outcome_kind=outcome_kind, style=style)
+        if bucket is None:
+            return
+        success_probability, success_values, _ = self.karmic_d20_success_profile(
+            actor,
+            advantage_state,
+            target_number=target_number,
+            modifier=modifier,
+            outcome_kind=outcome_kind,
+            style=style,
+        )
+        self.record_karmic_d20_result(
+            bucket,
+            success=outcome.kept in set(success_values),
+            success_probability=success_probability,
+        )
+
+    def karmic_accuracy_bonus(self, actor) -> int:
         return 0
+
+    def record_karmic_hostile_action_result(self, actor, *, meaningful: bool) -> None:
+        return
+
+    def grant_karmic_resource_progress(self, actor) -> None:
+        return
+
+    def attack_near_miss_margin(self, total: int, target_number: int) -> int:
+        return target_number - total
+
+    def can_apply_pressure_result(self, actor, target, *, total: int, target_number: int) -> bool:
+        return False
+
+    def apply_chipped_armor_pressure(self, target, *, source: str = "") -> bool:
+        return False
+
+    def apply_pressure_result(self, actor, target, *, source: str, physical: bool = True) -> bool:
+        return False
+
+    def handle_empty_hostile_attack(
+        self,
+        actor,
+        target,
+        *,
+        total: int,
+        target_number: int,
+        source: str,
+        physical: bool = True,
+        allow_pressure: bool = True,
+    ) -> bool:
+        return False
 
     def use_iron_draw(self, actor, target) -> None:
         duration = 2 if self.current_combat_stance_key(actor) in {"guard", "brace"} else 1
@@ -1989,6 +2322,15 @@ class CombatResolutionMixin:
         total = d20.kept + total_modifier
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+            if self.handle_empty_hostile_attack(
+                actor,
+                target,
+                total=total,
+                target_number=target_number,
+                source=label,
+                allow_pressure=d20.kept != 1,
+            ):
+                return True
             self.say(f"{self.style_name(actor)} tries {label} on {self.style_name(target)}, but the angle fails.")
             return False
         self.maybe_gain_grit_from_strong_hit(actor, total - target_number)
@@ -2152,6 +2494,15 @@ class CombatResolutionMixin:
         if apply_reckless_opening:
             self.apply_status(actor, "reckless_opening", 2, source=label)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+            if self.handle_empty_hostile_attack(
+                actor,
+                target,
+                total=total,
+                target_number=target_number,
+                source=label,
+                allow_pressure=d20.kept != 1,
+            ):
+                return True
             self.say(f"{self.style_name(actor)} throws {label} at {self.style_name(target)}, but the strike goes wide.")
             return False
         self.maybe_gain_grit_from_strong_hit(actor, total - target_number)
@@ -2354,6 +2705,15 @@ class CombatResolutionMixin:
         total = d20.kept + total_modifier
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+            if self.handle_empty_hostile_attack(
+                actor,
+                target,
+                total=total,
+                target_number=target_number,
+                source=label,
+                allow_pressure=d20.kept != 1,
+            ):
+                return True
             self.say(f"{self.style_name(actor)} reaches for {label}, but the wound line closes.")
             return False
         self.maybe_gain_grit_from_strong_hit(actor, total - target_number)
@@ -2656,6 +3016,15 @@ class CombatResolutionMixin:
             total = d20.kept + total_modifier
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+                if self.handle_empty_hostile_attack(
+                    actor,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source=label,
+                    allow_pressure=d20.kept != 1,
+                ):
+                    return True
                 self.say(f"{self.style_name(actor)} reaches for {label}, but {self.style_name(target)} denies the angle.")
                 return False
             damage_bonus = actor.damage_bonus() + self.status_damage_modifier(actor)
@@ -2928,6 +3297,15 @@ class CombatResolutionMixin:
             total = d20.kept + total_modifier
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+                if self.handle_empty_hostile_attack(
+                    actor,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source=label,
+                    allow_pressure=d20.kept != 1,
+                ):
+                    return True
                 self.say(f"{self.style_name(actor)} sends {label} wide of the useful vein.")
                 return False
             damage_bonus = actor.damage_bonus() + self.status_damage_modifier(actor)
@@ -3465,6 +3843,7 @@ class CombatResolutionMixin:
         heroes: list | None = None,
         enemies: list | None = None,
     ) -> None:
+        self.record_karmic_hostile_action_result(attacker, meaningful=True)
         if self.actor_uses_class_resource(attacker, "edge") and self.rogue_target_is_exposed(attacker, target, heroes):
             self.grant_class_resource(attacker, "edge", source="an exposed hit")
         self.record_weapon_master_hit(attacker, target)
@@ -3535,8 +3914,19 @@ class CombatResolutionMixin:
                 self.grant_juggernaut_momentum(target, source="armor taking the force")
             if source_actor is not None and self.target_is_fixated_by(target, source_actor):
                 self.grant_juggernaut_momentum(target, source="a Fixated enemy pressing in")
+        if source_actor is not None and self.damage_resolution_creates_glance_pressure(result, damage_type=damage_type):
+            self.apply_chipped_armor_pressure(target, source=f"{source_actor.name}'s Glance pressure")
         if source_actor is not None and result.wound:
             self.trigger_on_wound_hooks(source_actor, target, result)
+
+    def damage_resolution_creates_glance_pressure(self, result: DamageResolution, *, damage_type: str) -> bool:
+        if not self.damage_type_uses_defense(damage_type):
+            return False
+        if result.raw_damage <= 0 or result.resisted_damage <= 0 or result.hp_damage > 0:
+            return False
+        if result.glance:
+            return True
+        return result.mitigated_damage > 0 and (result.ward_absorbed > 0 or result.temp_hp_absorbed > 0)
 
     def trigger_post_hp_damage_hooks(self, target, source_actor, *, previous_hp: int, damage_type: str) -> None:
         if not self.actor_uses_class_resource(target, "fury") or target.max_hp <= 0:
@@ -3608,6 +3998,15 @@ class CombatResolutionMixin:
         total = d20.kept + total_modifier
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
+            if self.handle_empty_hostile_attack(
+                actor,
+                target,
+                total=total,
+                target_number=target_number,
+                source="Pin",
+                allow_pressure=d20.kept != 1,
+            ):
+                return True
             self.say(f"{self.style_name(actor)} tries to pin {self.style_name(target)}, but the angle slips.")
             return False
         self.maybe_gain_grit_from_strong_hit(actor, total - target_number)
@@ -3681,6 +4080,14 @@ class CombatResolutionMixin:
             )
             total = d20.kept + total_modifier
             if d20.kept == 1:
+                self.handle_empty_hostile_attack(
+                    attacker,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source=attacker.weapon.name,
+                    allow_pressure=False,
+                )
                 self.say(f"{self.style_name(attacker)} misses {self.style_name(target)} outright.")
                 return
             critical_hit = d20.kept >= self.critical_threshold(attacker)
@@ -3688,6 +4095,14 @@ class CombatResolutionMixin:
                 critical_hit = False
                 self.say(f"{self.style_name(target)}'s armor turns a critical hit into a normal one.")
             if not critical_hit and total < target_number:
+                if self.handle_empty_hostile_attack(
+                    attacker,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source=attacker.weapon.name,
+                ):
+                    return
                 self.say(f"{self.style_name(attacker)} attacks {self.style_name(target)} but misses {self.attack_target_label(target_number)}.")
                 return
             self.maybe_gain_grit_from_strong_hit(attacker, total - target_number)
@@ -3781,9 +4196,11 @@ class CombatResolutionMixin:
                 self.apply_poison_on_hit(attacker, target)
             if attacker.weapon.ranged or "bow" in attacker.weapon.name.lower():
                 self.trigger_blacklake_adjudicator_reflection(attacker, target, source=attacker.weapon.name)
+                self.record_karmic_hostile_action_result(attacker, meaningful=True)
                 return
             if d20.kept >= 18 and target.is_conscious():
                 self.apply_status(target, "reeling", 1, source=attacker.name)
+            self.record_karmic_hostile_action_result(attacker, meaningful=True)
         finally:
             self.break_invisibility_from_hostile_action(attacker)
 
@@ -3869,6 +4286,7 @@ class CombatResolutionMixin:
             damage_type=weapon_item.damage_type if weapon_item is not None else "",
             source_actor=attacker,
             apply_defense=True,
+            max_hp_damage=self.enemy_critical_hp_damage_cap(attacker, target, critical_hit=critical_hit),
         )
         if actual <= 0 and self.last_damage_was_glance():
             self.say(f"{self.style_name(attacker)} hits {self.style_name(target)}, but the blow glances off their Defense.")
@@ -4123,7 +4541,15 @@ class CombatResolutionMixin:
             total = d20.kept + total_modifier
             critical_hit = d20.kept >= self.critical_threshold(attacker)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
-                self.say(f"{self.style_name(attacker)}'s off-hand attack misses {self.style_name(target)}.")
+                if not self.handle_empty_hostile_attack(
+                    attacker,
+                    target,
+                    total=total,
+                    target_number=target_number,
+                    source="Off-Hand Attack",
+                    allow_pressure=d20.kept != 1,
+                ):
+                    self.say(f"{self.style_name(attacker)}'s off-hand attack misses {self.style_name(target)}.")
                 return
             self.maybe_gain_grit_from_strong_hit(attacker, total - target_number)
             damage_bonus = self.weapon_damage_bonus_for(attacker, weapon, include_ability_mod=False) + self.status_damage_modifier(attacker)
@@ -4147,6 +4573,7 @@ class CombatResolutionMixin:
             )
             self.say(f"{self.style_name(attacker)} strikes with {off_hand_item.name} for {self.style_damage(actual)} damage.")
             self.announce_downed_target(target)
+            self.record_karmic_hostile_action_result(attacker, meaningful=True)
         finally:
             self.break_invisibility_from_hostile_action(attacker)
 
@@ -4299,6 +4726,7 @@ class CombatResolutionMixin:
         apply_defense: bool = False,
         armor_break_percent: int = 0,
         armor_break: int = 0,
+        max_hp_damage: int | None = None,
     ) -> int:
         self._last_damage_resolution = DamageResolution(raw_damage=max(0, amount))
         if target.dead:
@@ -4375,6 +4803,8 @@ class CombatResolutionMixin:
             target.temp_hp -= absorbed
             damage -= absorbed
             temp_hp_absorbed = absorbed
+        if max_hp_damage is not None:
+            damage = min(damage, max(0, int(max_hp_damage)))
         self._last_damage_resolution = DamageResolution(
             raw_damage=raw_damage,
             resisted_damage=resisted_damage,
@@ -4425,6 +4855,25 @@ class CombatResolutionMixin:
             if callable(damage_hook):
                 damage_hook(target, previous_hp=previous_hp, damage=damage, damage_type=damage_type)
         return damage
+
+    def enemy_is_boss_actor(self, actor) -> bool:
+        tags = set(getattr(actor, "tags", []))
+        if "leader" in tags or "boss" in tags:
+            return True
+        return int(getattr(actor, "max_hp", 0) or 0) >= 50 and int(getattr(actor, "level", 1) or 1) >= 4
+
+    def enemy_attack_is_telegraphed(self, actor) -> bool:
+        if bool(getattr(actor, "bond_flags", {}).get("telegraphed_attack")):
+            return True
+        return any(self.has_status(actor, status) for status in ("telegraphed", "winding_up", "charging"))
+
+    def enemy_critical_hp_damage_cap(self, attacker, target, *, critical_hit: bool) -> int | None:
+        if not critical_hit or "enemy" not in getattr(attacker, "tags", []):
+            return None
+        if self.enemy_is_boss_actor(attacker) and self.enemy_attack_is_telegraphed(attacker):
+            return None
+        cap_percent = 35 if self.enemy_uses_ordinary_variance_profile(attacker) else 45
+        return max(1, (max(1, int(getattr(target, "max_hp", 1))) * cap_percent + 99) // 100)
 
     def announce_downed_target(self, target) -> None:
         if target.current_hp == 0 and not target.dead and "enemy" not in target.tags:
@@ -4535,17 +4984,17 @@ class CombatResolutionMixin:
             self.say("")
         return success
 
-    def saving_throw(self, actor, ability: str, dc: int, *, context: str, against_poison: bool = False) -> bool:
+    def saving_throw_result(self, actor, ability: str, dc: int, *, context: str, against_poison: bool = False) -> SavingThrowOutcome:
         resist_label = f"{ability_label(ability, include_code=True)} resist"
         if self.always_fail_dice_checks_enabled() and self.is_party_member_actor(actor):
             self.say(f"{self.style_name(actor)} automatically fails the {resist_label} {context}.")
-            return False
+            return SavingThrowOutcome(False, -999, dc=dc, automatic=True)
         if self.always_pass_dice_checks_enabled() and self.is_party_member_actor(actor):
             self.say(f"{self.style_name(actor)} automatically clears the {resist_label} {context}.")
-            return True
+            return SavingThrowOutcome(True, 999, dc=dc, automatic=True)
         if self.auto_fail_save(actor, ability):
             self.say(f"{self.style_name(actor)} automatically fails the {resist_label} {context}.")
-            return False
+            return SavingThrowOutcome(False, -999, dc=dc, automatic=True)
         advantage = 1 if against_poison and "dwarven_resilience" in actor.features else 0
         if ability == "DEX" and self.actor_is_dodging(actor):
             advantage += 1
@@ -4571,7 +5020,24 @@ class CombatResolutionMixin:
         )
         total = d20.kept + total_modifier
         self.say(f"{self.style_name(actor)} makes a {resist_label} {context}: {total} vs DC {dc}.")
-        return total >= dc
+        return SavingThrowOutcome(total >= dc, total - dc, total=total, dc=dc)
+
+    def saving_throw(self, actor, ability: str, dc: int, *, context: str, against_poison: bool = False) -> bool:
+        return self.saving_throw_result(actor, ability, dc, context=context, against_poison=against_poison).success
+
+    def control_save_degree(
+        self,
+        actor,
+        ability: str,
+        dc: int,
+        *,
+        context: str,
+        against_poison: bool = False,
+    ) -> tuple[str, SavingThrowOutcome]:
+        outcome = self.saving_throw_result(actor, ability, dc, context=context, against_poison=against_poison)
+        if outcome.success:
+            return ("close_success" if outcome.margin <= 4 else "success"), outcome
+        return "fail", outcome
 
     def roll_with_advantage(self, actor, advantage_state: int) -> D20Outcome:
         return roll_d20(self.rng, advantage_state=advantage_state, lucky="lucky" in actor.features)
@@ -4605,7 +5071,29 @@ class CombatResolutionMixin:
             style=style,
             outcome_kind=outcome_kind,
         ):
-            return self.roll_with_advantage(actor, advantage_state)
+            forced = self.karmic_forced_d20_outcome(
+                actor,
+                advantage_state,
+                target_number=target_number,
+                target_label=target_label,
+                modifier=modifier,
+                context_label=context_label,
+                style=style,
+                outcome_kind=outcome_kind,
+            )
+            if forced is not None:
+                return forced
+            outcome = self.roll_with_advantage(actor, advantage_state)
+        self.record_karmic_d20_outcome(
+            actor,
+            outcome,
+            advantage_state,
+            target_number=target_number,
+            modifier=modifier,
+            outcome_kind=outcome_kind,
+            style=style,
+        )
+        return outcome
 
     def roll_initiative(self, heroes, enemies, *, hero_bonus: int = 0, enemy_bonus: int = 0) -> list:
         entries: list[dict[str, object]] = []

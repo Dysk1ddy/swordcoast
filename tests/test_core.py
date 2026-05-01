@@ -259,10 +259,31 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(payloads[-1]["modifier"], 0)
         self.assertEqual(payloads[-1]["display_modifier"], 3)
 
-    def test_game_disables_dice_animation_for_custom_io_by_default(self) -> None:
+    def test_game_keeps_roll_table_hook_for_custom_io_by_default(self) -> None:
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9002))
         self.assertFalse(game.animate_dice)
-        self.assertFalse(hasattr(game.rng, "dice_roll_animator"))
+        self.assertTrue(callable(getattr(game.rng, "dice_roll_animator", None)))
+
+    def test_roll_and_initiative_tables_render_when_live_animation_is_off(self) -> None:
+        player = build_character(
+            name="Velkor",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        enemy = create_enemy("goblin_skirmisher")
+        log: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(90021), animate_dice=False)
+
+        game.roll_with_animation_context("1d4", context_label="Test roll", style="utility")
+        game.roll_initiative([player], [enemy])
+
+        rendered = self.plain_output(log)
+        self.assertIn("Test roll", rendered)
+        self.assertIn("Total:", rendered)
+        self.assertIn("Initiative Order", rendered)
 
     def test_game_can_enable_dice_animation_explicitly(self) -> None:
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(9003), animate_dice=True)
@@ -419,7 +440,10 @@ class CoreTests(unittest.TestCase):
     def test_kivy_dice_animation_gate_skips_combat_except_initiative(self) -> None:
         self.assertTrue(kivy_dice_animation_allowed(in_combat=False, style="skill"))
         self.assertFalse(kivy_dice_animation_allowed(in_combat=True, style="attack"))
+        self.assertFalse(kivy_dice_animation_allowed(in_combat=True, style="damage"))
         self.assertFalse(kivy_dice_animation_allowed(in_combat=True, outcome_kind="save"))
+        self.assertTrue(kivy_dice_animation_allowed(in_combat=True, style="skill"))
+        self.assertTrue(kivy_dice_animation_allowed(in_combat=True, outcome_kind="check"))
         self.assertTrue(kivy_dice_animation_allowed(in_combat=True, style="initiative"))
         self.assertTrue(kivy_dice_animation_allowed(in_combat=True, outcome_kind="initiative"))
 
@@ -492,7 +516,7 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(game.combat_dashboard_rendering_supported())
             self.assertFalse(game.rich_dice_panel_enabled())
             self.assertFalse(game.animate_dice)
-            self.assertFalse(hasattr(game.rng, "dice_roll_animator"))
+            self.assertTrue(callable(getattr(game.rng, "dice_roll_animator", None)))
             self.assertFalse(game.pace_output)
             self.assertFalse(game.type_dialogue)
             self.assertFalse(game.staggered_reveals_enabled)
@@ -16009,14 +16033,15 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("Settings", rendered)
         self.assertIn("Toggle sound effects", rendered)
-        self.assertIn("Dice animation style", rendered)
+        self.assertNotIn("Dice animation style", rendered)
         self.assertIn("Difficulty", rendered)
         self.assertIn("Toggle typed dialogue and narration", rendered)
         self.assertIn("Toggle pacing pauses", rendered)
         self.assertIn("Toggle staggered option reveals", rendered)
+        self.assertIn("Toggle Karmic Dice", rendered)
 
     def test_settings_menu_can_disable_presentation_toggles(self) -> None:
-        answers = iter(["3", "1", "5", "6", "7", "8"])
+        answers = iter(["4", "5", "6", "8"])
         game = TextDnDGame(
             input_fn=lambda _: next(answers),
             output_fn=print,
@@ -16031,11 +16056,11 @@ class CoreTests(unittest.TestCase):
         game.persist_settings = lambda: None
         with patch("sys.stdout", io.StringIO()):
             game.open_settings_menu()
-        self.assertFalse(game.animate_dice)
+        self.assertTrue(game.animate_dice)
         self.assertFalse(game.pace_output)
         self.assertFalse(game.type_dialogue)
         self.assertFalse(game.staggered_reveals_enabled)
-        self.assertFalse(hasattr(game.rng, "dice_roll_animator"))
+        self.assertTrue(callable(getattr(game.rng, "dice_roll_animator", None)))
         self.assertFalse(game.current_settings_payload()["animations_and_delays_enabled"])
 
     def test_settings_persist_across_game_restarts(self) -> None:
@@ -16067,13 +16092,12 @@ class CoreTests(unittest.TestCase):
             {
                 "sound_effects_enabled": False,
                 "music_enabled": True,
-                "dice_animations_enabled": False,
-                "dice_animation_mode": "off",
                 "difficulty_mode": "standard",
                 "typed_dialogue_enabled": False,
                 "pacing_pauses_enabled": False,
                 "staggered_reveals_enabled": False,
                 "animations_and_delays_enabled": False,
+                "karmic_dice_enabled": True,
             },
         )
 
@@ -16084,18 +16108,49 @@ class CoreTests(unittest.TestCase):
             rng=random.Random(405),
         )
         self.assertFalse(second_game.animate_dice)
+        self.assertTrue(callable(getattr(second_game.rng, "dice_roll_animator", None)))
         self.assertFalse(second_game.pace_output)
         self.assertFalse(second_game.type_dialogue)
         self.assertFalse(second_game.staggered_reveals_enabled)
         self.assertFalse(second_game.current_settings_payload()["sound_effects_enabled"])
         self.assertTrue(second_game.current_settings_payload()["music_enabled"])
-        self.assertFalse(second_game.current_settings_payload()["dice_animations_enabled"])
-        self.assertEqual(second_game.current_settings_payload()["dice_animation_mode"], "off")
+        self.assertNotIn("dice_animations_enabled", second_game.current_settings_payload())
+        self.assertNotIn("dice_animation_mode", second_game.current_settings_payload())
         self.assertEqual(second_game.current_settings_payload()["difficulty_mode"], "standard")
         self.assertFalse(second_game.current_settings_payload()["typed_dialogue_enabled"])
         self.assertFalse(second_game.current_settings_payload()["pacing_pauses_enabled"])
         self.assertFalse(second_game.current_settings_payload()["staggered_reveals_enabled"])
         self.assertFalse(second_game.current_settings_payload()["animations_and_delays_enabled"])
+        self.assertTrue(second_game.current_settings_payload()["karmic_dice_enabled"])
+
+        settings_path.unlink(missing_ok=True)
+        save_dir.rmdir()
+
+    def test_karmic_dice_setting_persists_across_restarts(self) -> None:
+        save_dir = Path.cwd() / "tests_output" / "karmic_settings_persistence"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        settings_path = save_dir / "settings.json"
+        settings_path.unlink(missing_ok=True)
+
+        first_game = TextDnDGame(
+            input_fn=lambda _: "1",
+            output_fn=lambda _: None,
+            save_dir=save_dir,
+            rng=random.Random(408),
+        )
+        first_game.set_karmic_dice_enabled(False)
+
+        stored_settings = json.loads(settings_path.read_text(encoding="utf-8"))
+        self.assertFalse(stored_settings["karmic_dice_enabled"])
+
+        second_game = TextDnDGame(
+            input_fn=lambda _: "1",
+            output_fn=lambda _: None,
+            save_dir=save_dir,
+            rng=random.Random(409),
+        )
+        self.assertFalse(second_game.current_karmic_dice_enabled())
+        self.assertFalse(second_game.current_settings_payload()["karmic_dice_enabled"])
 
         settings_path.unlink(missing_ok=True)
         save_dir.rmdir()
@@ -16115,13 +16170,14 @@ class CoreTests(unittest.TestCase):
 
         self.assertFalse(game.current_settings_payload()["sound_effects_enabled"])
         self.assertTrue(game.current_settings_payload()["music_enabled"])
-        self.assertTrue(game.current_settings_payload()["dice_animations_enabled"])
-        self.assertEqual(game.current_settings_payload()["dice_animation_mode"], "full")
+        self.assertNotIn("dice_animations_enabled", game.current_settings_payload())
+        self.assertNotIn("dice_animation_mode", game.current_settings_payload())
         self.assertEqual(game.current_settings_payload()["difficulty_mode"], "standard")
         self.assertTrue(game.current_settings_payload()["typed_dialogue_enabled"])
         self.assertTrue(game.current_settings_payload()["pacing_pauses_enabled"])
         self.assertTrue(game.current_settings_payload()["staggered_reveals_enabled"])
         self.assertTrue(game.current_settings_payload()["animations_and_delays_enabled"])
+        self.assertTrue(game.current_settings_payload()["karmic_dice_enabled"])
         self.assertEqual(gameplay_base.GameBase.default_settings_payload(), game.current_settings_payload())
 
         settings_path.unlink(missing_ok=True)
@@ -16534,7 +16590,7 @@ class CoreTests(unittest.TestCase):
         game.enemy_turn(enemy, [player, companion], [enemy], SimpleNamespace(), set())
         self.assertEqual(targeted, [player.name])
 
-    def test_default_enemy_targeting_uses_random_living_hero_instead_of_lowest_hp(self) -> None:
+    def test_default_enemy_targeting_uses_weighted_living_hero_instead_of_lowest_hp(self) -> None:
         player = build_character(
             name="Velkor",
             race="Human",
@@ -16550,12 +16606,6 @@ class CoreTests(unittest.TestCase):
         targeted: list[str] = []
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(4303))
         game.state = GameState(player=player, companions=[companion], current_scene="road_ambush")
-
-        class SecondChoiceRng:
-            def choice(self, values):
-                return values[1]
-
-        game.rng = SecondChoiceRng()  # type: ignore[assignment]
         game.perform_enemy_attack = (
             lambda attacker, target, heroes, enemies, dodging: targeted.append(target.name) or False
         )
@@ -16563,6 +16613,38 @@ class CoreTests(unittest.TestCase):
         game.enemy_turn(enemy, [player, companion], [enemy], SimpleNamespace(), set())
 
         self.assertEqual(targeted, [companion.name])
+
+    def test_ordinary_enemy_targeting_spreads_same_round_focus(self) -> None:
+        first = build_character(
+            name="Ari",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        second = build_character(
+            name="Bryn",
+            race="Human",
+            class_name="Warrior",
+            background="Soldier",
+            base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+            class_skill_choices=["Athletics", "Survival"],
+        )
+        enemies = [create_enemy("bandit"), create_enemy("bandit")]
+        targeted: list[str] = []
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None, rng=random.Random(4305))
+        game.state = GameState(player=first, companions=[second], current_scene="road_ambush")
+        game._active_round_number = 1
+        game.perform_enemy_attack = (
+            lambda attacker, target, heroes, enemies, dodging: targeted.append(target.name) or False
+        )
+
+        for enemy in enemies:
+            game.enemy_turn(enemy, [first, second], enemies, SimpleNamespace(), set())
+
+        self.assertEqual(len(targeted), 2)
+        self.assertEqual(set(targeted), {first.name, second.name})
 
     def test_official_conditions_are_all_defined(self) -> None:
         official_conditions = {

@@ -84,6 +84,15 @@ LOW_LEVEL_ENEMY_COMBAT_PROFILES: dict[str, dict[str, int]] = {
     "cinderflame_skull": {"avoidance": 3, "defense_percent": 15},
     "obelisk_eye": {"avoidance": 3, "defense_percent": 20},
 }
+SMOOTH_ORDINARY_ENEMY_DAMAGE_EXPRESSIONS = {
+    "1d6": "1d4+1",
+    "1d6+1": "1d4+2",
+    "1d6+2": "1d4+3",
+    "1d8": "1d4+2",
+    "1d8+1": "1d4+3",
+    "1d8+2": "1d4+4",
+    "2d6": "2d4+2",
+}
 
 
 def apply_racial_bonuses(race: str, ability_scores: dict[str, int]) -> dict[str, int]:
@@ -291,6 +300,21 @@ def apply_enemy_combat_profile(enemy: Character, template: str) -> None:
         "template": template,
         "avoidance": target_avoidance,
         "defense_percent": target_defense,
+    }
+
+
+def apply_enemy_damage_variance_profile(enemy: Character) -> None:
+    tags = set(getattr(enemy, "tags", []))
+    if "enemy" not in tags or "leader" in tags or int(getattr(enemy, "level", 1)) > 2:
+        return
+    original_damage = enemy.weapon.damage
+    smoothed_damage = SMOOTH_ORDINARY_ENEMY_DAMAGE_EXPRESSIONS.get(original_damage)
+    if smoothed_damage is None:
+        return
+    enemy.weapon.damage = smoothed_damage
+    enemy.bond_flags["smoothed_damage_expression"] = {
+        "original": original_damage,
+        "smoothed": smoothed_damage,
     }
 
 
@@ -1931,6 +1955,7 @@ def create_enemy(template: str, *, name: str | None = None) -> Character:
     template_character = templates[template]
     enemy = Character.from_dict(template_character.to_dict())
     apply_enemy_combat_profile(enemy, template)
+    apply_enemy_damage_variance_profile(enemy)
     apply_enemy_level_one_hp_bonus(enemy)
     if name is not None:
         enemy.name = name

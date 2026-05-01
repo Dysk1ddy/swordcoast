@@ -264,6 +264,8 @@ def kivy_dice_animation_allowed(
 ) -> bool:
     if style == "initiative" or outcome_kind == "initiative":
         return True
+    if style == "skill" or outcome_kind == "check":
+        return True
     return not in_combat
 
 

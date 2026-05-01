@@ -33,6 +33,31 @@ def build_game_with_player(class_name: str, scores: dict[str, int]) -> tuple[Tex
     return game, player
 
 
+class ScriptedRandom(random.Random):
+    def __init__(self, *, randint_values: list[int] | None = None, random_values: list[float] | None = None) -> None:
+        super().__init__(0)
+        self.randint_values = list(randint_values or [])
+        self.random_values = list(random_values or [])
+
+    def randint(self, a: int, b: int) -> int:
+        if not self.randint_values:
+            return super().randint(a, b)
+        value = self.randint_values.pop(0)
+        if not a <= value <= b:
+            raise AssertionError(f"Scripted randint value {value} outside {a}..{b}")
+        return value
+
+    def random(self) -> float:
+        if not self.random_values:
+            return super().random()
+        return self.random_values.pop(0)
+
+    def choice(self, sequence):  # type: ignore[override]
+        if not sequence:
+            raise IndexError("Cannot choose from an empty sequence")
+        return sequence[0]
+
+
 class CombatResolverTests(unittest.TestCase):
     def test_story_mode_recovers_quarter_max_hp_after_battle(self) -> None:
         game, Warrior = build_game_with_player(
@@ -142,6 +167,137 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(game.effective_attack_target_number(Warrior), 8)
         self.assertEqual(rogue_game.effective_avoidance(rogue), 3)
         self.assertEqual(rogue_game.effective_attack_target_number(rogue), 11)
+
+    def test_karmic_failure_debt_can_force_next_success(self) -> None:
+        rng = ScriptedRandom(randint_values=[2], random_values=[0.0])
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        game.rng = rng
+        game.karmic_dice_enabled = True
+
+        first = game.roll_check_d20(
+            Warrior,
+            0,
+            target_number=12,
+            target_label="DC 12",
+            modifier=0,
+            style="skill",
+            outcome_kind="check",
+        )
+        second = game.roll_check_d20(
+            Warrior,
+            0,
+            target_number=12,
+            target_label="DC 12",
+            modifier=0,
+            style="skill",
+            outcome_kind="check",
+        )
+
+        self.assertEqual(first.kept, 2)
+        self.assertGreaterEqual(second.kept, 12)
+        self.assertEqual(game.karmic_dice_bucket_state("dialogue")["failure"], 0)
+        self.assertGreater(game.karmic_dice_bucket_state("dialogue")["success"], 0)
+
+    def test_karmic_success_debt_can_force_next_failure(self) -> None:
+        rng = ScriptedRandom(randint_values=[18], random_values=[0.0])
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        game.rng = rng
+        game.karmic_dice_enabled = True
+
+        first = game.roll_check_d20(
+            Warrior,
+            0,
+            target_number=12,
+            target_label="DC 12",
+            modifier=0,
+            style="skill",
+            outcome_kind="check",
+        )
+        second = game.roll_check_d20(
+            Warrior,
+            0,
+            target_number=12,
+            target_label="DC 12",
+            modifier=0,
+            style="skill",
+            outcome_kind="check",
+        )
+
+        self.assertEqual(first.kept, 18)
+        self.assertLess(second.kept, 12)
+        self.assertEqual(game.karmic_dice_bucket_state("dialogue")["success"], 0)
+        self.assertGreater(game.karmic_dice_bucket_state("dialogue")["failure"], 0)
+
+    def test_karmic_disabled_uses_plain_rolls(self) -> None:
+        rng = ScriptedRandom(randint_values=[2, 2], random_values=[0.0])
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        game.rng = rng
+        game.karmic_dice_enabled = False
+
+        first = game.roll_check_d20(Warrior, 0, target_number=12, modifier=0, style="skill", outcome_kind="check")
+        second = game.roll_check_d20(Warrior, 0, target_number=12, modifier=0, style="skill", outcome_kind="check")
+
+        self.assertEqual(first.kept, 2)
+        self.assertEqual(second.kept, 2)
+        self.assertFalse(hasattr(game, "_karmic_dice_debts"))
+
+    def test_karmic_near_miss_no_longer_creates_pressure_result(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        target = create_enemy("bandit")
+        game._in_combat = True
+        game.karmic_dice_enabled = True
+        game.prepare_class_resources_for_combat(Warrior)
+        starting_hp = target.current_hp
+        starting_grit = int(Warrior.resources.get("grit", 0))
+        target_number = game.effective_attack_target_number(target)
+        total_modifier = (
+            Warrior.attack_bonus()
+            + game.ally_pressure_bonus(Warrior, [Warrior], ranged=Warrior.weapon.ranged)
+            + game.status_accuracy_modifier(Warrior)
+            + game.attack_focus_modifier(Warrior, target)
+            + game.weapon_master_style_accuracy_modifier(Warrior, target)
+            + game.assassin_accuracy_modifier(Warrior, target, [Warrior])
+            + game.target_accuracy_modifier(target)
+        )
+        near_miss_roll = target_number - total_modifier - 1
+        self.assertGreater(near_miss_roll, 1)
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=near_miss_roll, rolls=[near_miss_roll], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertEqual(target.current_hp, starting_hp)
+        self.assertFalse(game.has_status(target, "exposed"))
+        self.assertFalse(game.has_status(target, "chipped_armor"))
+        self.assertEqual(int(Warrior.resources.get("grit", 0)), starting_grit)
+        self.assertNotIn("karmic_empty_hostile_actions", Warrior.bond_flags)
+
+    def test_karmic_close_control_failure_uses_final_roll_result(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        archer = create_enemy("bandit_archer")
+        archer.resources["ash_shot"] = 0
+        game._in_combat = True
+        game.karmic_dice_enabled = True
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=8, rolls=[8], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+
+        game.enemy_turn(archer, [Warrior], [archer], Encounter("Test", "", [archer]), set())
+
+        self.assertTrue(game.has_status(Warrior, "restrained"))
+        self.assertFalse(game.has_status(Warrior, "slowed"))
 
     def test_extreme_heavy_armor_can_reach_eighty_percent_defense(self) -> None:
         game, Warrior = build_game_with_player(
@@ -339,6 +495,24 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(game.effective_defense_percent(scuttler, damage_type="slashing"), 25)
         self.assertEqual(game.effective_avoidance(scuttler), 0)
 
+    def test_low_level_ordinary_enemy_damage_dice_are_smoothed(self) -> None:
+        cases = {
+            "bandit": "1d4+1",
+            "bandit_archer": "1d4+1",
+            "ash_brand_enforcer": "1d4+3",
+            "acidmaw_burrower": "1d4+4",
+            "bugbear_reaver": "1d4+4",
+            "ochre_slime": "2d4+2",
+        }
+
+        for template, expected_damage in cases.items():
+            with self.subTest(template=template):
+                enemy = create_enemy(template)
+                self.assertEqual(enemy.weapon.damage, expected_damage)
+                self.assertEqual(enemy.bond_flags["smoothed_damage_expression"]["smoothed"], expected_damage)
+
+        self.assertEqual(create_enemy("orc_bloodchief").weapon.damage, "1d12+1")
+
     def test_low_level_scout_brute_shieldhand_and_named_profiles_are_converted(self) -> None:
         game, _ = build_game_with_player(
             "Warrior",
@@ -484,12 +658,54 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(base.target_number, 8)
         self.assertEqual(base.damage.defense_percent, 40)
         self.assertAlmostEqual(base.hit_chance, 0.80)
-        self.assertAlmostEqual(base.expected_hp_damage, 1.9694444444444443)
+        self.assertAlmostEqual(base.expected_hp_damage, 1.8781250000000003)
         self.assertEqual(guarded.target_number, 8)
         self.assertEqual(guarded.damage.defense_percent, 60)
         self.assertAlmostEqual(guarded.hit_chance, 0.80)
-        self.assertAlmostEqual(guarded.expected_hp_damage, 1.140277777777778)
+        self.assertAlmostEqual(guarded.expected_hp_damage, 1.2437500000000001)
         self.assertLess(guarded.expected_hp_damage, base.expected_hp_damage)
+
+    def test_ordinary_enemy_critical_damage_is_capped_by_target_max_hp(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        enemy = create_enemy("bandit")
+        enemy.weapon.damage = "2d8+10"
+        cap = game.enemy_critical_hp_damage_cap(enemy, Warrior, critical_hit=True)
+        assert cap is not None
+        self.assertEqual(cap, (Warrior.max_hp * 35 + 99) // 100)
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=20, rolls=[20], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+        game.roll_with_display_bonus = lambda expression, *args, **kwargs: RollOutcome(expression, 30, [10, 10], 10)  # type: ignore[method-assign]
+
+        self.assertTrue(game.perform_enemy_attack(enemy, Warrior, [Warrior], [enemy], set()))
+
+        self.assertEqual(game.last_damage_resolution().hp_damage, cap)
+        self.assertEqual(Warrior.current_hp, Warrior.max_hp - cap)
+
+    def test_boss_critical_cap_requires_telegraphed_attack_exception(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        boss = create_enemy("orc_bloodchief")
+        boss.weapon.damage = "2d8+10"
+        boss_cap = game.enemy_critical_hp_damage_cap(boss, Warrior, critical_hit=True)
+        assert boss_cap is not None
+        self.assertEqual(boss_cap, (Warrior.max_hp * 45 + 99) // 100)
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=20, rolls=[20], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+        game.roll_with_display_bonus = lambda expression, *args, **kwargs: RollOutcome(expression, 30, [10, 10], 10)  # type: ignore[method-assign]
+
+        self.assertTrue(game.perform_enemy_attack(boss, Warrior, [Warrior], [boss], set()))
+        self.assertEqual(game.last_damage_resolution().hp_damage, boss_cap)
+
+        Warrior.current_hp = Warrior.max_hp
+        Warrior.dead = False
+        boss.bond_flags["telegraphed_attack"] = True
+        self.assertIsNone(game.enemy_critical_hp_damage_cap(boss, Warrior, critical_hit=True))
+
+        self.assertTrue(game.perform_enemy_attack(boss, Warrior, [Warrior], [boss], set()))
+        self.assertGreater(game.last_damage_resolution().hp_damage, boss_cap)
 
     def test_combat_simulator_armor_break_raises_expected_damage(self) -> None:
         game, Warrior = build_game_with_player(
@@ -2047,6 +2263,36 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(absorbed_result.temp_hp_absorbed, 6)
         self.assertFalse(absorbed_result.glance)
         self.assertFalse(absorbed_result.wound)
+
+    def test_glance_does_not_create_karmic_chipped_armor(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        attacker = create_enemy("bandit")
+        game._in_combat = True
+        game.karmic_dice_enabled = True
+
+        game.apply_damage(Warrior, 1, damage_type="slashing", source_actor=attacker, apply_defense=True)
+        self.assertTrue(game.last_damage_was_glance())
+        self.assertNotIn("chipped_armor", Warrior.conditions)
+        self.assertEqual(game.total_armor_break_percent(Warrior), 0)
+
+    def test_temp_hp_blocked_physical_hit_does_not_chip_armor(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        attacker = create_enemy("bandit")
+        Warrior.temp_hp = 10
+        game._in_combat = True
+        game.karmic_dice_enabled = True
+
+        actual = game.apply_damage(Warrior, 10, damage_type="slashing", source_actor=attacker, apply_defense=True)
+
+        self.assertEqual(actual, 0)
+        self.assertFalse(game.last_damage_was_glance())
+        self.assertFalse(game.has_status(Warrior, "chipped_armor"))
 
     def test_non_physical_spell_damage_bypasses_defense(self) -> None:
         game, Warrior = build_game_with_player(

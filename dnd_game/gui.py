@@ -2476,7 +2476,14 @@ class ClickableGameBridge:
 
     def show_combat_actor(self, actor) -> None:
         name = "" if actor is None else str(getattr(actor, "name", ""))
-        Clock.schedule_once(lambda _dt: self.screen.set_active_combat_actor(name))
+        done = Event()
+
+        def update_actor(_dt) -> None:
+            self.screen.set_active_combat_actor(name)
+            done.set()
+
+        Clock.schedule_once(update_actor, -1)
+        done.wait(timeout=1.0)
 
     def refresh_combat_panel(self) -> None:
         Clock.schedule_once(lambda _dt: self.screen.refresh_combat_panel())
@@ -2543,7 +2550,7 @@ class ClickableTextDnDGame(TextDnDGame):
             input_fn=lambda _prompt="": "",
             output_fn=self.bridge.post_output,
             save_dir=save_dir,
-            animate_dice=None,
+            animate_dice=True,
             pace_output=None,
             type_dialogue=None,
             staggered_reveals=None,
@@ -2626,14 +2633,9 @@ class ClickableTextDnDGame(TextDnDGame):
         )
 
     def animate_dice_roll(self, **payload) -> None:
-        if not self.kivy_should_animate_dice_roll(
-            style=payload.get("style"),
-            outcome_kind=payload.get("outcome_kind"),
-        ):
-            return
         kind = str(payload.get("kind", "roll"))
         rolls = list(payload.get("rolls") or [])
-        if not self.animate_dice or not rolls:
+        if not rolls:
             return
         expression = str(payload.get("expression", "roll"))
         sides = int(payload.get("sides", 20) or 20)
@@ -2652,6 +2654,26 @@ class ClickableTextDnDGame(TextDnDGame):
         context_label = payload.get("context_label")
         style = payload.get("style")
         outcome_kind = payload.get("outcome_kind")
+        animate_allowed = self.kivy_should_animate_dice_roll(style=style, outcome_kind=outcome_kind)
+        if not animate_allowed:
+            return
+        if not self.animate_dice:
+            self.render_dice_result_panel(
+                kind=kind,
+                expression=expression,
+                rolls=rolls,
+                modifier=effective_modifier,
+                kept=kept,
+                rerolls=rerolls,
+                target_number=target_number,
+                target_label=target_label,
+                context_label=context_label,
+                style=style,
+                outcome_kind=outcome_kind,
+                critical=critical,
+                advantage_state=advantage_state,
+            )
+            return
 
         self.begin_animation_skip_scope()
         try:
@@ -3267,6 +3289,32 @@ class ClickableTextDnDGame(TextDnDGame):
             pop_scale=1.0,
             accent=accent,
         )
+        self.render_dice_animation_frame(
+            self.dice_animation_final_label(
+                kind,
+                expression,
+                style=style,
+                critical=critical,
+                advantage_state=advantage_state,
+            ),
+            rolls,
+            kind=kind,
+            final=True,
+            modifier=modifier,
+            kept=kept,
+            rerolls=rerolls,
+            style=style,
+            outcome_kind=outcome_kind,
+            target_number=target_number,
+            target_label=target_label,
+            show_total=True,
+            context_label=context_label,
+            highlight_index=kivy_dice_highlight_index(rolls, kept),
+            highlight_color=outcome_hex,
+            pop_scale=1.0,
+            value_width=max(2, max(len(str(value)) for value in rolls)),
+            clear_animation=True,
+        )
         lines = [
             f"[b][color=#{accent}]{escape_kivy_markup(strip_ansi(heading))}[/color][/b]",
             (
@@ -3539,7 +3587,15 @@ class ClickableTextDnDGame(TextDnDGame):
         )
 
     def animate_initiative_rolls(self, entries: list[dict[str, object]]) -> None:
-        if not self.animate_dice or not entries:
+        if not entries:
+            return
+        if not self.animate_dice:
+            self.render_kivy_initiative_panel(
+                entries,
+                shown_rolls=[getattr(entry["outcome"], "kept", 0) for entry in entries],
+                final=True,
+                clear_animation=True,
+            )
             return
         self.begin_animation_skip_scope()
         try:
@@ -4037,11 +4093,11 @@ class ClickableTextDnDGame(TextDnDGame):
                 (
                     f"Toggle music ({self.settings_toggle_label(getattr(self, 'music_enabled', False), unavailable=not music_available)})"
                 ),
-                f"Dice animation style ({self.dice_animation_mode_label()})",
                 f"Difficulty ({self.difficulty_mode_label()})",
                 f"Toggle typed dialogue and narration ({self.settings_toggle_label(getattr(self, '_typed_dialogue_preference', self.type_dialogue))})",
                 f"Toggle pacing pauses ({self.settings_toggle_label(getattr(self, '_pacing_pauses_preference', self.pace_output))})",
                 f"Toggle staggered option reveals ({self.settings_toggle_label(getattr(self, '_staggered_reveals_preference', getattr(self, 'staggered_reveals_enabled', False)))})",
+                f"Toggle Karmic Dice ({self.settings_toggle_label(self.current_karmic_dice_enabled())})",
                 f"Toggle Kivy dark mode ({self.settings_toggle_label(getattr(self, '_kivy_dark_mode_preference', self.DEFAULT_KIVY_DARK_MODE_ENABLED))})",
                 f"Toggle fullscreen ({self.settings_toggle_label(getattr(self, '_kivy_fullscreen_preference', self.DEFAULT_KIVY_FULLSCREEN_ENABLED))})",
                 "Back",
@@ -4062,19 +4118,19 @@ class ClickableTextDnDGame(TextDnDGame):
                     self.say("Music playback is not supported in this build.")
                 continue
             if choice == 3:
-                self.open_dice_animation_settings()
-                continue
-            if choice == 4:
                 self.open_difficulty_settings()
                 continue
-            if choice == 5:
+            if choice == 4:
                 self.toggle_typed_dialogue()
                 continue
-            if choice == 6:
+            if choice == 5:
                 self.toggle_pacing_pauses()
                 continue
-            if choice == 7:
+            if choice == 6:
                 self.toggle_staggered_reveals()
+                continue
+            if choice == 7:
+                self.toggle_karmic_dice()
                 continue
             if choice == 8:
                 self.toggle_kivy_dark_mode()
@@ -4315,10 +4371,12 @@ class GameScreen(BoxLayout):
     DEFEATED_ENEMY_FADE_INTERVAL_SECONDS = 0.05
     INITIATIVE_TURN_ARROW_INTERVAL_SECONDS = 0.28
     SINGLE_TEXT_WINDOW_FONT_SIZE = "20sp"
-    SPLIT_TEXT_WINDOW_FONT_SIZE = "15sp"
+    SPLIT_TEXT_WINDOW_FONT_SIZE = "17sp"
     OPTION_BUTTON_MIN_HEIGHT = 48
     OPTION_BUTTON_ROW_GAP = 6
     OPTION_BUTTON_VISIBLE_ROWS = 4
+    CHOICE_SCROLL_INDICATOR_WIDTH = 28
+    CHOICE_SCROLL_INDICATOR_PULSE_SECONDS = 0.48
     BUTTON_FONT_MIN_SP = 7
     BUTTON_FONT_MAX_SP = 24
     BUTTON_TEXT_HORIZONTAL_PADDING = 16
@@ -4570,6 +4628,7 @@ class GameScreen(BoxLayout):
         self._button_font_bindings: dict[Button, list[tuple[str, int]]] = {}
         self._button_font_sync_event = None
         self._button_font_syncing = False
+        self._choice_scroll_indicator_active = False
         self.typing_animation_enabled = True
         self.bridge = ClickableGameBridge(self, load_save=load_save)
         self._build_ui()
@@ -4866,15 +4925,35 @@ class GameScreen(BoxLayout):
             radius=6,
         )
         self.options_scroll = ScrollView(do_scroll_x=False, bar_width=dp(5))
+        self.options_scroll.bind(scroll_y=lambda *_args: self._sync_choice_scroll_indicator())
         self.options_grid = GridLayout(
             cols=1,
             spacing=dp(self.OPTION_BUTTON_ROW_GAP),
             size_hint=(1, None),
         )
-        self.options_grid.bind(minimum_height=self.options_grid.setter("height"))
+        self.options_grid.bind(
+            minimum_height=self.options_grid.setter("height"),
+            height=lambda *_args: self._sync_choice_scroll_indicator(),
+        )
         self.options_scroll.add_widget(self.options_grid)
         self.options_shell.add_widget(self.options_scroll)
         self.options_area.add_widget(self.options_shell)
+        self.choice_scroll_indicator = Label(
+            text="",
+            markup=True,
+            color=(0.96, 0.78, 0.28, 1),
+            font_size="24sp",
+            bold=True,
+            halign="center",
+            valign="middle",
+            size_hint=(None, 1),
+            width=0,
+            opacity=0,
+            disabled=True,
+        )
+        self._apply_font(self.choice_scroll_indicator, "ui")
+        self.choice_scroll_indicator.bind(size=self._sync_choice_scroll_indicator_label)
+        self.options_area.add_widget(self.choice_scroll_indicator)
 
         self.examine_shell = PanelBox(
             orientation="vertical",
@@ -5217,6 +5296,12 @@ class GameScreen(BoxLayout):
         instance.text_size = (
             max(1, instance.width - dp(6)),
             max(1, instance.height - dp(2)),
+        )
+
+    def _sync_choice_scroll_indicator_label(self, instance: Label, _value=None) -> None:
+        instance.text_size = (
+            max(1, instance.width),
+            max(1, instance.height),
         )
 
     def _fit_label_to_texture_width(self, instance: Label, maximum_width: float) -> None:
@@ -5879,6 +5964,8 @@ class GameScreen(BoxLayout):
         ):
             label.color = theme["dice_tray_text"]
         self.prompt_label.color = theme["prompt"]
+        if hasattr(self, "choice_scroll_indicator"):
+            self.choice_scroll_indicator.color = theme["prompt"]
         self.combat_stats_label.color = theme["text"]
         self.side_command_title_label.color = theme["title"]
         self.side_command_close_button.background_color = theme["command_bg"]
@@ -6014,6 +6101,7 @@ class GameScreen(BoxLayout):
 
     def set_active_combat_actor(self, name: str) -> None:
         self._active_combat_actor_name = str(name or "")
+        self._initiative_turn_arrow_phase = 0
         if self._active_combat_actor_name and self.combat_active():
             self._start_initiative_turn_arrow_animation()
         else:
@@ -7999,7 +8087,7 @@ class GameScreen(BoxLayout):
 
     def _option_button_height(self, *, detailed: bool = False) -> int:
         if detailed and self._title_menu_active:
-            return 62
+            return 72
         return 66 if detailed else self.OPTION_BUTTON_MIN_HEIGHT
 
     def _option_shell_height(self, rows: int, *, detailed: bool = False) -> float:
@@ -8012,14 +8100,14 @@ class GameScreen(BoxLayout):
             gaps = max(0, visible_rows - 1) * self.OPTION_BUTTON_ROW_GAP
             return dp(vertical_padding + visible_rows * row_height + gaps)
         if detailed and self._title_menu_active:
-            row_height = 62
-            vertical_padding = 12
+            row_height = self._option_button_height(detailed=detailed)
+            vertical_padding = 18
             gaps = max(0, rows - 1) * self.OPTION_BUTTON_ROW_GAP
-            return dp(min(176, vertical_padding + rows * row_height + gaps))
+            return dp(min(204, vertical_padding + rows * row_height + gaps))
         row_height = self._option_button_height(detailed=detailed)
         vertical_padding = 14
         gaps = max(0, rows - 1) * self.OPTION_BUTTON_ROW_GAP
-        max_height = 380 if detailed else 260
+        max_height = 340 if self._title_menu_active else (380 if detailed else 260)
         return dp(min(max_height, vertical_padding + rows * row_height + gaps))
 
     def _sync_options_area_layout(self, rows: int | None = None) -> None:
@@ -8029,6 +8117,47 @@ class GameScreen(BoxLayout):
         self.options_area.height = max(option_height, dp(44))
         self.options_shell.size_hint_x = 1
         self._sync_examine_panel_layout()
+        self._sync_choice_scroll_indicator()
+
+    def _choice_scroll_indicator_needed(self) -> bool:
+        if not hasattr(self, "options_scroll") or not hasattr(self, "options_grid"):
+            return False
+        if not bool(getattr(self.options_scroll, "do_scroll_y", False)):
+            return False
+        return bool(self.options_grid.height > self.options_scroll.height + dp(2))
+
+    def _set_choice_scroll_indicator_visible(self, visible: bool) -> None:
+        if not hasattr(self, "choice_scroll_indicator"):
+            return
+        if not visible:
+            Animation.cancel_all(self.choice_scroll_indicator, "opacity")
+            self._choice_scroll_indicator_active = False
+            self.choice_scroll_indicator.text = ""
+            self.choice_scroll_indicator.width = 0
+            self.choice_scroll_indicator.opacity = 0
+            self.choice_scroll_indicator.disabled = True
+            return
+        self.choice_scroll_indicator.width = dp(self.CHOICE_SCROLL_INDICATOR_WIDTH)
+        self.choice_scroll_indicator.disabled = False
+        if self._choice_scroll_indicator_active:
+            return
+        self._choice_scroll_indicator_active = True
+        self.choice_scroll_indicator.opacity = 1
+        pulse = (
+            Animation(opacity=0.38, duration=self.CHOICE_SCROLL_INDICATOR_PULSE_SECONDS)
+            + Animation(opacity=1.0, duration=self.CHOICE_SCROLL_INDICATOR_PULSE_SECONDS)
+        )
+        pulse.repeat = True
+        pulse.start(self.choice_scroll_indicator)
+
+    def _sync_choice_scroll_indicator(self, *_args) -> None:
+        if not self._choice_scroll_indicator_needed():
+            self._set_choice_scroll_indicator_visible(False)
+            return
+        scroll_y = float(getattr(self.options_scroll, "scroll_y", 1.0) or 0.0)
+        arrow = "↑" if scroll_y <= 0.02 else "↓"
+        self.choice_scroll_indicator.text = f"[b]{arrow}[/b]"
+        self._set_choice_scroll_indicator_visible(True)
 
     def _sync_examine_panel_layout(self) -> None:
         if self._examine_panel_visible:

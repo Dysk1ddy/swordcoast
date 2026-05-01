@@ -349,6 +349,7 @@ def simulate_damage_after_defense(
     defense_percent: int = 0,
     apply_defense: bool = True,
     minimum_raw_damage: int = 1,
+    max_hp_damage: int | None = None,
 ) -> tuple[float, float, float]:
     expected_hp_damage = 0.0
     glance_chance = 0.0
@@ -360,6 +361,8 @@ def simulate_damage_after_defense(
         if apply_defense and game.damage_type_uses_defense(damage_type):
             mitigated_damage = mitigated_damage * (100 - defense_percent) // 100
         hp_damage = max(0, mitigated_damage)
+        if max_hp_damage is not None:
+            hp_damage = min(hp_damage, max(0, int(max_hp_damage)))
         expected_hp_damage += hp_damage * chance
         if apply_defense and raw_damage > 0 and resisted_damage > 0 and mitigated_damage <= 0:
             glance_chance += chance
@@ -414,6 +417,11 @@ def simulate_weapon_damage(
         critical_distribution,
         damage_type=damage_type,
         defense_percent=defense_percent,
+        max_hp_damage=(
+            game.enemy_critical_hp_damage_cap(attacker, target, critical_hit=True)
+            if hasattr(game, "enemy_critical_hp_damage_cap")
+            else None
+        ),
     )
     return DamageSimulation(
         defense_percent=defense_percent,

@@ -76,11 +76,11 @@ class GameBase:
     BOOLEAN_SETTINGS_KEYS = (
         "sound_effects_enabled",
         "music_enabled",
-        "dice_animations_enabled",
         "typed_dialogue_enabled",
         "pacing_pauses_enabled",
         "staggered_reveals_enabled",
         "animations_and_delays_enabled",
+        "karmic_dice_enabled",
     )
     DICE_ANIMATION_MODES = ("off", "minimal", "full")
     DICE_ANIMATION_MODE_LABELS = {
@@ -95,17 +95,16 @@ class GameBase:
         "tactician": "Tactician",
     }
     DEFAULT_DIFFICULTY_MODE = "standard"
-    SETTINGS_KEYS = (*BOOLEAN_SETTINGS_KEYS, "dice_animation_mode", "difficulty_mode")
+    SETTINGS_KEYS = (*BOOLEAN_SETTINGS_KEYS, "difficulty_mode")
     DEFAULT_SETTINGS_PAYLOAD = {
         "sound_effects_enabled": False,
         "music_enabled": True,
-        "dice_animations_enabled": True,
-        "dice_animation_mode": "full",
         "difficulty_mode": DEFAULT_DIFFICULTY_MODE,
         "typed_dialogue_enabled": True,
         "pacing_pauses_enabled": True,
         "staggered_reveals_enabled": True,
         "animations_and_delays_enabled": True,
+        "karmic_dice_enabled": True,
     }
     ACT_LABELS = {
         1: "I",
@@ -119,12 +118,15 @@ class GameBase:
         "greywake_triage_yard": "Greywake Yard",
         "greywake_road_breakout": "Greywake Breakout",
         "greywake_briefing": "Greywake",
+        "blackwake_crossing": "Blackwake Crossing",
+        "road_decision_post_blackwake": "Blackwake Crossing",
         "road_ambush": "Emberway",
         "emberway_liars_circle": "Liar's Circle",
         "emberway_false_checkpoint": "False Checkpoint",
         "emberway_false_tollstones": "False Tollstones",
         "iron_hollow_hub": "Iron Hollow",
         "blackglass_well": "Blackglass Well",
+        "cinderfall_ruins": "Cinderfall Ruins",
         "red_mesa_hold": "Red Mesa Hold",
         "ashfall_watch": "Ashfall Watch",
         "duskmere_manor": "Duskmere Manor",
@@ -135,6 +137,7 @@ class GameBase:
         "hushfen_pale_circuit": "Hushfen and the Pale Circuit",
         "greywake_survey_camp": "Greywake Wood",
         "stonehollow_dig": "Stonehollow Dig",
+        "glasswater_intake": "Glasswater Intake",
         "siltlock_counting_house": "Siltlock Counting House",
         "act2_midpoint_convergence": "Sabotage Night",
         "broken_prospect": "Broken Prospect",
@@ -300,14 +303,8 @@ class GameBase:
             "animations_and_delays_enabled",
             default_settings["animations_and_delays_enabled"] if should_apply_persisted_settings else self._interactive_output,
         )
-        stored_dice_mode = persisted_settings.get("dice_animation_mode")
         if animate_dice is None:
-            if isinstance(stored_dice_mode, str) and stored_dice_mode in self.DICE_ANIMATION_MODES:
-                requested_dice_mode = stored_dice_mode
-            elif "dice_animations_enabled" in persisted_settings:
-                requested_dice_mode = "full" if bool(persisted_settings["dice_animations_enabled"]) else "off"
-            else:
-                requested_dice_mode = "full" if default_presentation else "off"
+            requested_dice_mode = "full" if self._interactive_output else "off"
         else:
             requested_dice_mode = "full" if animate_dice else "off"
         requested_pacing = (
@@ -338,8 +335,7 @@ class GameBase:
         self._typed_dialogue_preference = bool(requested_dialogue_typing)
         self._staggered_reveals_preference = bool(requested_staggered_reveals)
         self._animations_and_delays_preference = bool(
-            self._dice_animations_preference
-            and self._pacing_pauses_preference
+            self._pacing_pauses_preference
             and self._typed_dialogue_preference
             and self._staggered_reveals_preference
         )
@@ -348,6 +344,9 @@ class GameBase:
             stored_difficulty_mode
             if isinstance(stored_difficulty_mode, str) and stored_difficulty_mode in self.DIFFICULTY_MODES
             else str(default_settings["difficulty_mode"])
+        )
+        self.karmic_dice_enabled = bool(
+            persisted_settings.get("karmic_dice_enabled", default_settings["karmic_dice_enabled"])
         )
         self.animate_dice = self._dice_animations_preference
         self.apply_dice_animation_mode_profile()
@@ -363,13 +362,13 @@ class GameBase:
         self._dice_animation_width = 0
         self._choice_pause_seconds = 1.0
         self._combat_transition_pause_seconds = 1.0
-        self._option_reveal_pause_seconds = 0.75
-        self._loot_reveal_pause_seconds = 1.0
+        self._option_reveal_pause_seconds = 0.5
+        self._loot_reveal_pause_seconds = 0.75
         self._health_bar_width = 12
         self._health_bar_animation_step_seconds = 0.08
         self._dialogue_character_delay_seconds = 0.03
         self._dialogue_seconds_per_sentence = 2.5
-        self._narration_seconds_per_sentence = 3.25
+        self._narration_seconds_per_sentence = 2.5
         self._typing_sentence_pause_seconds = 0.75
         self._animation_skip_latched = False
         self._animation_skip_scope_depth = 0
@@ -405,7 +404,7 @@ class GameBase:
         initialize_sound_effects_system = getattr(self, "initialize_sound_effects_system", None)
         if callable(initialize_sound_effects_system):
             initialize_sound_effects_system(self._sound_effects_enabled_preference)
-        if self.animate_dice:
+        if not self._plain_output:
             try:
                 setattr(self.rng, "dice_roll_animator", self.animate_dice_roll)
             except Exception:
@@ -465,9 +464,6 @@ class GameBase:
         for key in self.BOOLEAN_SETTINGS_KEYS:
             if key in data:
                 settings[key] = bool(data[key])
-        dice_mode = data.get("dice_animation_mode")
-        if isinstance(dice_mode, str) and dice_mode in self.DICE_ANIMATION_MODES:
-            settings["dice_animation_mode"] = dice_mode
         difficulty_mode = data.get("difficulty_mode")
         if isinstance(difficulty_mode, str) and difficulty_mode in self.DIFFICULTY_MODES:
             settings["difficulty_mode"] = difficulty_mode
@@ -479,8 +475,7 @@ class GameBase:
 
     def current_settings_payload(self) -> dict[str, object]:
         presentation_bundle = bool(
-            getattr(self, "_dice_animations_preference", self.animate_dice)
-            and getattr(self, "_typed_dialogue_preference", self.type_dialogue)
+            getattr(self, "_typed_dialogue_preference", self.type_dialogue)
             and getattr(self, "_pacing_pauses_preference", self.pace_output)
             and getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
         )
@@ -489,8 +484,6 @@ class GameBase:
                 getattr(self, "_sound_effects_enabled_preference", getattr(self, "sound_effects_enabled", False))
             ),
             "music_enabled": bool(getattr(self, "_music_enabled_preference", getattr(self, "music_enabled", False))),
-            "dice_animations_enabled": bool(getattr(self, "_dice_animations_preference", self.animate_dice)),
-            "dice_animation_mode": self.current_dice_animation_mode(),
             "difficulty_mode": self.current_difficulty_mode(),
             "typed_dialogue_enabled": bool(getattr(self, "_typed_dialogue_preference", self.type_dialogue)),
             "pacing_pauses_enabled": bool(getattr(self, "_pacing_pauses_preference", self.pace_output)),
@@ -498,6 +491,7 @@ class GameBase:
                 getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
             ),
             "animations_and_delays_enabled": presentation_bundle,
+            "karmic_dice_enabled": self.current_karmic_dice_enabled(),
         }
 
     def current_dice_animation_mode(self) -> str:
@@ -513,6 +507,9 @@ class GameBase:
 
     def difficulty_mode_label(self, mode: str | None = None) -> str:
         return self.DIFFICULTY_MODE_LABELS.get(mode or self.current_difficulty_mode(), "Standard")
+
+    def current_karmic_dice_enabled(self) -> bool:
+        return bool(getattr(self, "karmic_dice_enabled", self.DEFAULT_SETTINGS_PAYLOAD["karmic_dice_enabled"]))
 
     def minimum_enemy_scaling_level(self) -> int:
         mode = self.current_difficulty_mode()
@@ -586,26 +583,35 @@ class GameBase:
 
     def run(self) -> None:
         try:
-            title_options = [
-                "Start a new game",
-                "Save Files",
-                "Read the lore notes",
-                "Settings",
-                "Quit",
-            ]
-            title_option_details = {
-                "Start a new game": "Build a new character and ride the Emberway toward Iron Hollow.",
-                "Save Files": "Browse save files, load a run, or delete old journals.",
-                "Read the lore notes": "Browse Aethrune context, mechanics guidance, and item basics.",
-                "Settings": "Adjust audio, animations, typed narration, and presentation pacing.",
-                "Quit": "Leave the frontier for now.",
-            }
             while True:
                 try:
                     self._at_title_screen = True
                     refresh_scene_music = getattr(self, "refresh_scene_music", None)
                     if callable(refresh_scene_music):
                         refresh_scene_music(default_to_menu=True)
+                    saves = self.loadable_save_paths()
+                    latest_save = saves[0] if saves else None
+                    continue_detail = (
+                        f"Load latest save: {self.save_basic_menu_label(latest_save)}"
+                        if latest_save is not None
+                        else "No save files yet."
+                    )
+                    title_options = [
+                        "Continue",
+                        "Start a new game",
+                        "Save Files",
+                        "Read the lore notes",
+                        "Settings",
+                        "Quit",
+                    ]
+                    title_option_details = {
+                        "Continue": continue_detail,
+                        "Start a new game": "Build a new character and ride the Emberway toward Iron Hollow.",
+                        "Save Files": "Browse save files, load a run, or delete old journals.",
+                        "Read the lore notes": "Browse Aethrune context, mechanics guidance, and item basics.",
+                        "Settings": "Adjust audio, animations, typed narration, and presentation pacing.",
+                        "Quit": "Leave the frontier for now.",
+                    }
                     choice = self.choose_title_menu(
                         "Aethrune",
                         "Acts I-II: Frontier Roads and Echoing Depths",
@@ -617,17 +623,24 @@ class GameBase:
                         option_details=title_option_details,
                     )
                     if choice == 1:
+                        if latest_save is None:
+                            self.say("No save files were found yet.")
+                            continue
+                        self._at_title_screen = False
+                        self.load_save_path(latest_save)
+                        self.play_current_state()
+                    elif choice == 2:
                         self._at_title_screen = False
                         self.start_new_game()
                         self.play_current_state()
-                    elif choice == 2:
+                    elif choice == 3:
                         self._at_title_screen = False
                         loaded = self.open_save_files_menu()
                         if loaded:
                             self.play_current_state()
-                    elif choice == 3:
-                        self.show_lore_notes()
                     elif choice == 4:
+                        self.show_lore_notes()
+                    elif choice == 5:
                         self.open_settings_menu()
                     else:
                         self.say("Safe travels, adventurer.")
@@ -678,6 +691,8 @@ class GameBase:
 
     def skill_tag(self, tag: str, text: str) -> str:
         normalized_tag = tag.strip().upper()
+        if normalized_tag == "SAFE":
+            return text
         if normalized_tag.startswith("BACKTRACK"):
             return f"[{tag}] {text}"
         normalized_text = strip_ansi(text).lower()
@@ -1486,7 +1501,10 @@ class GameBase:
             )
 
     def animate_initiative_rolls(self, entries: list[dict[str, object]]) -> None:
-        if not self.animate_dice or not entries:
+        if not entries:
+            return
+        if not self.animate_dice:
+            self.render_initiative_result_panel(entries)
             return
         self.begin_animation_skip_scope()
         try:
@@ -1555,7 +1573,24 @@ class GameBase:
         style: str | None = None,
         outcome_kind: str | None = None,
     ) -> None:
-        if not self.animate_dice or not rolls:
+        if not rolls:
+            return
+        if not self.animate_dice:
+            self.render_dice_result_panel(
+                kind=kind,
+                expression=expression,
+                rolls=rolls,
+                modifier=display_modifier if display_modifier is not None else modifier,
+                kept=kept,
+                rerolls=rerolls,
+                target_number=target_number,
+                target_label=target_label,
+                context_label=context_label,
+                style=style,
+                outcome_kind=outcome_kind,
+                critical=critical,
+                advantage_state=advantage_state,
+            )
             return
         self.begin_animation_skip_scope()
         try:
@@ -2508,10 +2543,7 @@ class GameBase:
 
     def open_console_commands_menu(self) -> bool:
         while True:
-            raw = self.read_resize_aware_input(
-                self.show_console_command_reference,
-                prompt="console> ",
-            ).strip()
+            raw = self.read_input("console> ").strip()
             if raw.lower() in {"", "back", "exit", "quit"}:
                 return False
             if self.execute_console_command(raw):
@@ -2988,15 +3020,14 @@ class GameBase:
 
     def refresh_presentation_bundle_preference(self) -> None:
         self._animations_and_delays_preference = bool(
-            getattr(self, "_dice_animations_preference", self.animate_dice)
-            and getattr(self, "_typed_dialogue_preference", self.type_dialogue)
+            getattr(self, "_typed_dialogue_preference", self.type_dialogue)
             and getattr(self, "_pacing_pauses_preference", self.pace_output)
             and getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
         )
 
     def apply_dice_animation_preference(self) -> None:
         self.apply_dice_animation_mode_profile()
-        if self.animate_dice:
+        if not getattr(self, "_plain_output", False):
             try:
                 setattr(self.rng, "dice_roll_animator", self.animate_dice_roll)
             except Exception:
@@ -3028,35 +3059,6 @@ class GameBase:
             getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
             and not getattr(self, "_presentation_forced_off", False)
         )
-
-    def set_dice_animations_enabled(self, enabled: bool) -> None:
-        self.set_dice_animation_mode("full" if enabled else "off")
-
-    def toggle_dice_animations(self) -> None:
-        self.set_dice_animations_enabled(not getattr(self, "_dice_animations_preference", self.animate_dice))
-
-    def set_dice_animation_mode(self, mode: str) -> None:
-        selected = mode if mode in self.DICE_ANIMATION_MODES else "off"
-        self._dice_animation_mode_preference = selected
-        self._dice_animations_preference = selected != "off"
-        self.apply_dice_animation_preference()
-        self.refresh_presentation_bundle_preference()
-        self.persist_settings()
-        self.say(f"Dice animation style set to {self.dice_animation_mode_label(selected)}.")
-
-    def open_dice_animation_settings(self) -> None:
-        while True:
-            options = [
-                f"Off ({'Current' if self.current_dice_animation_mode() == 'off' else 'Set'})",
-                f"Minimal ({'Current' if self.current_dice_animation_mode() == 'minimal' else 'Set'})",
-                f"Full ({'Current' if self.current_dice_animation_mode() == 'full' else 'Set'})",
-                "Back",
-            ]
-            choice = self.choose("Dice animation style", options, allow_meta=False)
-            if choice == 4:
-                return
-            self.set_dice_animation_mode(self.DICE_ANIMATION_MODES[choice - 1])
-            return
 
     def set_difficulty_mode(self, mode: str) -> None:
         selected = mode if mode in self.DIFFICULTY_MODES else self.DEFAULT_DIFFICULTY_MODE
@@ -3112,13 +3114,18 @@ class GameBase:
             not getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
         )
 
+    def set_karmic_dice_enabled(self, enabled: bool) -> None:
+        self.karmic_dice_enabled = bool(enabled)
+        self.persist_settings()
+        self.say(f"Karmic Dice {'enabled' if self.karmic_dice_enabled else 'disabled'}.")
+
+    def toggle_karmic_dice(self) -> None:
+        self.set_karmic_dice_enabled(not self.current_karmic_dice_enabled())
+
     def set_animations_and_delays_enabled(self, enabled: bool) -> None:
-        self._dice_animation_mode_preference = "full" if enabled else "off"
-        self._dice_animations_preference = bool(enabled)
         self._typed_dialogue_preference = bool(enabled)
         self._pacing_pauses_preference = bool(enabled)
         self._staggered_reveals_preference = bool(enabled)
-        self.apply_dice_animation_preference()
         self.apply_typed_dialogue_preference()
         self.apply_pacing_preference()
         self.apply_staggered_reveal_preference()
@@ -3129,8 +3136,7 @@ class GameBase:
     def toggle_animations_and_delays(self) -> None:
         self.set_animations_and_delays_enabled(
             not bool(
-                getattr(self, "_dice_animations_preference", self.animate_dice)
-                and getattr(self, "_typed_dialogue_preference", self.type_dialogue)
+                getattr(self, "_typed_dialogue_preference", self.type_dialogue)
                 and getattr(self, "_pacing_pauses_preference", self.pace_output)
                 and getattr(self, "_staggered_reveals_preference", getattr(self, "staggered_reveals_enabled", False))
             )
@@ -3149,11 +3155,11 @@ class GameBase:
                 (
                     f"Toggle music ({self.settings_toggle_label(getattr(self, 'music_enabled', False), unavailable=not music_available)})"
                 ),
-                f"Dice animation style ({self.dice_animation_mode_label()})",
                 f"Difficulty ({self.difficulty_mode_label()})",
                 f"Toggle typed dialogue and narration ({self.settings_toggle_label(getattr(self, '_typed_dialogue_preference', self.type_dialogue))})",
                 f"Toggle pacing pauses ({self.settings_toggle_label(getattr(self, '_pacing_pauses_preference', self.pace_output))})",
                 f"Toggle staggered option reveals ({self.settings_toggle_label(getattr(self, '_staggered_reveals_preference', getattr(self, 'staggered_reveals_enabled', False)))})",
+                f"Toggle Karmic Dice ({self.settings_toggle_label(self.current_karmic_dice_enabled())})",
                 "Back",
             ]
             choice = self.choose("Settings", options, allow_meta=False)
@@ -3172,19 +3178,19 @@ class GameBase:
                     self.say("Music playback is not supported in this build.")
                 continue
             if choice == 3:
-                self.open_dice_animation_settings()
-                continue
-            if choice == 4:
                 self.open_difficulty_settings()
                 continue
-            if choice == 5:
+            if choice == 4:
                 self.toggle_typed_dialogue()
                 continue
-            if choice == 6:
+            if choice == 5:
                 self.toggle_pacing_pauses()
                 continue
-            if choice == 7:
+            if choice == 6:
                 self.toggle_staggered_reveals()
+                continue
+            if choice == 7:
+                self.toggle_karmic_dice()
                 continue
             return
 

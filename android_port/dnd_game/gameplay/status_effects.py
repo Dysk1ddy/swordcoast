@@ -229,6 +229,11 @@ STATUS_DEFINITIONS: dict[str, dict[str, object]] = {
         "combat_only": True,
         "incoming_attack_bonus": 1,
     },
+    "chipped_armor": {
+        "name": "Chipped Armor",
+        "combat_only": True,
+        "armor_break_percent": 5,
+    },
     "slip_away": {
         "name": "Slip Away",
         "combat_only": True,

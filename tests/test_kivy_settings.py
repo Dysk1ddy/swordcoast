@@ -13,7 +13,7 @@ from dnd_game.game import TextDnDGame
 from dnd_game.gameplay.base import QuitProgram, ReturnToTitleMenu
 from dnd_game.models import GameState
 from dnd_game.ui.examine import ExamineEntry
-from dnd_game.ui.kivy_markup import format_kivy_log_entry
+from dnd_game.ui.kivy_markup import format_kivy_log_entry, visible_markup_text
 
 try:
     from dnd_game.gui import (
@@ -50,6 +50,8 @@ class FakeKivyBridge:
         self.initiative_refresh_count = 0
         self.combat_refresh_count = 0
         self.initiative_fade_count = 0
+        self.dice_frames: list[tuple[str, dict[str, object]]] = []
+        self.dice_results: list[str] = []
 
     def post_output(self, text: object = "") -> None:
         self.outputs.append(str(text))
@@ -86,6 +88,12 @@ class FakeKivyBridge:
     def fade_out_initiative_tray(self) -> None:
         self.initiative_fade_count += 1
 
+    def show_dice_animation_frame(self, markup: str, **kwargs: object) -> None:
+        self.dice_frames.append((markup, dict(kwargs)))
+
+    def append_dice_result(self, markup: str) -> None:
+        self.dice_results.append(markup)
+
 
 @unittest.skipIf(ClickableTextDnDGame is None, f"Kivy unavailable: {KIVY_IMPORT_ERROR}")
 class KivySettingsTests(unittest.TestCase):
@@ -104,6 +112,28 @@ class KivySettingsTests(unittest.TestCase):
             base_ability_scores={"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
             class_skill_choices=["Athletics", "Survival"],
         )
+
+    def test_clickable_game_keeps_dice_ui_enabled_without_dice_setting(self) -> None:
+        save_dir = self.make_save_dir()
+        settings_path = save_dir / "settings.json"
+        settings_path.write_text(
+            json.dumps(
+                {
+                    "animations_and_delays_enabled": False,
+                    "dice_animations_enabled": False,
+                    "dice_animation_mode": "off",
+                }
+            ),
+            encoding="utf-8",
+        )
+        bridge = FakeKivyBridge()
+
+        game = ClickableTextDnDGame(bridge, save_dir=save_dir)
+
+        self.assertTrue(game.animate_dice)
+        self.assertTrue(callable(getattr(game.rng, "dice_roll_animator", None)))
+        self.assertNotIn("dice_animations_enabled", game.current_settings_payload())
+        self.assertNotIn("dice_animation_mode", game.current_settings_payload())
 
     def test_fullscreen_setting_loads_applies_and_persists(self) -> None:
         save_dir = self.make_save_dir()
@@ -593,6 +623,7 @@ class KivySettingsTests(unittest.TestCase):
 
         self.assertAlmostEqual(screen.left_column.size_hint_x, 0.6)
         self.assertAlmostEqual(screen.combat_panel.size_hint_x, 0.4)
+        self.assertEqual(GameScreen.SPLIT_TEXT_WINDOW_FONT_SIZE, "17sp")
 
     def test_prompt_choices_and_command_bar_keep_full_width(self) -> None:
         assert Window is not None
@@ -622,6 +653,11 @@ class KivySettingsTests(unittest.TestCase):
         self.assertEqual(screen._option_grid_shape(6), (6, 1))
         self.assertEqual(screen._option_shell_height(6), screen._option_shell_height(4))
         self.assertLess(screen.options_area.height, screen.options_grid.height)
+        self.assertGreater(screen.choice_scroll_indicator.width, 0)
+        self.assertIn("↓", screen.choice_scroll_indicator.text)
+        screen.options_scroll.scroll_y = 0
+        screen._sync_choice_scroll_indicator()
+        self.assertIn("↑", screen.choice_scroll_indicator.text)
         self.assertTrue(all(button.halign == "left" for button in screen.option_buttons))
         self.assertTrue(all(button.size_hint_y is None for button in screen.option_buttons))
 
@@ -638,6 +674,7 @@ class KivySettingsTests(unittest.TestCase):
         self.assertEqual(screen.options_grid.size_hint_y, 1)
         self.assertFalse(screen.options_scroll.do_scroll_y)
         self.assertEqual(screen.options_scroll.bar_width, 0)
+        self.assertEqual(screen.choice_scroll_indicator.width, 0)
         self.assertTrue(all(button.halign == "center" for button in screen.option_buttons))
 
     def test_title_menu_choices_keep_normal_grid_without_scroll(self) -> None:
@@ -654,7 +691,21 @@ class KivySettingsTests(unittest.TestCase):
         self.assertEqual(screen.options_grid.size_hint_y, 1)
         self.assertFalse(screen.options_scroll.do_scroll_y)
         self.assertEqual(screen.options_scroll.bar_width, 0)
+        self.assertGreaterEqual(screen._option_button_height(detailed=True), 72)
+        self.assertGreaterEqual(screen.options_area.height, 168)
         self.assertTrue(all(button.halign == "center" for button in screen.option_buttons))
+
+    def test_title_context_settings_menu_reserves_full_button_height(self) -> None:
+        assert Window is not None
+        screen = GameScreen()
+        self.addCleanup(lambda: Window.unbind(on_key_down=screen._handle_window_key_down))
+        self.addCleanup(screen.clear_widgets)
+        screen._title_menu_active = True
+        rows = 5
+
+        expected = 14 + rows * screen.OPTION_BUTTON_MIN_HEIGHT + (rows - 1) * screen.OPTION_BUTTON_ROW_GAP
+
+        self.assertGreaterEqual(screen._option_shell_height(rows), expected)
 
     def test_combat_choices_keep_multi_column_centered_buttons(self) -> None:
         assert Window is not None
@@ -706,6 +757,74 @@ class KivySettingsTests(unittest.TestCase):
 
         screen._show_dice_roll_side_frame.assert_called_once()
         screen._show_dice_tray_frame.assert_not_called()
+
+    def test_kivy_combat_attack_rolls_do_not_update_roll_tray(self) -> None:
+        save_dir = self.make_save_dir()
+        bridge = FakeKivyBridge()
+        game = ClickableTextDnDGame(bridge, save_dir=save_dir)
+        game._in_combat = True
+
+        game.animate_dice_roll(
+            kind="roll",
+            expression="1d4+2",
+            sides=4,
+            rolls=[3],
+            modifier=2,
+            style="damage",
+            context_label="Short sword",
+        )
+
+        self.assertEqual(bridge.dice_frames, [])
+        self.assertEqual(bridge.dice_results, [])
+
+    def test_kivy_random_encounter_skill_checks_show_roll_tray_during_combat_unwind(self) -> None:
+        save_dir = self.make_save_dir()
+        bridge = FakeKivyBridge()
+        game = ClickableTextDnDGame(bridge, save_dir=save_dir)
+        game._in_combat = True
+
+        game.animate_dice_roll(
+            kind="d20",
+            expression="d20",
+            sides=20,
+            rolls=[16],
+            kept=16,
+            modifier=4,
+            target_number=12,
+            target_label="DC 12",
+            style="skill",
+            outcome_kind="check",
+            context_label="Vale Perception check",
+        )
+
+        self.assertEqual(len(bridge.dice_frames), 1)
+        frame_markup, frame_kwargs = bridge.dice_frames[0]
+        self.assertTrue(frame_kwargs["use_tray"])
+        self.assertTrue(frame_kwargs["use_roll_tray"])
+        self.assertIn("Vale Perception check", visible_markup_text(frame_markup))
+        self.assertIn("DC 12", visible_markup_text(frame_markup))
+        self.assertEqual(len(bridge.dice_results), 1)
+
+    def test_active_initiative_arrow_refreshes_with_zero_phase_immediately(self) -> None:
+        screen = GameScreen.__new__(GameScreen)
+        screen._initiative_turn_arrow_phase = 3
+        screen.combat_active = Mock(return_value=True)
+        screen._start_initiative_turn_arrow_animation = Mock()
+        screen._stop_initiative_turn_arrow_animation = Mock()
+        calls: list[tuple[str, int, str]] = []
+        screen.refresh_combat_panel = lambda: calls.append(
+            ("combat", screen._initiative_turn_arrow_phase, screen._active_combat_actor_name)
+        )
+        screen.refresh_active_initiative_tray = lambda: calls.append(
+            ("initiative", screen._initiative_turn_arrow_phase, screen._active_combat_actor_name)
+        )
+
+        screen.set_active_combat_actor("Vale")
+
+        self.assertEqual(screen._initiative_turn_arrow_phase, 0)
+        screen._start_initiative_turn_arrow_animation.assert_called_once()
+        screen._stop_initiative_turn_arrow_animation.assert_not_called()
+        self.assertIn(("initiative", 0, "Vale"), calls)
 
     def test_dice_roll_side_frame_waits_for_manual_close(self) -> None:
         screen = GameScreen.__new__(GameScreen)

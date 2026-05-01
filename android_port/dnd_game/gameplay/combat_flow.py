@@ -137,11 +137,14 @@ class CombatFlowMixin:
                     if not any(hero.is_conscious() for hero in heroes):
                         encounter_outcome = "defeat"
                         return encounter_outcome
+                show_combat_actor = getattr(self, "show_combat_actor", None)
                 for actor in initiative:
                     if actor.name in dodging:
                         dodging.discard(actor.name)
                     if actor.dead:
                         continue
+                    if callable(show_combat_actor):
+                        show_combat_actor(actor)
                     if actor in heroes and actor.is_dying():
                         self.resolve_death_save(actor)
                         if actor.dead:
@@ -178,6 +181,9 @@ class CombatFlowMixin:
             self._active_dodging_names = previous_active_dodging
             self._active_round_number = previous_active_round
             self._in_combat = False
+            show_combat_actor = getattr(self, "show_combat_actor", None)
+            if callable(show_combat_actor):
+                show_combat_actor(None)
             deferred_refresh_outcomes = getattr(self, "_defer_scene_music_refresh_on_outcomes", frozenset())
             if encounter_outcome not in deferred_refresh_outcomes and callable(refresh_scene_music):
                 refresh_scene_music()
@@ -1749,6 +1755,63 @@ class CombatFlowMixin:
                 return True
         return False
 
+    def enemy_targeting_round_counts(self) -> dict[int, int]:
+        round_number = int(getattr(self, "_active_round_number", 0) or 0)
+        if getattr(self, "_enemy_targeting_round_number", None) != round_number:
+            self._enemy_targeting_round_number = round_number
+            self._enemy_targeting_round_counts = {}
+        counts = getattr(self, "_enemy_targeting_round_counts", None)
+        if not isinstance(counts, dict):
+            counts = {}
+            self._enemy_targeting_round_counts = counts
+        return counts
+
+    def enemy_target_score(self, actor: Character, target: Character) -> int:
+        ordinary = self.enemy_uses_ordinary_variance_profile(actor)
+        max_hp = max(1, int(getattr(target, "max_hp", 1) or 1))
+        current_hp = max(0, int(getattr(target, "current_hp", 0) or 0))
+        missing_percent = max(0, min(100, (max_hp - current_hp) * 100 // max_hp))
+        score = 50
+        if ordinary and current_hp * 4 <= max_hp:
+            score -= 5
+        else:
+            score += min(5, missing_percent // 15)
+        score += max(0, target.attack_bonus() - 3) // 2
+        assumed_damage_type = "piercing" if getattr(actor.weapon, "ranged", False) else "slashing"
+        score -= self.effective_defense_percent(target, damage_type=assumed_damage_type) // 20
+        if self.hero_has_positive_combat_status(target):
+            score += 3
+        if any(self.has_status(target, status) for status in ("reeling", "frightened", "blinded", "restrained")):
+            score += 2
+        if any(self.has_status(target, status) for status in ("guarded", "smoke_jar", "false_target", "anchor_shell")):
+            score -= 3
+        if ordinary:
+            counts = self.enemy_targeting_round_counts()
+            score -= 8 * int(counts.get(id(target), 0))
+            if actor.bond_flags.get("last_targeted_hero_id") == id(target):
+                score -= 4
+        return score
+
+    def choose_weighted_enemy_target(self, actor: Character, conscious_heroes: list[Character]) -> Character:
+        indexed = list(enumerate(conscious_heroes))
+        return max(
+            indexed,
+            key=lambda entry: (
+                self.enemy_target_score(actor, entry[1]),
+                -int(self.enemy_targeting_round_counts().get(id(entry[1]), 0)),
+                int(getattr(entry[1], "current_hp", 0) or 0),
+                -entry[0],
+            ),
+        )[1]
+
+    def record_enemy_target_choice(self, actor: Character, target: Character) -> None:
+        if not self.enemy_uses_ordinary_variance_profile(actor):
+            return
+        counts = self.enemy_targeting_round_counts()
+        counts[id(target)] = int(counts.get(id(target), 0)) + 1
+        actor.bond_flags["last_targeted_hero"] = target.name
+        actor.bond_flags["last_targeted_hero_id"] = id(target)
+
     def companion_turn(
         self,
         actor: Character,
@@ -1845,8 +1908,12 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["flash_ash"] = 0
             self.say(f"{actor.name} cracks a palmful of flash ash across {target.name}'s face.")
-            if not self.saving_throw(target, "CON", 11, context=f"against {actor.name}'s flash ash"):
+            degree, _ = self.control_save_degree(target, "CON", 11, context=f"against {actor.name}'s flash ash")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s flash ash")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s flash ash")
+                self.say(f"{target.name} keeps sight through the ash, but the grit catches in every breath.")
             else:
                 self.say(f"{target.name} coughs through the ash without losing sight of the fight.")
             return
@@ -1863,8 +1930,12 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (hero.current_hp, hero.armor_class))
             actor.resources["silver_pressure"] = 0
             self.say(f"{actor.name} names the price of every life in the chamber until {target.name}'s footing starts to feel negotiable.")
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s silver pressure"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s silver pressure")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s silver pressure")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s silver pressure")
+                self.say(f"{target.name} catches the lie late, leaving one bad step in their stance.")
             else:
                 self.say(f"{target.name} refuses to let Sereth turn arithmetic into fear.")
             return
@@ -1878,8 +1949,12 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["flash_ash"] = 0
             self.say(f"{actor.name} crushes a glass ash capsule underfoot and kicks the burst toward {target.name}.")
-            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s flash ash"):
+            degree, _ = self.control_save_degree(target, "CON", 12, context=f"against {actor.name}'s flash ash")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s flash ash")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s flash ash")
+                self.say(f"{target.name} sees through watering eyes, a half-beat behind Sereth's next order.")
             else:
                 self.say(f"{target.name} turns aside before the ash takes their eyes.")
             return
@@ -1903,10 +1978,14 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["blind_dust"] = 0
             self.say(f"{actor.name} snaps a pouch of bitter dust across {target.name}'s line of sight.")
-            if not self.saving_throw(target, "DEX", 12, context=f"against {actor.name}'s blinding dust"):
+            degree, _ = self.control_save_degree(target, "DEX", 12, context=f"against {actor.name}'s blinding dust")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s blind dust")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s blind dust")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s blind dust")
+                self.say(f"{target.name} blinks the dust clear, but the pouch burst leaves them off rhythm.")
             else:
                 self.say(f"{target.name} turns away before the worst of the dust can settle in.")
             return
@@ -2046,10 +2125,14 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["cinder_pot"] = 0
             self.say(f"{actor.name} hurls a clay cinder pot that bursts across {target.name}'s face in hot ash.")
-            if not self.saving_throw(target, "DEX", 11, context=f"against {actor.name}'s cinder pot"):
+            degree, _ = self.control_save_degree(target, "DEX", 11, context=f"against {actor.name}'s cinder pot")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s cinder pot")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s cinder pot")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s cinder pot")
+                self.say(f"{target.name} keeps their eyes, coughing ember grit out of the line.")
             else:
                 self.say(f"{target.name} turns aside before the ash can blind them cleanly.")
             return
@@ -2057,8 +2140,12 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (0 if self.has_status(hero, "restrained") else 1, hero.current_hp))
             actor.resources["venom_web"] = 0
             self.say(f"{actor.name} spits a slick sheet of mirewebbing toward {target.name}.")
-            if not self.saving_throw(target, "DEX", 11, context=f"against {actor.name}'s mireweb"):
+            degree, _ = self.control_save_degree(target, "DEX", 11, context=f"against {actor.name}'s mireweb")
+            if degree == "fail":
                 self.apply_status(target, "restrained", 2, source=f"{actor.name}'s mireweb")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s mireweb")
+                self.say(f"{target.name} tears loose, but strands cling to boots and buckles.")
             else:
                 self.say(f"{target.name} tears free before the webbing can set.")
             return
@@ -2435,15 +2522,25 @@ class CombatFlowMixin:
         if actor.archetype == "bandit_archer" and actor.resources.get("snare_shot", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["snare_shot"] = 0
-            if not self.saving_throw(target, "DEX", 12, context=f"against {actor.name}'s weighted line"):
+            degree, _ = self.control_save_degree(target, "DEX", 12, context=f"against {actor.name}'s weighted line")
+            if degree == "fail":
                 self.apply_status(target, "restrained", 2, source=f"{actor.name}'s weighted line")
                 self.say(f"{actor.name}'s weighted line tangles around {target.name} and holds them fast.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s weighted line")
+                self.say(f"{actor.name}'s weighted line catches a boot before {target.name} kicks free.")
                 return
         if actor.archetype == "bandit_archer" and actor.resources.get("ash_shot", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["ash_shot"] = 0
-            if not self.saving_throw(target, "DEX", 12, context=f"against {actor.name}'s ash-blinding shot"):
+            degree, _ = self.control_save_degree(target, "DEX", 12, context=f"against {actor.name}'s ash-blinding shot")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s ash shot")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s ash shot")
+                self.say(f"{target.name} keeps sight through the ash, but loses the clean angle.")
                 return
         if actor.archetype == "rukhar" and actor.resources.get("war_shout", 1) > 0:
             actor.resources["war_shout"] = 0
@@ -2528,7 +2625,8 @@ class CombatFlowMixin:
         elif actor.archetype == "whispermaw_blob":
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
         else:
-            target = marked_target or self.rng.choice(conscious_heroes)
+            target = marked_target or self.choose_weighted_enemy_target(actor, conscious_heroes)
+        self.record_enemy_target_choice(actor, target)
         self.maybe_apply_enemy_stance(actor, target, conscious_heroes, conscious_allies)
         self.perform_enemy_attack(actor, target, heroes, enemies, dodging)
 
