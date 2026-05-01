@@ -9,6 +9,7 @@ saves, tests, and creation flow remain stable during the retcon.
 
 from collections.abc import Mapping
 
+from ...gameplay.defense_formula import base_damage_reduction_for_defense
 from ...models import SKILL_TO_ABILITY
 from .character_options.backgrounds import BACKGROUNDS
 from .character_options.classes import CLASSES, CLASS_LEVEL_PROGRESSION
@@ -79,6 +80,18 @@ LOCATION_LORE: dict[str, LoreEntry] = {
         "menu": "A road shrine where Elira spends lamp oil, bandages, and witness names on field care.",
         "text": "The shrine smells of wet wool and lamp smoke. Cots crowd the wall, and every name Elira writes down becomes one more person the road failed to erase.",
     },
+    "Greywake Yard": {
+        "menu": "An intake yard full of triage ropes, warehouse soot, and frightened route witnesses.",
+        "text": "Greywake Yard catches the first human cost of the route attacks. Clerks count blankets while wounded teamsters argue over which wagon burned first.",
+    },
+    "Greywake Breakout": {
+        "menu": "A road-yard fight where Ashen Brand cutters try to erase proof before it reaches Mira.",
+        "text": "The breakout hits between wagons, cots, and rope lines. Someone wants the wounded quiet and the manifests gone before the city can make either count.",
+    },
+    "Blackwake Crossing": {
+        "menu": "A wet side-branch of forged toll papers, prison pens, and a hidden supply cache.",
+        "text": "Blackwake Crossing leaves ash in the reeds and crate slats in the mud. The place teaches the party how stolen goods become authority when the seals look clean.",
+    },
     "Emberway": {
         "menu": "The old road artery whose milestones, shrines, and tollmarks still shape Act I.",
         "text": (
@@ -88,6 +101,18 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "That makes control of the road a daily contest. False papers, copied seals, fake checkpoints, and staged "
             "rescues can bend traffic long before anyone admits the route changed hands."
         ),
+    },
+    "Liar's Circle": {
+        "menu": "A roadside statue puzzle where cracked stone still cares about exact claims.",
+        "text": "Four old figures stand in weathered argument beside the Emberway. Rain gathers in their carved mouths before anyone asks who is lying.",
+    },
+    "False Checkpoint": {
+        "menu": "A copied roadwarden stop built from uniforms, nerve, and stolen cadence.",
+        "text": "The checkpoint looks official from ten paces: a rope, a stamped board, a tired voice asking for papers. The wrongness lives in the pauses.",
+    },
+    "False Tollstones": {
+        "menu": "A broken milemarker rigged into a toll trap with borrowed authority.",
+        "text": "The tollstones lean beside the road with fresh chalk in old cracks. Someone has made a ruined marker sound like a law again.",
     },
     "Iron Hollow": {
         "menu": "A frontier hub built around claims, supply ledgers, and stubborn local survival.",
@@ -127,6 +152,10 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "to survey the land can close around it like a fist."
         ),
     },
+    "Ashfall Watch": {
+        "menu": "A ruined watch height where command discipline turns extortion into siege work.",
+        "text": "Ashfall Watch holds smoke-black stone, prisoner yards, and signal scars above Iron Hollow's approaches. Orders travel here faster than mercy.",
+    },
     "Cinderfall Ruins": {
         "menu": "A scorched relay ruin that hints at older signal logic beneath Act I.",
         "text": (
@@ -145,6 +174,10 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "The ruins keep a record of them."
         ),
     },
+    "Emberhall Cellars": {
+        "menu": "The cellar route beneath Iron Hollow where the Ashen Brand makes its final Act I stand.",
+        "text": "Emberhall Cellars run under wet stone, ash ledgers, and locked rooms that learned too many names. The last Brand orders collect there like bad smoke.",
+    },
     "Vein of Glass": {
         "menu": "The Act II region where claims, echoes, and old water-control systems converge.",
         "text": (
@@ -154,6 +187,46 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "Act II turns the campaign from road control toward memory control. Ownership still matters, but the sharper "
             "fight is over who gets to name what the buried world was trying to say."
         ),
+    },
+    "Ashlamp Claims Council": {
+        "menu": "Iron Hollow's Act II table of claimants, sponsors, clerks, and frightened witnesses.",
+        "text": "The council smells of lamp brass, damp wool, and fresh ink. Every faction brings a map, and every map wants the next expedition to owe it something.",
+    },
+    "Act II Expedition Hub": {
+        "menu": "The working table for routes, sponsors, camp pressure, and Act II leads.",
+        "text": "The hub is a room of pins, ration tallies, and muddy boots. The party chooses which trouble gets daylight before the others learn to move.",
+    },
+    "Hushfen and the Pale Circuit": {
+        "menu": "A fen road where dead witness, old vows, and Choir defilement share the same mud.",
+        "text": "Hushfen keeps low water, grave moss, and pale signal marks under the reeds. Travelers lower their voices there before they know why.",
+    },
+    "Greywake Wood": {
+        "menu": "A cut survey line where rival claims and Quiet Choir lookouts edit the route.",
+        "text": "Greywake Wood holds snapped stakes, spoiled stores, and sightlines trimmed by someone who knew the survey habits. The trees keep the freshest lies at boot height.",
+    },
+    "Stonehollow Dig": {
+        "menu": "A collapsed dig site of trapped scholars, tunnel predators, and nervous claim marks.",
+        "text": "Stonehollow Dig breathes grit from broken lifts and half-shored cuts. Every lantern beam finds another place where the floor stopped agreeing to be floor.",
+    },
+    "Glasswater Intake": {
+        "menu": "A waterworks annex where permits, valves, and runoff carry Quiet Choir pressure.",
+        "text": "Glasswater Intake starts with a wet rock apron and the clack of a gatehouse winch. Green wax in the wrong groove can make a whole valley drink a lie.",
+    },
+    "Siltlock Counting House": {
+        "menu": "A claims office where water permits, ration tags, and wax seals turn harm into paperwork.",
+        "text": "Siltlock keeps tidy counters over dirty records. Permit stacks, charity crocks, and a back till all know who profited before Glasswater sounded sick.",
+    },
+    "Sabotage Night": {
+        "menu": "A three-front Iron Hollow crisis where delayed leads come due after dark.",
+        "text": "Sabotage Night breaks across bells, smoke stores, and rooflines. The town learns which problem the party left breathing longest.",
+    },
+    "Broken Prospect": {
+        "menu": "A shattered claim shelf at the edge of the Resonant Vaults.",
+        "text": "Broken Prospect hangs on bad timber, pact markers, and rival survey shelves. The rock has been argued over so often the stakes look nervous.",
+    },
+    "South Adit": {
+        "menu": "A prison cut where the Choir hides witnesses inside old mining work.",
+        "text": "South Adit carries pick dust, silent cells, and wrist slates corrected by cold hands. The exit smells of drainage water and fear that almost made it out.",
     },
     "Resonant Vaults": {
         "menu": "The deep ruin complex beneath Act II, where record and reality begin to blur.",
@@ -165,6 +238,14 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "it enough ritual, pressure, and patience."
         ),
     },
+    "Blackglass Causeway": {
+        "menu": "A drowned crossing where old anchor chains and black water guard the lower route.",
+        "text": "Blackglass Causeway stretches over water dark enough to swallow lantern light. Chains knock below the planks as if the crossing is counting weight.",
+    },
+    "Blackglass Relay House": {
+        "menu": "A relay station where ledgers, bells, and cable sumps carry the route's old commands.",
+        "text": "Blackglass Relay House keeps its teeth in cables, counterweights, and null-bell walks. The place answers hands that know which lever sounds official.",
+    },
     "Meridian Forge": {
         "menu": "The Act II convergence point where old infrastructure can be repaired or weaponized.",
         "text": (
@@ -174,6 +255,14 @@ LOCATION_LORE: dict[str, LoreEntry] = {
             "That puts the whole campaign argument in one room. The Forge can restore old permissions, or it can force "
             "survivors to decide which parts of the old world deserve to stay buried."
         ),
+    },
+    "Ninth Ledger": {
+        "menu": "The Act III opening pressure point where hidden routes and old accounts wake.",
+        "text": "The Ninth Ledger opens with paper that should have stayed blank. Names, debts, and route marks begin answering a hand no clerk admits training.",
+    },
+    "Ledger Aftermath": {
+        "menu": "The follow-through after the Ninth Ledger starts naming old pressure.",
+        "text": "Ledger Aftermath is quieter than the opening shock. People count who vanished from the page, who appeared, and whose seal suddenly feels heavy.",
     },
 }
 
@@ -701,7 +790,8 @@ def format_armor_summary(class_name: str) -> str:
     shield = "shield included" if CLASSES[class_name]["shield"] else "no shield"
     if armor is None:
         return f"Starts unarmored with {shield}."
-    armor_bits = [f"{armor.name} (base Defense {armor.base_ac})", shield]
+    defense = int(getattr(armor, "defense_points", armor.base_ac) or armor.base_ac)
+    armor_bits = [f"{armor.name} (Defense {defense}, DR {base_damage_reduction_for_defense(defense):.1f}%)", shield]
     if armor.heavy:
         armor_bits.append("heavy shell")
     elif armor.dex_cap is None:

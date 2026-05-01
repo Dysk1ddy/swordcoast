@@ -4,6 +4,7 @@ from dataclasses import replace
 
 from ...dice import ability_modifier
 from ...gameplay.class_framework import synchronize_class_resources
+from ...gameplay.defense_formula import DEFENSE_POINT_CAP, DEFENSE_POINT_FLOOR, base_damage_reduction_for_defense
 from ...gameplay.magic_points import synchronize_magic_points
 from ...gameplay.spell_slots import synchronize_spell_slots
 from ...models import Armor, Character, Weapon
@@ -29,60 +30,85 @@ HIGH_AVOIDANCE_ENEMY_TEMPLATES = frozenset(
         "lantern_fen_wisp",
         "obelisk_eye",
         "stirge_swarm",
+        "varyn",
     }
 )
-LOW_LEVEL_ENEMY_COMBAT_PROFILES: dict[str, dict[str, int]] = {
-    "goblin_skirmisher": {"avoidance": 1, "defense_percent": 10},
-    "wolf": {"avoidance": 1, "defense_percent": 10},
-    "bandit": {"avoidance": 0, "defense_percent": 10},
-    "bandit_archer": {"avoidance": 1, "defense_percent": 15},
-    "brand_saboteur": {"avoidance": 1, "defense_percent": 15},
-    "skeletal_sentry": {"avoidance": 0, "defense_percent": 20},
-    "worg": {"avoidance": 1, "defense_percent": 15},
-    "orc_raider": {"avoidance": 0, "defense_percent": 25},
-    "cinder_kobold": {"avoidance": 1, "defense_percent": 15},
-    "briar_twig": {"avoidance": 0, "defense_percent": 15},
-    "mireweb_spider": {"avoidance": 1, "defense_percent": 25},
-    "gutter_zealot": {"avoidance": 0, "defense_percent": 5},
-    "rust_shell_scuttler": {"avoidance": 0, "defense_percent": 25},
-    "sereth_vane": {"avoidance": 2, "defense_percent": 25},
-    "ash_brand_enforcer": {"avoidance": 0, "defense_percent": 30},
-    "ember_channeler": {"avoidance": 0, "defense_percent": 5},
-    "carrion_stalker": {"avoidance": 2, "defense_percent": 25},
-    "orc_bloodchief": {"avoidance": 0, "defense_percent": 30},
-    "ogre_brute": {"avoidance": -1, "defense_percent": 20},
-    "gravecaller": {"avoidance": 0, "defense_percent": 15},
-    "expedition_reaver": {"avoidance": 1, "defense_percent": 20},
-    "cult_lookout": {"avoidance": 1, "defense_percent": 20},
-    "grimlock_tunneler": {"avoidance": 0, "defense_percent": 25},
-    "stirge_swarm": {"avoidance": 3, "defense_percent": 5},
-    "ochre_slime": {"avoidance": -2, "defense_percent": 5},
-    "animated_armor": {"avoidance": -1, "defense_percent": 45, "defense_cap_percent": 80},
-    "lantern_fen_wisp": {"avoidance": 3, "defense_percent": 0},
-    "ashstone_percher": {"avoidance": 1, "defense_percent": 30},
-    "acidmaw_burrower": {"avoidance": 0, "defense_percent": 30},
-    "bugbear_reaver": {"avoidance": 0, "defense_percent": 25},
-    "nothic": {"avoidance": 0, "defense_percent": 20},
-    "rukhar": {"avoidance": 0, "defense_percent": 30},
-    "choir_adept": {"avoidance": 0, "defense_percent": 10},
-    "spectral_foreman": {"avoidance": 1, "defense_percent": 25},
-    "starblighted_miner": {"avoidance": 0, "defense_percent": 15},
-    "ettervine_webherd": {"avoidance": 1, "defense_percent": 25},
-    "carrion_lash_crawler": {"avoidance": 1, "defense_percent": 25},
-    "cache_mimic": {"avoidance": 0, "defense_percent": 30},
-    "stonegaze_skulker": {"avoidance": 0, "defense_percent": 40},
-    "cliff_harpy": {"avoidance": 2, "defense_percent": 15},
-    "whispermaw_blob": {"avoidance": -2, "defense_percent": 5},
-    "vaelith_marr": {"avoidance": 2, "defense_percent": 25},
-    "false_map_skirmisher": {"avoidance": 3, "defense_percent": 15},
-    "claimbinder_notary": {"avoidance": 0, "defense_percent": 25},
-    "echo_sapper": {"avoidance": 0, "defense_percent": 40},
-    "pact_archive_warden": {"avoidance": 0, "defense_percent": 55, "defense_cap_percent": 80},
-    "blackglass_listener": {"avoidance": 3, "defense_percent": 15},
-    "blacklake_pincerling": {"avoidance": 0, "defense_percent": 50, "defense_cap_percent": 80},
-    "graveblade_wight": {"avoidance": 0, "defense_percent": 50, "defense_cap_percent": 80},
-    "cinderflame_skull": {"avoidance": 3, "defense_percent": 15},
-    "obelisk_eye": {"avoidance": 3, "defense_percent": 20},
+LOW_LEVEL_ENEMY_COMBAT_PROFILES: dict[str, dict[str, object]] = {
+    "goblin_skirmisher": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "wolf": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "bandit": {"avoidance": 0, "defense": 11, "role": "ordinary"},
+    "bandit_archer": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "brand_saboteur": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "skeletal_sentry": {"avoidance": 0, "defense": 12, "role": "armored"},
+    "worg": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "orc_raider": {"avoidance": 0, "defense": 12, "role": "armored"},
+    "cinder_kobold": {"avoidance": 1, "defense": 11, "role": "ordinary"},
+    "briar_twig": {"avoidance": 0, "defense": 11, "role": "ordinary"},
+    "mireweb_spider": {"avoidance": 1, "defense": 12, "role": "armored"},
+    "gutter_zealot": {"avoidance": 0, "defense": 10, "role": "ordinary"},
+    "rust_shell_scuttler": {"avoidance": 0, "defense": 12, "role": "armored"},
+    "sereth_vane": {"avoidance": 2, "defense": 13, "role": "elite"},
+    "ash_brand_enforcer": {"avoidance": 0, "defense": 13, "role": "armored"},
+    "ember_channeler": {"avoidance": 0, "defense": 10, "role": "ordinary"},
+    "carrion_stalker": {"avoidance": 2, "defense": 12, "role": "armored"},
+    "orc_bloodchief": {"avoidance": 0, "defense": 14, "role": "boss"},
+    "ogre_brute": {"avoidance": -1, "defense": 12, "role": "armored"},
+    "gravecaller": {"avoidance": 0, "defense": 12, "role": "elite"},
+    "expedition_reaver": {"avoidance": 1, "defense": 12, "role": "ordinary"},
+    "cult_lookout": {"avoidance": 1, "defense": 12, "role": "ordinary"},
+    "grimlock_tunneler": {"avoidance": 0, "defense": 12, "role": "armored"},
+    "stirge_swarm": {"avoidance": 3, "defense": 10, "role": "ordinary"},
+    "ochre_slime": {"avoidance": -2, "defense": 10, "role": "ordinary"},
+    "animated_armor": {"avoidance": -1, "defense": 15, "role": "elite"},
+    "lantern_fen_wisp": {"avoidance": 3, "defense": 10, "role": "ordinary"},
+    "ashstone_percher": {"avoidance": 1, "defense": 13, "role": "armored"},
+    "acidmaw_burrower": {"avoidance": 0, "defense": 13, "role": "armored"},
+    "bugbear_reaver": {"avoidance": 0, "defense": 13, "role": "armored"},
+    "nothic": {"avoidance": 0, "defense": 12, "role": "ordinary"},
+    "rukhar": {"avoidance": 0, "defense": 15, "role": "boss"},
+    "choir_adept": {"avoidance": 0, "defense": 11, "role": "elite"},
+    "spectral_foreman": {"avoidance": 1, "defense": 14, "role": "elite"},
+    "starblighted_miner": {"avoidance": 0, "defense": 11, "role": "ordinary"},
+    "ettervine_webherd": {"avoidance": 1, "defense": 12, "role": "armored"},
+    "carrion_lash_crawler": {"avoidance": 1, "defense": 12, "role": "armored"},
+    "cache_mimic": {"avoidance": 0, "defense": 13, "role": "armored"},
+    "stonegaze_skulker": {"avoidance": 0, "defense": 15, "role": "elite"},
+    "cliff_harpy": {"avoidance": 2, "defense": 11, "role": "ordinary"},
+    "whispermaw_blob": {"avoidance": -2, "defense": 10, "role": "ordinary"},
+    "vaelith_marr": {"avoidance": 2, "defense": 14, "role": "boss"},
+    "false_map_skirmisher": {"avoidance": 3, "defense": 11, "role": "ordinary"},
+    "claimbinder_notary": {"avoidance": 0, "defense": 13, "role": "elite"},
+    "echo_sapper": {"avoidance": 0, "defense": 14, "role": "elite"},
+    "pact_archive_warden": {"avoidance": 0, "defense": 16, "role": "elite"},
+    "blackglass_listener": {"avoidance": 3, "defense": 11, "role": "ordinary"},
+    "blacklake_pincerling": {"avoidance": 0, "defense": 15, "role": "elite"},
+    "graveblade_wight": {"avoidance": 0, "defense": 16, "role": "elite"},
+    "cinderflame_skull": {"avoidance": 3, "defense": 11, "role": "ordinary"},
+    "obelisk_eye": {"avoidance": 3, "defense": 12, "role": "elite"},
+    "varyn": {"avoidance": 3, "defense": 14, "role": "boss"},
+    "caldra_voss": {"avoidance": 1, "defense": 13, "role": "boss"},
+    "choir_cartographer": {"avoidance": 0, "defense": 13, "role": "elite"},
+    "resonance_leech": {"avoidance": 1, "defense": 12, "role": "ordinary"},
+    "survey_chain_revenant": {"avoidance": 0, "defense": 14, "role": "armored"},
+    "censer_horror": {"avoidance": 0, "defense": 15, "role": "elite"},
+    "memory_taker_adept": {"avoidance": 2, "defense": 12, "role": "ordinary"},
+    "iron_prayer_horror": {"avoidance": 0, "defense": 15, "role": "elite"},
+    "hookclaw_burrower": {"avoidance": 0, "defense": 14, "role": "armored"},
+    "thunderroot_mound": {"avoidance": -1, "defense": 13, "role": "armored"},
+    "obelisk_chorister": {"avoidance": 0, "defense": 14, "role": "elite"},
+    "blacklake_adjudicator": {"avoidance": 0, "defense": 17, "role": "boss"},
+    "forge_echo_stalker": {"avoidance": 2, "defense": 13, "role": "ordinary"},
+    "covenant_breaker_wight": {"avoidance": 0, "defense": 17, "role": "boss"},
+    "hollowed_survey_titan": {"avoidance": -1, "defense": 16, "role": "elite"},
+    "oathbroken_revenant": {"avoidance": 0, "defense": 16, "role": "elite"},
+    "choir_executioner": {"avoidance": 0, "defense": 16, "role": "elite"},
+    "duskmire_matriarch": {"avoidance": 0, "defense": 17, "role": "boss"},
+}
+ENEMY_DEFENSE_ROLE_CAPS: dict[str, tuple[tuple[int, int], ...]] = {
+    "ordinary": ((1, 11), (3, 12), (5, 13), (99, 14)),
+    "armored": ((1, 12), (2, 13), (4, 14), (5, 15), (99, 16)),
+    "elite": ((1, 13), (2, 15), (4, 16), (5, 17), (99, 18)),
+    "boss": ((1, 14), (2, 15), (3, 16), (4, 17), (5, 18), (99, 19)),
 }
 SMOOTH_ORDINARY_ENEMY_DAMAGE_EXPRESSIONS = {
     "1d6": "1d4+1",
@@ -202,6 +228,16 @@ def create_elira_dawnmantle() -> Character:
         tags=["hero", "companion"],
     )
     character.spellcasting_ability = "WIS"
+    character.armor = Armor(
+        name="Chain Shirt",
+        base_ac=13,
+        armor_type="medium",
+        dex_cap=2,
+        defense_percent=20,
+        defense_cap_percent=75,
+        defense_points=13,
+        defense_cap_points=22,
+    )
     synchronize_magic_points(character, refill=True)
     return apply_companion_profile(character, "elira_dawnmantle")
 
@@ -278,28 +314,44 @@ def enemy_base_avoidance(enemy: Character) -> int:
     return dex_mod
 
 
+def enemy_defense_role_cap(enemy: Character, role: str) -> int:
+    bands = ENEMY_DEFENSE_ROLE_CAPS.get(role, ENEMY_DEFENSE_ROLE_CAPS["ordinary"])
+    level = int(getattr(enemy, "level", 1))
+    for maximum_level, cap in bands:
+        if level <= maximum_level:
+            return cap
+    return bands[-1][1]
+
+
 def apply_enemy_combat_profile(enemy: Character, template: str) -> None:
     profile = LOW_LEVEL_ENEMY_COMBAT_PROFILES.get(template)
     if profile is None:
         return
-    target_defense = max(0, int(profile["defense_percent"]))
+    role = str(profile.get("role", "ordinary"))
+    requested_defense = max(DEFENSE_POINT_FLOOR, int(profile["defense"]))
+    target_defense = min(requested_defense, enemy_defense_role_cap(enemy, role), DEFENSE_POINT_CAP)
     target_avoidance = int(profile["avoidance"])
-    cap = int(profile.get("defense_cap_percent", 75 if target_defense >= 25 else 45))
-    shield_defense = 5 if enemy.shield else 0
-    armor_defense = max(0, target_defense - shield_defense)
+    cap = max(target_defense, int(profile.get("defense_cap", DEFENSE_POINT_CAP)))
+    shield_defense = 1 if enemy.shield else 0
+    armor_defense = max(DEFENSE_POINT_FLOOR, target_defense - shield_defense)
+    target_reduction = round(base_damage_reduction_for_defense(target_defense))
     if enemy.armor is not None:
+        enemy.armor.defense_points = armor_defense
+        enemy.armor.defense_cap_points = cap
         enemy.armor.defense_percent = armor_defense
-        enemy.armor.defense_cap_percent = max(cap, target_defense)
+        enemy.armor.defense_cap_percent = round(base_damage_reduction_for_defense(cap))
     elif target_defense:
-        enemy.gear_bonuses["defense_percent"] = enemy.gear_bonuses.get("defense_percent", 0) + target_defense
-        enemy.gear_bonuses["defense_cap_percent"] = max(enemy.gear_bonuses.get("defense_cap_percent", 0), cap)
+        enemy.gear_bonuses["defense_points"] = enemy.gear_bonuses.get("defense_points", 0) + max(0, target_defense - DEFENSE_POINT_FLOOR)
+        enemy.gear_bonuses["defense_cap_points"] = max(enemy.gear_bonuses.get("defense_cap_points", 0), cap)
     avoidance_delta = target_avoidance - enemy_base_avoidance(enemy)
     if avoidance_delta:
         enemy.gear_bonuses["avoidance"] = enemy.gear_bonuses.get("avoidance", 0) + avoidance_delta
     enemy.bond_flags["combat_profile"] = {
         "template": template,
         "avoidance": target_avoidance,
-        "defense_percent": target_defense,
+        "defense": target_defense,
+        "damage_reduction_percent": target_reduction,
+        "role": role,
     }
 
 

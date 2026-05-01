@@ -240,8 +240,8 @@ Seeds: `1001` to `1100`
 
 | Action | Samples | Mean | CV | Zero | P10 | P50 | P90 | Crit | Crit damage share |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| L4 Warrior weapon vs bandit | `100` | `6.95` | `0.38` | `5.0%` | `4` | `7` | `10` | `4.0%` | `6.2%` |
-| L4 Warrior weapon vs false_map_skirmisher | `100` | `5.09` | `0.72` | `5.0%` | `0` | `5` | `10` | `4.0%` | `8.1%` |
+| L4 Warrior weapon vs bandit | `100` | `6.74` | `0.38` | `5.0%` | `4` | `7` | `10` | `4.0%` | `6.1%` |
+| L4 Warrior weapon vs false_map_skirmisher | `100` | `5.25` | `0.70` | `5.0%` | `0` | `6` | `10` | `4.0%` | `7.8%` |
 | L4 Warrior weapon vs animated_armor | `100` | `3.99` | `0.44` | `5.0%` | `2` | `4` | `6` | `4.0%` | `6.5%` |
 | L4 Mage Arcane Bolt bonus cycle vs bandit | `200` | `3.98` | `1.11` | `52.5%` | `0` | `0` | `10` | `2.0%` | `6.8%` |
 
@@ -249,16 +249,17 @@ Seeds: `1001` to `1100`
 
 | Encounter | Seeds | Victory | Rounds P10 | Rounds P50 | Rounds P90 | Downed mean | Downed P90 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Basic raiders | `100` | `100.0%` | `2` | `3` | `3` | `0.00` | `0` |
-| High Defense brutes | `100` | `100.0%` | `5` | `7` | `7` | `0.11` | `1` |
-| Sereth group | `100` | `100.0%` | `4` | `4` | `5` | `0.01` | `0` |
+| Basic raiders | `100` | `100.0%` | `2` | `3` | `4` | `0.00` | `0` |
+| High Defense brutes | `100` | `100.0%` | `5` | `7` | `8` | `0.11` | `1` |
+| Sereth group | `100` | `100.0%` | `4` | `5` | `6` | `0.01` | `0` |
 
 Read:
 
-- Ordinary raiders now stay inside a tight two-to-three-round band with no P90 downed allies.
-- High-Defense brutes still drag mud on the boots, but Glance pressure and chipped armor keep the P90 clear time at `7` rounds with P90 downed allies at `1`.
-- Sereth's group stays predictable across seeds: P10/P50/P90 rounds are `4/4/5`, and downed allies almost vanish in the fixed-seed pass.
-- Arcane Bolt still has a cooldown-shaped zero-result rate. Its crit damage share is low; further work should focus on miss follow-up or Pattern Charge rather than damage reduction.
+- Ordinary raiders stay controlled: P90 clear time is `4` rounds and P90 downed allies remains `0`.
+- High-Defense brutes still drag mud on the boots. Glance pressure and chipped armor keep the fight inside `5/7/8` rounds, with P90 downed allies at `1`.
+- Sereth's group now lands at `4/5/6` rounds after the save-degree pass. Partial control results add a few setup turns, while P90 downed allies remains `0`.
+- Pressure cuts the false-map skirmisher blank rate from `27%` to `5%` while keeping mean damage at `5.25`. The P10 result stays `0` because Pressure changes the next attack instead of dealing damage.
+- Arcane Bolt still has a cooldown-shaped zero-result rate. Its crit damage share is low; further work should focus on Pattern Charge and action-cycle text rather than damage reduction.
 
 ## Balance Read
 

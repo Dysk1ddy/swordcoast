@@ -63,7 +63,7 @@ class CampMixin:
             self.rich_text("3. Rest and recovery", "light_green"),
             self.rich_text("4. Talk to a companion", "light_green"),
             self.rich_text("5. View journal", "light_green"),
-            self.rich_text("6. Speak to the magic mirror", "light_green"),
+            self.rich_text("6. Respec", "light_green"),
             self.rich_text("7. Break camp", "light_green"),
         ]
         if has_banter:
@@ -142,7 +142,7 @@ class CampMixin:
                     "Rest and recovery",
                     "Talk to a companion",
                     "View journal",
-                    "Speak to the magic mirror (100 gold)",
+                    "Respec (100 gold)",
                     "Break camp",
                 ]
                 if self.available_camp_banters():

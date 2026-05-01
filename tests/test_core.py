@@ -184,6 +184,23 @@ class CoreTests(unittest.TestCase):
         self.assertEqual([member.name for member in game.state.camp_companions], snapshot["camp_companions"])
         self.assertEqual(list(game.state.journal), snapshot["journal"])
 
+    def test_elira_defaults_to_medium_armor(self) -> None:
+        elira = create_elira_dawnmantle()
+
+        self.assertIsNotNone(elira.armor)
+        assert elira.armor is not None
+        self.assertEqual(elira.armor.name, "Chain Shirt")
+        self.assertEqual(elira.armor.armor_type, "medium")
+        self.assertEqual(elira.armor.defense_percent, 20)
+        self.assertEqual(elira.armor.defense_points, 13)
+        self.assertEqual(elira.armor_class, 14)
+
+        game = TextDnDGame(input_fn=lambda _: "1", output_fn=lambda _: None)
+        game.state = GameState(player=elira)
+        game.ensure_state_integrity()
+
+        self.assertEqual(elira.equipment_slots["chest"], "chain_shirt_common")
+
     def guard_opening_tutorial_prompt(
         self,
         steps: dict[str, int],
@@ -479,15 +496,15 @@ class CoreTests(unittest.TestCase):
         block = chr(0x2588)
         rendered = plain_combat_status_text(
             f"Ashen Brand Runner: HP [\x1b[92m{block * 3}\x1b[0m     ] 3/11, "
-            f"Defense 10%, Avoidance +0 | MP [{block * 2}  ] 2/4"
+            f"Defense 11 (DR 12%), Avoidance +0 | MP [{block * 2}  ] 2/4"
         )
 
         self.assertEqual(
             rendered,
-            "Ashen Brand Runner: HP 3/11, Defense 10%, Avoidance +0 | MP 2/4",
+            "Ashen Brand Runner: HP 3/11, Defense 11 (DR 12%), Avoidance +0 | MP 2/4",
         )
         markup, _animated = format_kivy_log_entry(
-            f"Ashen Brand Runner: HP [{block * 3}     ] 3/11, Defense 10%, Avoidance +0"
+            f"Ashen Brand Runner: HP [{block * 3}     ] 3/11, Defense 11 (DR 12%), Avoidance +0"
         )
 
         visible = visible_markup_text(markup)
@@ -10159,6 +10176,32 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Browse Skills. (page 1)", rendered)
         self.assertIn("1. Return to lore categories", rendered)
 
+    def test_paged_menu_keeps_trailing_back_before_next_page(self) -> None:
+        log: list[str] = []
+        options = [f"Choice {index}" for index in range(1, 11)] + ["Back"]
+        game = TextDnDGame(input_fn=lambda _: "9", output_fn=log.append, rng=random.Random(448))
+
+        selected = game.choose("Paged menu.", options, allow_meta=False)
+
+        rendered = self.plain_output(log)
+        self.assertEqual(selected, 11)
+        self.assertIn("9. Back", rendered)
+        self.assertIn("10. Next page", rendered)
+        self.assertLess(rendered.index("9. Back"), rendered.index("10. Next page"))
+
+    def test_paged_story_menu_without_back_uses_normal_pagination(self) -> None:
+        answers = iter(["10", "1"])
+        log: list[str] = []
+        options = [f"Choice {index}" for index in range(1, 11)]
+        game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=log.append, rng=random.Random(449))
+
+        selected = game.choose("Story choice.", options, allow_meta=False)
+
+        rendered = self.plain_output(log)
+        self.assertEqual(selected, 10)
+        self.assertIn("10. Next page", rendered)
+        self.assertNotIn("Back", rendered)
+
     def test_lore_codex_class_entry_includes_gameplay_manual(self) -> None:
         answers = iter(["2", "2", "2", "10", "1"])
         log: list[str] = []
@@ -12589,7 +12632,7 @@ class CoreTests(unittest.TestCase):
             class_skill_choices=["Athletics", "Survival"],
         )
         companion = create_tolan_ironshield()
-        answers = iter(["2", "9", "2", "10", "2", "3"])
+        answers = iter(["2", "10", "1", "2", "9", "3"])
         game = TextDnDGame(input_fn=lambda _: next(answers), output_fn=lambda _: None, rng=random.Random(182))
         game.state = GameState(player=player, companions=[companion], current_scene="iron_hollow_hub", inventory={"dagger_common": 1})
         game.ensure_state_integrity()
@@ -15913,7 +15956,7 @@ class CoreTests(unittest.TestCase):
         rendered = self.plain_output(log)
         self.assertIn("Current Head: Roadworn Iron Cap", rendered)
         self.assertIn("Roadworn Traveler's Hood", rendered)
-        self.assertIn("Defense -5%", rendered)
+        self.assertIn("Defense -1", rendered)
         self.assertIn("Perception +1", rendered)
 
     def test_map_command_opens_map_menu_each_time_it_is_requested(self) -> None:
@@ -16680,7 +16723,13 @@ class CoreTests(unittest.TestCase):
         game = TextDnDGame(input_fn=lambda _: "1", output_fn=log.append, rng=random.Random(114))
         game.state = GameState(player=player, current_scene="emberhall_cellars")
         varyn.resources["silver_tongue"] = 0
-        game.saving_throw = lambda actor, ability, dc, context, against_poison=False: False
+        failed_roll = max(1, 12 - player.save_bonus("WIS") - 5)
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(
+            kept=failed_roll,
+            rolls=[failed_roll],
+            rerolls=[],
+            advantage_state=0,
+        )
         game.enemy_turn(varyn, [player], [varyn], SimpleNamespace(), set())
         self.assertIn("incapacitated", player.conditions)
         rendered = self.plain_output(log)

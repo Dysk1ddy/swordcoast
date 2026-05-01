@@ -1032,6 +1032,8 @@ class GameIOMixin:
             raise ValueError("Choice lists must contain at least one option.")
         prompt_context_lines = tuple(getattr(self, "_latest_narration_lines", ()))
         sticky_count = max(0, min(sticky_trailing_options, len(options) - 1))
+        if sticky_count == 0 and options[-1].strip().lower() == "back":
+            sticky_count = 1
         sticky_options = options[-sticky_count:] if sticky_count else []
         paged_options = options[:-sticky_count] if sticky_count else options
         page_size = max(1, MENU_PAGE_SIZE - sticky_count)

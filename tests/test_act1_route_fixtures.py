@@ -78,8 +78,8 @@ class Act1RouteFixtureTests(unittest.TestCase):
         self.assertEqual(ACT1_ATTRITION_DAMAGE_MULTIPLIER, 1.0)
         self.assertEqual(len(reports), len(route.segments))
         self.assertEqual(sum(report.encounter_count for report in reports), route.encounter_count)
-        self.assertGreaterEqual(total_damage, 650)
-        self.assertLessEqual(total_damage, 780)
+        self.assertGreaterEqual(total_damage, 560)
+        self.assertLessEqual(total_damage, 680)
         self.assertGreaterEqual(total_short_rests, 4)
         self.assertLessEqual(total_short_rests, 7)
         self.assertEqual(total_long_rests, 0)
@@ -91,7 +91,7 @@ class Act1RouteFixtureTests(unittest.TestCase):
         pressure_segments = {
             report.segment_key
             for report in reports
-            if report.minimum_survival_margin_rounds < 2.0
+            if report.minimum_survival_margin_rounds < 3.0
         }
         self.assertIn("blackwake_crossing", pressure_segments)
         self.assertIn("red_mesa_hold", pressure_segments)

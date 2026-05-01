@@ -117,6 +117,8 @@ class ExamineEntryTests(unittest.TestCase):
         self.assertIn("Warriors hold ground", entry.description)
         self.assertIn("soldier training", entry.description)
         self.assertIn("Background: Soldier", entry.details)
+        self.assertIn("HP: 18/18 | Defense: 17 (DR 56.7%) | Contact: 18", entry.details)
+        self.assertIn("Armor: Chain Mail | Dex cap +0", entry.details)
         self.assertNotIn("combatant or party member", entry.description.lower())
 
     def test_game_stat_terms_have_examine_entries(self) -> None:

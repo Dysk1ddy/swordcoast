@@ -433,6 +433,53 @@ class PanelBox(BoxLayout):
         self._canvas_color.rgba = color
 
 
+class TimerProgressBar(Widget):
+    def __init__(
+        self,
+        *,
+        track_color=(0.16, 0.13, 0.09, 1),
+        fill_color=(0.94, 0.67, 0.26, 1),
+        radius: int = 2,
+        **kwargs,
+    ):
+        self._progress = 0.0
+        self._track_rgba = track_color
+        self._fill_rgba = fill_color
+        self._bar_radius = radius
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            self._track_color = Color(*self._track_rgba)
+            self._track_rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[dp(radius)])
+            self._fill_color = Color(*self._fill_rgba)
+            self._fill_rect = RoundedRectangle(pos=self.pos, size=(0, self.height), radius=[dp(radius)])
+        self.bind(pos=self._sync_canvas, size=self._sync_canvas)
+
+    def set_progress(self, progress: float) -> None:
+        try:
+            progress_value = float(progress)
+        except (TypeError, ValueError):
+            progress_value = 0.0
+        self._progress = min(1.0, max(0.0, progress_value))
+        self._sync_canvas()
+
+    def set_colors(
+        self,
+        *,
+        track: tuple[float, float, float, float],
+        fill: tuple[float, float, float, float],
+    ) -> None:
+        self._track_rgba = track
+        self._fill_rgba = fill
+        self._track_color.rgba = track
+        self._fill_color.rgba = fill
+
+    def _sync_canvas(self, *_args) -> None:
+        self._track_rect.pos = self.pos
+        self._track_rect.size = self.size
+        self._fill_rect.pos = self.pos
+        self._fill_rect.size = (max(0, self.width * self._progress), self.height)
+
+
 class MapTokenLabel(Label):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1491,10 +1538,7 @@ class NativeCommandWorkspace(BoxLayout):
     def _inventory_filter_button_text(self, filter_snapshot) -> str:
         count = max(0, int(getattr(filter_snapshot, "count", 0)))
         noun = "item" if count == 1 else "items"
-        return (
-            f"[b]{escape_kivy_markup(filter_snapshot.label)}[/b]\n"
-            f"[size=10sp]{count} {noun}[/size]"
-        )
+        return f"[b]{escape_kivy_markup(filter_snapshot.label)}[/b] [size=11sp]({count} {noun})[/size]"
 
     def _journal_updates_markup(self, snapshot) -> str:
         lines = ["[size=17sp][b][color=#facc15]Recent Updates[/color][/b][/size]", ""]
@@ -1556,9 +1600,13 @@ class NativeCommandWorkspace(BoxLayout):
             free_text = f"{item.available} free" if item.equipped else f"x{item.quantity}"
             if item.equipped:
                 free_text += f" | {item.equipped} equipped"
+            label_parts = [item.category_label]
+            if item.kind_label.casefold() != item.category_label.casefold():
+                label_parts.append(item.kind_label)
+            label_parts.extend([item.rarity_title, free_text])
             row = (
                 f"[b][color=#{rarity}]{escape_kivy_markup(item.name)}[/color][/b]\n"
-                f"[size=11sp]{escape_kivy_markup(item.kind_label)} | {escape_kivy_markup(item.rarity_title)} | {escape_kivy_markup(free_text)}[/size]"
+                f"[size=11sp]{escape_kivy_markup(' | '.join(label_parts))}[/size]"
             )
             grid.add_widget(
                 self._button(
@@ -1591,8 +1639,9 @@ class NativeCommandWorkspace(BoxLayout):
         action_text = " | ".join(action_bits) if action_bits else "No direct action"
         lines = [
             f"[size=17sp][b][color=#{rarity}]{escape_kivy_markup(item.name)}[/color][/b][/size]",
-            f"[color=#b9ad91]{escape_kivy_markup(item.rarity_title)} {escape_kivy_markup(item.kind_label)}[/color]",
+            f"[color=#b9ad91]{escape_kivy_markup(item.rarity_title)} {escape_kivy_markup(item.category_label)}[/color]",
             "",
+            self._stat_line("Category", f"{item.category_label} / {item.item_type_label}"),
             self._stat_line("Quantity", f"{item.quantity} carried | {item.available} free | {item.equipped} equipped"),
             self._stat_line("Value", item.value_label),
             self._stat_line("Supply", item.supply_label),
@@ -4284,6 +4333,8 @@ class ClickableTextDnDGame(TextDnDGame):
             raise ValueError("Choice lists must contain at least one option.")
 
         sticky_count = max(0, min(sticky_trailing_options, len(options) - 1))
+        if sticky_count == 0 and options[-1].strip().lower() == "back":
+            sticky_count = 1
         sticky_options = options[-sticky_count:] if sticky_count else []
         paged_options = options[:-sticky_count] if sticky_count else options
         page_size = max(1, MENU_PAGE_SIZE - sticky_count)
@@ -4385,6 +4436,9 @@ class GameScreen(BoxLayout):
     DICE_ANIMATION_TRAY_MAX_HEIGHT = 340
     DICE_ANIMATION_TRAY_HIDE_SECONDS = 5.0
     DICE_ANIMATION_TRAY_FADE_SECONDS = 0.22
+    DICE_ROLL_TRAY_MIN_HEIGHT = 184
+    DICE_ROLL_TRAY_TIMER_HEIGHT = 5
+    DICE_ROLL_TRAY_TIMER_INTERVAL_SECONDS = 1.0 / 30.0
     SEND_BUTTON_FONT_SIZE = "14sp"
     COMMAND_BUTTON_FONT_SIZE = "15sp"
     COMMAND_BAR_HEIGHT = 40
@@ -4486,6 +4540,8 @@ class GameScreen(BoxLayout):
         "title_choice_disabled_text": (0.54, 0.52, 0.48, 1),
         "dice_tray": (0.105, 0.085, 0.055, 1),
         "dice_tray_text": (0.96, 0.86, 0.62, 1),
+        "dice_tray_timer_track": (0.18, 0.14, 0.09, 1),
+        "dice_tray_timer_fill": (0.95, 0.62, 0.24, 1),
     }
     LIGHT_THEME = {
         "window": (0.93, 0.89, 0.80, 1),
@@ -4533,6 +4589,8 @@ class GameScreen(BoxLayout):
         "title_choice_disabled_text": (0.36, 0.34, 0.30, 1),
         "dice_tray": (0.82, 0.73, 0.55, 1),
         "dice_tray_text": (0.18, 0.12, 0.06, 1),
+        "dice_tray_timer_track": (0.64, 0.53, 0.34, 1),
+        "dice_tray_timer_fill": (0.48, 0.27, 0.08, 1),
     }
     TITLE_MENU_LABELS = {
         "continue": "Continue",
@@ -4570,6 +4628,11 @@ class GameScreen(BoxLayout):
         self._dice_tray_fade_generation = 0
         self._dice_roll_tray_active = False
         self._dice_roll_tray_fade_generation = 0
+        self._dice_roll_tray_hide_event = None
+        self._dice_roll_tray_hide_ready_at = 0.0
+        self._dice_roll_timer_event = None
+        self._dice_roll_timer_started_at = 0.0
+        self._dice_roll_timer_duration = 0.0
         self._persistent_dice_tray_markup = ""
         self._persistent_dice_tray_height: float | None = None
         self._persistent_dice_tray_parts: tuple[str, str, str] | None = None
@@ -4891,9 +4954,16 @@ class GameScreen(BoxLayout):
             self._apply_font(label, "mono")
             label.bind(size=self._sync_dice_roll_label)
             self.dice_roll_row.add_widget(label)
+        self.dice_roll_timer_bar = TimerProgressBar(
+            size_hint_y=None,
+            height=dp(self.DICE_ROLL_TRAY_TIMER_HEIGHT),
+            track_color=self.theme["dice_tray_timer_track"],
+            fill_color=self.theme["dice_tray_timer_fill"],
+        )
         self.dice_roll_tray.add_widget(self.dice_roll_header)
         self.dice_roll_tray.add_widget(self.dice_roll_panel_label)
         self.dice_roll_tray.add_widget(self.dice_roll_row)
+        self.dice_roll_tray.add_widget(self.dice_roll_timer_bar)
         self.log_shell.add_widget(self.dice_animation_tray)
         self.left_column.add_widget(self.log_shell)
 
@@ -5963,6 +6033,11 @@ class GameScreen(BoxLayout):
             self.dice_roll_suffix_label,
         ):
             label.color = theme["dice_tray_text"]
+        if hasattr(self, "dice_roll_timer_bar"):
+            self.dice_roll_timer_bar.set_colors(
+                track=theme["dice_tray_timer_track"],
+                fill=theme["dice_tray_timer_fill"],
+            )
         self.prompt_label.color = theme["prompt"]
         if hasattr(self, "choice_scroll_indicator"):
             self.choice_scroll_indicator.color = theme["prompt"]
@@ -7011,7 +7086,7 @@ class GameScreen(BoxLayout):
             getattr(combatant, "max_hp", 1),
         )
         damage_popup = self.combat_damage_popup_markup(combatant)
-        ac = getattr(combatant, "armor_class", "?")
+        contact = getattr(combatant, "armor_class", "?")
         temp = f" temp {combatant.temp_hp}" if getattr(combatant, "temp_hp", 0) else ""
         defense_summary = ""
         combat_defense_summary = getattr(game, "combat_defense_summary", None)
@@ -7020,7 +7095,7 @@ class GameScreen(BoxLayout):
         status = " DEAD" if getattr(combatant, "dead", False) else " DOWN" if getattr(combatant, "current_hp", 0) <= 0 else ""
         lines = [
             f"{name_markup}"
-            f" [size=14sp][color=#b8a98d]Lv {getattr(combatant, 'level', '?')} AC {ac}{defense_summary}{temp}{status}[/color][/size]",
+            f" [size=14sp][color=#b8a98d]Lv {getattr(combatant, 'level', '?')} Contact {contact}{defense_summary}{temp}{status}[/color][/size]",
             f"[size=14sp]HP: {hp}{damage_popup}[/size]",
         ]
         max_mp = maximum_magic_points(combatant)
@@ -7233,6 +7308,61 @@ class GameScreen(BoxLayout):
 
         self._dice_tray_hide_event = Clock.schedule_once(hide_tray, visible_seconds)
 
+    def _cancel_dice_roll_tray_hide(self) -> None:
+        hide_event = getattr(self, "_dice_roll_tray_hide_event", None)
+        if hide_event is not None:
+            hide_event.cancel()
+            self._dice_roll_tray_hide_event = None
+        timer_event = getattr(self, "_dice_roll_timer_event", None)
+        if timer_event is not None:
+            timer_event.cancel()
+            self._dice_roll_timer_event = None
+        self._dice_roll_tray_hide_ready_at = 0.0
+        self._dice_roll_timer_started_at = 0.0
+        self._dice_roll_timer_duration = 0.0
+
+    def _set_dice_roll_timer_progress(self, progress: float) -> None:
+        timer_bar = getattr(self, "dice_roll_timer_bar", None)
+        if timer_bar is not None and hasattr(timer_bar, "set_progress"):
+            timer_bar.set_progress(progress)
+
+    def _schedule_dice_roll_tray_hide(self) -> None:
+        self._cancel_dice_roll_tray_hide()
+        visible_seconds = self._dice_tray_hold_seconds()
+        hide_generation = self._dice_roll_tray_fade_generation
+        started_at = time.monotonic()
+        self._dice_roll_timer_started_at = started_at
+        self._dice_roll_timer_duration = visible_seconds
+        self._dice_roll_tray_hide_ready_at = started_at + visible_seconds
+        self._set_dice_roll_timer_progress(1.0)
+
+        def update_timer(_dt):
+            if hide_generation != self._dice_roll_tray_fade_generation:
+                return False
+            remaining = max(0.0, self._dice_roll_tray_hide_ready_at - time.monotonic())
+            progress = remaining / visible_seconds if visible_seconds > 0 else 0.0
+            self._set_dice_roll_timer_progress(progress)
+            if progress <= 0.0:
+                return False
+            return True
+
+        def hide_tray(_dt) -> None:
+            if hide_generation != self._dice_roll_tray_fade_generation:
+                return
+            remaining = self._dice_roll_tray_hide_ready_at - time.monotonic()
+            if remaining > 0.01:
+                self._dice_roll_tray_hide_event = Clock.schedule_once(hide_tray, remaining)
+                return
+            self._dice_roll_tray_hide_event = None
+            self._set_dice_roll_timer_progress(0.0)
+            self._clear_dice_roll_tray()
+
+        self._dice_roll_timer_event = Clock.schedule_interval(
+            update_timer,
+            self.DICE_ROLL_TRAY_TIMER_INTERVAL_SECONDS,
+        )
+        self._dice_roll_tray_hide_event = Clock.schedule_once(hide_tray, visible_seconds)
+
     def _remember_persistent_dice_tray(
         self,
         markup: str,
@@ -7282,7 +7412,10 @@ class GameScreen(BoxLayout):
 
     def _set_dice_roll_tray_visible(self, visible: bool, *, tray_height: float | None = None) -> None:
         self._dice_roll_tray_active = visible
-        height = max(168.0, float(self.DICE_ANIMATION_TRAY_HEIGHT if tray_height is None else tray_height))
+        height = max(
+            float(self.DICE_ROLL_TRAY_MIN_HEIGHT),
+            float(self.DICE_ANIMATION_TRAY_HEIGHT if tray_height is None else tray_height),
+        )
         self.dice_roll_tray.height = dp(height) if visible else 0
         self.dice_roll_tray.opacity = 1 if visible else 0
         self.dice_roll_tray.disabled = not visible
@@ -7290,6 +7423,8 @@ class GameScreen(BoxLayout):
     def _clear_dice_roll_tray(self) -> None:
         self._dice_roll_tray_fade_generation += 1
         Animation.cancel_all(self.dice_roll_tray, "opacity")
+        self._cancel_dice_roll_tray_hide()
+        self._set_dice_roll_timer_progress(0.0)
         self.dice_roll_panel_label.text = ""
         self.dice_roll_prefix_label.text = ""
         self.dice_roll_core_label.text = ""
@@ -7344,7 +7479,11 @@ class GameScreen(BoxLayout):
             self.dice_roll_core_label.font_size = "34sp"
             for label in (self.dice_roll_prefix_label, self.dice_roll_core_label, self.dice_roll_suffix_label):
                 self._sync_dice_roll_label(label)
-        del final
+        if final:
+            self._schedule_dice_roll_tray_hide()
+        else:
+            self._cancel_dice_roll_tray_hide()
+            self._set_dice_roll_timer_progress(1.0)
 
     def fade_out_initiative_tray(self) -> None:
         self._fade_out_dice_tray()
@@ -8077,9 +8216,9 @@ class GameScreen(BoxLayout):
         if getattr(self, "_title_menu_active", False):
             return False
         try:
-            if self.combat_active():
-                return False
             game = self.active_game()
+            if self.combat_active() and not bool(getattr(game, "_random_encounter_active", False)):
+                return False
         except AttributeError:
             return False
         state = getattr(game, "state", None) if game is not None else None
@@ -8121,6 +8260,8 @@ class GameScreen(BoxLayout):
 
     def _choice_scroll_indicator_needed(self) -> bool:
         if not hasattr(self, "options_scroll") or not hasattr(self, "options_grid"):
+            return False
+        if len(getattr(self, "option_buttons", []) or []) <= self.OPTION_BUTTON_VISIBLE_ROWS:
             return False
         if not bool(getattr(self.options_scroll, "do_scroll_y", False)):
             return False

@@ -150,22 +150,32 @@ class AndroidTextDnDGame(TextDnDGame):
         show_hud: bool = True,
         sticky_trailing_options: int = 0,
     ) -> int:
-        del allow_meta, staggered, show_hud, sticky_trailing_options
+        del allow_meta, staggered, show_hud
         if not options:
             raise ValueError("Choice lists must contain at least one option.")
 
-        if len(options) > MENU_PAGE_SIZE:
+        sticky_count = max(0, min(sticky_trailing_options, len(options) - 1))
+        if sticky_count == 0 and options[-1].strip().lower() == "back":
+            sticky_count = 1
+        sticky_options = options[-sticky_count:] if sticky_count else []
+        paged_options = options[:-sticky_count] if sticky_count else options
+        page_size = max(1, MENU_PAGE_SIZE - sticky_count)
+
+        if len(paged_options) > page_size:
             page = 0
-            page_size = MENU_PAGE_SIZE
             while True:
                 start = page * page_size
-                visible = options[start : start + page_size]
-                labels = list(visible)
+                visible = paged_options[start : start + page_size]
+                labels = [*visible, *sticky_options]
                 nav_map: dict[int, str] = {}
+                sticky_map = {
+                    len(visible) + offset + 1: len(paged_options) + offset + 1
+                    for offset in range(len(sticky_options))
+                }
                 if page > 0:
                     labels.append("Previous page")
                     nav_map[len(labels)] = "prev"
-                if start + page_size < len(options):
+                if start + page_size < len(paged_options):
                     labels.append("Next page")
                     nav_map[len(labels)] = "next"
                 raw = self.bridge.request_choice(f"{prompt} (page {page + 1})", labels).strip()
@@ -176,6 +186,8 @@ class AndroidTextDnDGame(TextDnDGame):
                     if value in nav_map:
                         page = page - 1 if nav_map[value] == "prev" else page + 1
                         continue
+                    if value in sticky_map:
+                        return sticky_map[value]
                     if 1 <= value <= len(visible):
                         return start + value
                 self.say("Please choose one of the listed options.")

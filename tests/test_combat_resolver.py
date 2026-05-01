@@ -5,7 +5,7 @@ import unittest
 
 from dnd_game.content import build_character
 from dnd_game.content import create_enemy
-from dnd_game.data.items.catalog import ITEMS, item_rules_text
+from dnd_game.data.items.catalog import ITEMS, armor_defense_points, item_rules_text, shield_defense_points
 from dnd_game.data.story.factories import (
     AVOIDANCE_BANDS,
     BASELINE_HIT_CHANCE_TARGET,
@@ -14,6 +14,11 @@ from dnd_game.data.story.factories import (
 )
 from dnd_game.dice import D20Outcome, RollOutcome
 from dnd_game.game import TextDnDGame
+from dnd_game.gameplay.combat_resolution import (
+    base_damage_reduction_for_defense,
+    damage_reduction_for_defense,
+    defense_level_scaling_multiplier,
+)
 from dnd_game.gameplay.combat_simulator import simulate_weapon_attack
 from dnd_game.gameplay.encounter import Encounter
 from dnd_game.models import Armor, GameState, Weapon
@@ -59,6 +64,30 @@ class ScriptedRandom(random.Random):
 
 
 class CombatResolverTests(unittest.TestCase):
+    def test_defense_point_damage_reduction_curve_caps_at_eighty_percent(self) -> None:
+        self.assertEqual(base_damage_reduction_for_defense(9), 0)
+        anchors = {
+            10: 0.0,
+            14: 37.7,
+            17: 56.7,
+            20: 71.6,
+            22: 80.0,
+        }
+        for defense, expected_reduction in anchors.items():
+            with self.subTest(defense=defense):
+                self.assertAlmostEqual(base_damage_reduction_for_defense(defense), expected_reduction, places=1)
+                self.assertEqual(damage_reduction_for_defense(defense, 3, 3), round(expected_reduction))
+        self.assertEqual(base_damage_reduction_for_defense(24), 80)
+
+    def test_defense_point_level_scaling_is_stronger_for_players_than_enemies(self) -> None:
+        self.assertAlmostEqual(defense_level_scaling_multiplier(5, 3), 1.16)
+        self.assertAlmostEqual(defense_level_scaling_multiplier(5, 3, defender_is_enemy=True), 1.08)
+        self.assertAlmostEqual(defense_level_scaling_multiplier(5, 3, defender_is_enemy=True, boss=True), 1.12)
+        self.assertEqual(damage_reduction_for_defense(18, 5, 3), 72)
+        self.assertEqual(damage_reduction_for_defense(18, 5, 3, defender_is_enemy=True), 67)
+        self.assertEqual(damage_reduction_for_defense(18, 5, 3, defender_is_enemy=True, boss=True), 69)
+        self.assertEqual(damage_reduction_for_defense(22, 10, 1), 80)
+
     def test_story_mode_recovers_quarter_max_hp_after_battle(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
@@ -135,7 +164,7 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(companion.current_hp, 3)
         self.assertEqual(companion.death_failures, 0)
 
-    def test_catalog_armor_and_shields_emit_percent_defense(self) -> None:
+    def test_catalog_armor_and_shields_emit_defense_points_with_percent_compatibility(self) -> None:
         self.assertEqual(ITEMS["traveler_clothes_common"].armor.defense_percent, 0)
         self.assertEqual(ITEMS["leather_armor_common"].armor.defense_percent, 10)
         self.assertEqual(ITEMS["studded_leather_common"].armor.defense_percent, 15)
@@ -148,9 +177,51 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(ITEMS["chain_mail_rare"].armor.defense_cap_percent, 80)
         self.assertEqual(ITEMS["shield_common"].shield_defense_percent, 5)
         self.assertEqual(ITEMS["shield_rare"].shield_defense_percent, 10)
-        self.assertEqual(ITEMS["shield_rare"].raised_shield_defense_percent, 10)
-        self.assertIn("Defense 35%", item_rules_text(ITEMS["chain_mail_common"]))
-        self.assertIn("shield Defense +5%", item_rules_text(ITEMS["shield_common"]))
+        self.assertEqual(ITEMS["shield_rare"].raised_shield_defense_percent, 5)
+        self.assertEqual(armor_defense_points(ITEMS["chain_mail_common"].armor), 15)
+        self.assertEqual(armor_defense_points(ITEMS["breastplate_epic"].armor), 16)
+        self.assertEqual(shield_defense_points(ITEMS["shield_common"]), 1)
+        self.assertEqual(shield_defense_points(ITEMS["shield_rare"]), 2)
+        self.assertIn("Defense 15 (DR 44.6%)", item_rules_text(ITEMS["chain_mail_common"]))
+        self.assertIn("full Dex", item_rules_text(ITEMS["traveler_clothes_common"]))
+        self.assertIn("Dex cap +2", item_rules_text(ITEMS["chain_shirt_common"]))
+        self.assertIn("shield Defense +1", item_rules_text(ITEMS["shield_common"]))
+
+    def test_armor_catalog_matches_defense_point_rebalance_table(self) -> None:
+        expected_defense = {
+            "traveler_clothes_common": 10,
+            "padded_armor_common": 11,
+            "leather_armor_common": 11,
+            "leather_armor_uncommon": 12,
+            "studded_leather_common": 12,
+            "studded_leather_uncommon": 13,
+            "studded_leather_rare": 13,
+            "chain_shirt_common": 13,
+            "chain_shirt_uncommon": 14,
+            "scale_mail_common": 14,
+            "scale_mail_uncommon": 15,
+            "breastplate_common": 14,
+            "breastplate_uncommon": 15,
+            "breastplate_rare": 16,
+            "breastplate_epic": 16,
+            "chain_mail_common": 15,
+            "chain_mail_uncommon": 16,
+            "chain_mail_rare": 16,
+            "splint_armor_common": 17,
+            "splint_armor_rare": 18,
+            "splint_armor_epic": 19,
+            "splint_armor_legendary": 20,
+        }
+
+        for item_id, defense in expected_defense.items():
+            with self.subTest(item_id=item_id):
+                item = ITEMS[item_id]
+                assert item.armor is not None
+                self.assertEqual(armor_defense_points(item.armor), defense)
+                self.assertIn(
+                    f"Defense {defense} (DR {base_damage_reduction_for_defense(defense):.1f}%)",
+                    item_rules_text(item),
+                )
 
     def test_accuracy_targets_avoidance_instead_of_armor_class(self) -> None:
         game, Warrior = build_game_with_player(
@@ -296,8 +367,129 @@ class CombatResolverTests(unittest.TestCase):
 
         game.enemy_turn(archer, [Warrior], [archer], Encounter("Test", "", [archer]), set())
 
-        self.assertTrue(game.has_status(Warrior, "restrained"))
-        self.assertFalse(game.has_status(Warrior, "slowed"))
+        self.assertFalse(game.has_status(Warrior, "restrained"))
+        self.assertTrue(game.has_status(Warrior, "slowed"))
+
+    def test_control_save_degree_splits_hard_fail_close_fail_and_success(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        dc = 12
+        modifier = Warrior.save_bonus("DEX")
+        scripted_rolls = iter(
+            [
+                dc - modifier - 5,
+                dc - modifier - 4,
+                dc - modifier,
+                dc - modifier + 5,
+            ]
+        )
+
+        def next_roll(*args, **kwargs):
+            roll = next(scripted_rolls)
+            return D20Outcome(kept=roll, rolls=[roll], rerolls=[], advantage_state=0)
+
+        game.roll_check_d20 = next_roll  # type: ignore[method-assign]
+
+        hard_fail, _ = game.control_save_degree(Warrior, "DEX", dc, context="against test hard fail")
+        close_fail, _ = game.control_save_degree(Warrior, "DEX", dc, context="against test close fail")
+        close_success, _ = game.control_save_degree(Warrior, "DEX", dc, context="against test close success")
+        success, _ = game.control_save_degree(Warrior, "DEX", dc, context="against test success")
+
+        self.assertEqual(hard_fail, "fail")
+        self.assertEqual(close_fail, "close_fail")
+        self.assertEqual(close_success, "close_success")
+        self.assertEqual(success, "success")
+
+    def test_near_miss_applies_pressure_and_next_attack_consumes_it(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        target = create_enemy("false_map_skirmisher")
+        game._in_combat = True
+        game._active_round_number = 1
+        game._active_combat_heroes = [Warrior]
+        game._active_combat_enemies = [target]
+        game.prepare_class_resources_for_combat(Warrior)
+        scripted_rolls = iter([5, 6])
+
+        def next_roll(*args, **kwargs):
+            roll = next(scripted_rolls)
+            return D20Outcome(kept=roll, rolls=[roll], rerolls=[], advantage_state=0)
+
+        game.roll_check_d20 = next_roll  # type: ignore[method-assign]
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertTrue(game.has_status(target, "pressured"))
+        self.assertNotIn("combat_bad_streak", Warrior.bond_flags)
+        hp_after_pressure = target.current_hp
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertFalse(game.has_status(target, "pressured"))
+        self.assertLess(target.current_hp, hp_after_pressure)
+        self.assertNotIn("combat_bad_streak", Warrior.bond_flags)
+
+    def test_clean_misses_build_capped_bad_streak_accuracy_that_clears_on_hit(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        target = create_enemy("false_map_skirmisher")
+        game._in_combat = True
+        game._active_round_number = 1
+        game._active_combat_heroes = [Warrior]
+        game._active_combat_enemies = [target]
+        game.prepare_class_resources_for_combat(Warrior)
+        game.apply_status(target, "slip_away", 3, source="test high-avoidance lane")
+        Warrior.resources["grit"] = 0
+        scripted_rolls = iter([2, 2, 6])
+
+        def next_roll(*args, **kwargs):
+            roll = next(scripted_rolls)
+            return D20Outcome(kept=roll, rolls=[roll], rerolls=[], advantage_state=0)
+
+        game.roll_check_d20 = next_roll  # type: ignore[method-assign]
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertFalse(game.has_status(target, "pressured"))
+        self.assertEqual(Warrior.bond_flags["combat_bad_streak"], 2)
+        self.assertEqual(game.karmic_accuracy_bonus(Warrior), 2)
+        self.assertEqual(Warrior.resources["grit"], 1)
+        hp_after_misses = target.current_hp
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertLess(target.current_hp, hp_after_misses)
+        self.assertNotIn("combat_bad_streak", Warrior.bond_flags)
+
+    def test_natural_one_applies_no_pressure_and_no_enemy_bad_streak(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        target = create_enemy("false_map_skirmisher")
+        game._in_combat = True
+        game._active_round_number = 1
+        game._active_combat_heroes = [Warrior]
+        game._active_combat_enemies = [target]
+        game.prepare_class_resources_for_combat(Warrior)
+        game.roll_check_d20 = lambda *args, **kwargs: D20Outcome(kept=1, rolls=[1], rerolls=[], advantage_state=0)  # type: ignore[method-assign]
+
+        game.perform_weapon_attack(Warrior, target, [Warrior], [target], set())
+
+        self.assertFalse(game.has_status(target, "pressured"))
+        self.assertEqual(Warrior.bond_flags["combat_bad_streak"], 1)
+
+        enemy = create_enemy("bandit")
+        game.perform_enemy_attack(enemy, Warrior, [Warrior], [enemy], set())
+
+        self.assertNotIn("combat_bad_streak", enemy.bond_flags)
 
     def test_extreme_heavy_armor_can_reach_eighty_percent_defense(self) -> None:
         game, Warrior = build_game_with_player(
@@ -317,7 +509,7 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(game.defense_cap_percent(Warrior), 80)
         self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 80)
 
-    def test_equipment_sync_converts_old_ac_gear_to_percent_defense(self) -> None:
+    def test_equipment_sync_converts_support_gear_to_defense_points(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -338,11 +530,13 @@ class CombatResolverTests(unittest.TestCase):
         game.sync_equipment(Warrior)
 
         self.assertNotIn("AC", Warrior.gear_bonuses)
-        self.assertEqual(Warrior.gear_bonuses["defense_percent"], 5)
-        self.assertEqual(Warrior.gear_bonuses["shield_defense_percent"], 5)
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 45)
+        self.assertEqual(Warrior.gear_bonuses["defense_points"], 1)
+        self.assertEqual(Warrior.gear_bonuses["shield_defense_points"], 1)
+        self.assertEqual(game.effective_defense_points(Warrior), 17)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 57)
+        self.assertIn("Defense 17 (DR 57%)", game.combat_defense_summary(Warrior))
 
-    def test_raised_shield_adds_temporary_percent_defense(self) -> None:
+    def test_raised_shield_adds_temporary_defense_point(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -351,12 +545,14 @@ class CombatResolverTests(unittest.TestCase):
         encounter = Encounter("Sparring", "A shield drill.", [enemy])
 
         self.assertIn("Raise Shield", game.get_player_combat_options(Warrior, encounter, heroes=[Warrior]))
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 40)
+        self.assertEqual(game.effective_defense_points(Warrior), 17)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 57)
 
         game.use_raise_shield(Warrior)
 
         self.assertTrue(game.has_status(Warrior, "raised_shield"))
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 50)
+        self.assertEqual(game.effective_defense_points(Warrior), 18)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 62)
         self.assertNotIn("Raise Shield", game.get_player_combat_options(Warrior, encounter, heroes=[Warrior]))
 
     def test_combat_stances_are_mutually_exclusive_and_adjust_stats(self) -> None:
@@ -366,13 +562,13 @@ class CombatResolverTests(unittest.TestCase):
         )
 
         self.assertEqual(game.current_combat_stance_key(Warrior), "neutral")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 40)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 57)
         self.assertEqual(game.effective_avoidance(Warrior), 0)
         self.assertEqual(game.effective_stability(Warrior), 3)
 
         game.set_combat_stance(Warrior, "guard")
         self.assertEqual(game.current_combat_stance_key(Warrior), "guard")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 60)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 62)
         self.assertEqual(game.effective_avoidance(Warrior), 0)
         self.assertEqual(game.effective_stability(Warrior), 5)
         self.assertEqual(game.status_accuracy_modifier(Warrior), -2)
@@ -380,32 +576,32 @@ class CombatResolverTests(unittest.TestCase):
         game.set_combat_stance(Warrior, "brace")
         self.assertEqual(game.current_combat_stance_key(Warrior), "brace")
         self.assertFalse(game.has_status(Warrior, "stance_guard"))
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 50)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 62)
         self.assertEqual(game.effective_avoidance(Warrior), -1)
         self.assertEqual(game.effective_stability(Warrior), 7)
         self.assertEqual(game.status_accuracy_modifier(Warrior), -1)
 
         game.set_combat_stance(Warrior, "mobile")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 35)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 51)
         self.assertEqual(game.effective_avoidance(Warrior), 2)
         self.assertEqual(game.effective_stability(Warrior), 2)
         self.assertEqual(game.status_value(Warrior, "flee_bonus"), 2)
 
         game.set_combat_stance(Warrior, "aggressive")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 30)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 45)
         self.assertEqual(game.effective_avoidance(Warrior), -1)
         self.assertEqual(game.status_accuracy_modifier(Warrior), 2)
         self.assertEqual(game.status_damage_modifier(Warrior), 2)
 
         game.set_combat_stance(Warrior, "aim")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 35)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 51)
         self.assertEqual(game.effective_avoidance(Warrior), -2)
         self.assertEqual(game.effective_stability(Warrior), 2)
         self.assertEqual(game.status_accuracy_modifier(Warrior), 2)
 
         game.set_combat_stance(Warrior, "neutral")
         self.assertEqual(game.current_combat_stance_key(Warrior), "neutral")
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 40)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 57)
 
     def test_press_stance_applies_outgoing_armor_break_without_self_vulnerability(self) -> None:
         game, attacker = build_game_with_player(
@@ -418,15 +614,15 @@ class CombatResolverTests(unittest.TestCase):
         )
 
         game.set_combat_stance(attacker, "press")
-        self.assertEqual(game.effective_defense_percent(attacker, damage_type="slashing"), 35)
-        self.assertEqual(game.effective_defense_percent(target, damage_type="slashing"), 40)
+        self.assertEqual(game.effective_defense_percent(attacker, damage_type="slashing"), 51)
+        self.assertEqual(game.effective_defense_percent(target, damage_type="slashing"), 57)
 
         actual = game.apply_damage(target, 10, damage_type="slashing", source_actor=attacker, apply_defense=True)
 
         result = game.last_damage_resolution()
         self.assertEqual(result.armor_break_percent, 10)
-        self.assertEqual(result.defense_percent, 30)
-        self.assertEqual(actual, 7)
+        self.assertEqual(result.defense_percent, 47)
+        self.assertEqual(actual, 5)
 
     def test_routine_guard_and_cover_statuses_do_not_stack_avoidance(self) -> None:
         game, Warrior = build_game_with_player(
@@ -439,7 +635,7 @@ class CombatResolverTests(unittest.TestCase):
         game.apply_status(Warrior, "smoke_jar", 1, source="test smoke")
 
         self.assertEqual(game.effective_avoidance(Warrior), 0)
-        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 45)
+        self.assertEqual(game.effective_defense_percent(Warrior, damage_type="slashing"), 62)
         self.assertEqual(game.target_accuracy_modifier(Warrior), -3)
 
     def test_rogue_mobile_stance_preserves_avoidance_identity(self) -> None:
@@ -486,13 +682,16 @@ class CombatResolverTests(unittest.TestCase):
         archer = create_enemy("bandit_archer")
         scuttler = create_enemy("rust_shell_scuttler")
 
-        self.assertEqual(game.effective_defense_percent(bandit, damage_type="slashing"), 10)
+        self.assertEqual(game.effective_defense_points(bandit), 11)
+        self.assertEqual(game.effective_defense_percent(bandit, damage_type="slashing"), 12)
         self.assertEqual(game.effective_avoidance(bandit), 0)
         self.assertEqual(game.effective_attack_target_number(bandit), 8)
         self.assertGreaterEqual(6 + 3, game.effective_attack_target_number(bandit))
-        self.assertEqual(game.effective_defense_percent(archer, damage_type="slashing"), 15)
+        self.assertEqual(game.effective_defense_points(archer), 11)
+        self.assertEqual(game.effective_defense_percent(archer, damage_type="slashing"), 12)
         self.assertEqual(game.effective_avoidance(archer), 1)
-        self.assertEqual(game.effective_defense_percent(scuttler, damage_type="slashing"), 25)
+        self.assertEqual(game.effective_defense_points(scuttler), 12)
+        self.assertEqual(game.effective_defense_percent(scuttler, damage_type="slashing"), 21)
         self.assertEqual(game.effective_avoidance(scuttler), 0)
 
     def test_low_level_ordinary_enemy_damage_dice_are_smoothed(self) -> None:
@@ -519,42 +718,82 @@ class CombatResolverTests(unittest.TestCase):
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
         )
         cases = {
-            "false_map_skirmisher": (15, 3),
-            "ogre_brute": (20, -1),
-            "rukhar": (30, 0),
-            "sereth_vane": (25, 2),
+            "false_map_skirmisher": (11, 12, 3),
+            "ogre_brute": (12, 21, -1),
+            "rukhar": (15, 45, 0),
+            "sereth_vane": (13, 30, 2),
         }
 
-        for template, (defense, avoidance) in cases.items():
+        for template, (defense, damage_reduction, avoidance) in cases.items():
             with self.subTest(template=template):
                 enemy = create_enemy(template)
-                self.assertEqual(game.effective_defense_percent(enemy, damage_type="slashing"), defense)
+                self.assertEqual(game.effective_defense_points(enemy), defense)
+                self.assertEqual(game.effective_defense_percent(enemy, damage_type="slashing"), damage_reduction)
                 self.assertEqual(game.effective_avoidance(enemy), avoidance)
-                self.assertEqual(enemy.bond_flags["combat_profile"]["defense_percent"], defense)
+                self.assertEqual(enemy.bond_flags["combat_profile"]["defense"], defense)
                 self.assertEqual(enemy.bond_flags["combat_profile"]["avoidance"], avoidance)
 
-    def test_high_defense_enemies_stay_rare_before_level_four(self) -> None:
+    def test_high_defense_point_enemies_stay_role_limited(self) -> None:
         game, _ = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
         )
         high_defense_before_four: list[str] = []
         high_defense_at_four: set[str] = set()
+        high_defense_after_four: set[str] = set()
         for template in LOW_LEVEL_ENEMY_COMBAT_PROFILES:
             enemy = create_enemy(template)
-            defense = game.effective_defense_percent(enemy, damage_type="slashing")
-            if enemy.level < 4 and defense >= 35:
+            defense = game.effective_defense_points(enemy)
+            if enemy.level < 4 and defense >= 15:
                 high_defense_before_four.append(template)
-            if enemy.level == 4 and defense >= 35:
+            if enemy.level == 4 and defense >= 15:
                 high_defense_at_four.add(template)
+            if enemy.level > 4 and defense >= 17:
+                high_defense_after_four.add(template)
 
-        self.assertEqual(high_defense_before_four, ["animated_armor", "stonegaze_skulker"])
+        self.assertEqual(high_defense_before_four, ["animated_armor", "rukhar", "stonegaze_skulker"])
         self.assertEqual(
             high_defense_at_four,
-            {"echo_sapper", "pact_archive_warden", "blacklake_pincerling", "graveblade_wight"},
+            {"pact_archive_warden", "blacklake_pincerling", "graveblade_wight"},
+        )
+        self.assertEqual(high_defense_after_four, {"blacklake_adjudicator", "covenant_breaker_wight", "duskmire_matriarch"})
+
+    def test_ordinary_level_one_to_three_enemy_defense_budget_caps_at_thirteen(self) -> None:
+        game, _ = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
         )
 
-    def test_all_level_one_to_four_profiles_apply_exact_targets(self) -> None:
+        for template, profile in LOW_LEVEL_ENEMY_COMBAT_PROFILES.items():
+            enemy = create_enemy(template)
+            if profile.get("role") != "ordinary" or enemy.level > 3:
+                continue
+            with self.subTest(template=template):
+                self.assertLessEqual(int(profile["defense"]), 13)
+                self.assertLessEqual(game.effective_defense_points(enemy), 13)
+
+    def test_enemy_defense_seventeen_plus_requires_leader_miniboss_or_boss_marker(self) -> None:
+        game, _ = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        allowed_tags = {"leader", "miniboss", "boss"}
+
+        for template, profile in LOW_LEVEL_ENEMY_COMBAT_PROFILES.items():
+            enemy = create_enemy(template)
+            defense = game.effective_defense_points(enemy)
+            with self.subTest(template=template):
+                if defense >= 17:
+                    self.assertTrue(
+                        allowed_tags.intersection(enemy.tags),
+                        f"{template} reaches Defense {defense} without a leader/miniboss/boss tag",
+                    )
+                elif allowed_tags.isdisjoint(enemy.tags):
+                    self.assertLess(defense, 17)
+                if int(profile["defense"]) >= 17:
+                    self.assertNotEqual(profile.get("role"), "ordinary")
+
+    def test_all_enemy_profiles_apply_exact_defense_point_targets(self) -> None:
         game, _ = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -562,11 +801,12 @@ class CombatResolverTests(unittest.TestCase):
         for template, profile in LOW_LEVEL_ENEMY_COMBAT_PROFILES.items():
             with self.subTest(template=template):
                 enemy = create_enemy(template)
-                self.assertLessEqual(enemy.level, 4)
+                expected_defense = int(profile["defense"])
                 self.assertEqual(
-                    game.effective_defense_percent(enemy, damage_type="slashing"),
-                    profile["defense_percent"],
+                    game.effective_defense_points(enemy),
+                    expected_defense,
                 )
+                self.assertEqual(enemy.bond_flags["combat_profile"]["defense"], expected_defense)
                 self.assertEqual(game.effective_avoidance(enemy), profile["avoidance"])
 
     def test_enemy_avoidance_profiles_follow_declared_bands(self) -> None:
@@ -629,7 +869,7 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(skirmisher_result.target_number, 11)
         self.assertAlmostEqual(skirmisher_result.hit_chance, 0.75)
 
-    def test_combat_simulator_expected_damage_uses_percentage_defense(self) -> None:
+    def test_combat_simulator_expected_damage_uses_defense_point_dr(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -638,11 +878,11 @@ class CombatResolverTests(unittest.TestCase):
 
         result = simulate_weapon_attack(game, Warrior, bandit)
 
-        self.assertEqual(result.damage.defense_percent, 10)
+        self.assertEqual(result.damage.defense_percent, 12)
         self.assertEqual(result.damage.armor_break_percent, 0)
-        self.assertAlmostEqual(result.damage.expected_hp_damage_on_normal_hit, 6.375)
-        self.assertAlmostEqual(result.damage.expected_hp_damage_on_critical_hit, 10.328125)
-        self.assertAlmostEqual(result.expected_hp_damage, 5.93515625)
+        self.assertAlmostEqual(result.damage.expected_hp_damage_on_normal_hit, 6.125)
+        self.assertAlmostEqual(result.damage.expected_hp_damage_on_critical_hit, 10.0625)
+        self.assertAlmostEqual(result.expected_hp_damage, 5.709375)
 
     def test_combat_simulator_guard_stance_reduces_incoming_weapon_damage(self) -> None:
         game, Warrior = build_game_with_player(
@@ -656,13 +896,13 @@ class CombatResolverTests(unittest.TestCase):
         guarded = simulate_weapon_attack(game, bandit, Warrior, heroes=[bandit], enemies=[])
 
         self.assertEqual(base.target_number, 8)
-        self.assertEqual(base.damage.defense_percent, 40)
+        self.assertEqual(base.damage.defense_percent, 57)
         self.assertAlmostEqual(base.hit_chance, 0.80)
-        self.assertAlmostEqual(base.expected_hp_damage, 1.8781250000000003)
+        self.assertAlmostEqual(base.expected_hp_damage, 1.25625)
         self.assertEqual(guarded.target_number, 8)
-        self.assertEqual(guarded.damage.defense_percent, 60)
+        self.assertEqual(guarded.damage.defense_percent, 62)
         self.assertAlmostEqual(guarded.hit_chance, 0.80)
-        self.assertAlmostEqual(guarded.expected_hp_damage, 1.2437500000000001)
+        self.assertAlmostEqual(guarded.expected_hp_damage, 1.046875)
         self.assertLess(guarded.expected_hp_damage, base.expected_hp_damage)
 
     def test_ordinary_enemy_critical_damage_is_capped_by_target_max_hp(self) -> None:
@@ -717,11 +957,11 @@ class CombatResolverTests(unittest.TestCase):
         armored = simulate_weapon_attack(game, Warrior, animated_armor)
         broken = simulate_weapon_attack(game, Warrior, animated_armor, armor_break_percent=20)
 
-        self.assertEqual(armored.damage.defense_percent, 45)
+        self.assertEqual(armored.damage.defense_percent, 46)
         self.assertEqual(broken.damage.armor_break_percent, 20)
-        self.assertEqual(broken.damage.defense_percent, 25)
-        self.assertAlmostEqual(armored.expected_hp_damage, 3.56796875)
-        self.assertAlmostEqual(broken.expected_hp_damage, 5.15625)
+        self.assertEqual(broken.damage.defense_percent, 26)
+        self.assertAlmostEqual(armored.expected_hp_damage, 3.450000000000001)
+        self.assertAlmostEqual(broken.expected_hp_damage, 4.918750000000001)
         self.assertGreater(broken.expected_hp_damage, armored.expected_hp_damage)
 
     def test_combat_simulator_tracks_glance_without_wound(self) -> None:
@@ -832,15 +1072,15 @@ class CombatResolverTests(unittest.TestCase):
         actual = game.apply_damage(Warrior, 10, damage_type="slashing", apply_defense=True)
 
         result = game.last_damage_resolution()
-        self.assertEqual(result.defense_percent, 40)
-        self.assertEqual(result.mitigated_damage, 6)
+        self.assertEqual(result.defense_percent, 57)
+        self.assertEqual(result.mitigated_damage, 4)
         self.assertEqual(result.ward_absorbed, 4)
-        self.assertEqual(result.temp_hp_absorbed, 2)
+        self.assertEqual(result.temp_hp_absorbed, 0)
         self.assertEqual(actual, 0)
         self.assertFalse(result.glance)
         self.assertFalse(result.wound)
         self.assertEqual(Warrior.resources["ward"], 0)
-        self.assertEqual(Warrior.temp_hp, 8)
+        self.assertEqual(Warrior.temp_hp, 10)
 
     def test_shared_mage_starts_with_charge_focus_and_combat_options(self) -> None:
         game, mage = build_game_with_player(
@@ -858,7 +1098,8 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(mage.resources["mp"], 13)
         self.assertEqual(mage.max_resources["focus"], 5)
         self.assertEqual(mage.resources["focus"], 0)
-        self.assertEqual(game.effective_defense_percent(mage, damage_type="slashing"), 10)
+        self.assertEqual(game.effective_defense_points(mage), 11)
+        self.assertEqual(game.effective_defense_percent(mage, damage_type="slashing"), 12)
         self.assertIn("Arcane Bolt (Action, 2 MP)", options)
         self.assertIn("Arcane Bolt (Bonus, 1 MP)", options)
         self.assertIn("Minor Channel (1 MP)", options)
@@ -1046,9 +1287,9 @@ class CombatResolverTests(unittest.TestCase):
         self.assertEqual(game.attack_focus_modifier(attacker, mage), -1)
         self.assertEqual(game.attack_focus_modifier(attacker, ally), 0)
 
-        actual = game.apply_damage(ally, 10, damage_type="slashing", source_actor=attacker, apply_defense=True)
+        actual = game.apply_damage(ally, 20, damage_type="slashing", source_actor=attacker, apply_defense=True)
 
-        self.assertEqual(actual, 0)
+        self.assertEqual(actual, 2)
         self.assertEqual(game.last_damage_resolution().ward_absorbed, 5)
         self.assertEqual(ally.resources.get("ward", 0), 0)
         self.assertFalse(game.has_status(ally, "anchor_shell"))
@@ -1070,7 +1311,7 @@ class CombatResolverTests(unittest.TestCase):
         actual = game.apply_damage(mage, 10, damage_type="slashing", source_actor=attacker, apply_defense=True)
 
         self.assertEqual(actual, 0)
-        self.assertEqual(game.last_damage_resolution().ward_absorbed, 9)
+        self.assertEqual(game.last_damage_resolution().ward_absorbed, 8)
         self.assertEqual(game.last_damage_resolution().temp_hp_absorbed, 0)
         self.assertEqual(mage.temp_hp, 4)
         self.assertEqual(mage.resources["mp"], 11)
@@ -2216,7 +2457,7 @@ class CombatResolverTests(unittest.TestCase):
         self.assertFalse(any(key.startswith("rogue_mark") for key in target.bond_flags))
         self.assertFalse(any(key.startswith("rogue_poison") for key in target.bond_flags))
 
-    def test_percentage_defense_reduces_physical_damage_after_resistance(self) -> None:
+    def test_defense_point_dr_reduces_physical_damage_after_resistance(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -2227,11 +2468,11 @@ class CombatResolverTests(unittest.TestCase):
 
         result = game.last_damage_resolution()
         self.assertEqual(result.resisted_damage, 5)
-        self.assertEqual(result.defense_percent, 40)
-        self.assertEqual(actual, 3)
+        self.assertEqual(result.defense_percent, 57)
+        self.assertEqual(actual, 2)
         self.assertTrue(result.wound)
 
-    def test_armor_break_lowers_defense_by_percentage_points(self) -> None:
+    def test_armor_break_lowers_damage_reduction_by_percentage_points(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -2241,8 +2482,8 @@ class CombatResolverTests(unittest.TestCase):
 
         result = game.last_damage_resolution()
         self.assertEqual(result.armor_break_percent, 10)
-        self.assertEqual(result.defense_percent, 30)
-        self.assertEqual(actual, 7)
+        self.assertEqual(result.defense_percent, 47)
+        self.assertEqual(actual, 5)
 
     def test_glance_and_wound_are_recorded_after_defense_and_temp_hp(self) -> None:
         game, Warrior = build_game_with_player(
@@ -2260,11 +2501,11 @@ class CombatResolverTests(unittest.TestCase):
         absorbed = game.apply_damage(Warrior, 10, damage_type="slashing", apply_defense=True)
         absorbed_result = game.last_damage_resolution()
         self.assertEqual(absorbed, 0)
-        self.assertEqual(absorbed_result.temp_hp_absorbed, 6)
+        self.assertEqual(absorbed_result.temp_hp_absorbed, 4)
         self.assertFalse(absorbed_result.glance)
         self.assertFalse(absorbed_result.wound)
 
-    def test_glance_does_not_create_karmic_chipped_armor(self) -> None:
+    def test_enemy_glance_against_player_does_not_chip_player_armor(self) -> None:
         game, Warrior = build_game_with_player(
             "Warrior",
             {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
@@ -2277,6 +2518,41 @@ class CombatResolverTests(unittest.TestCase):
         self.assertTrue(game.last_damage_was_glance())
         self.assertNotIn("chipped_armor", Warrior.conditions)
         self.assertEqual(game.total_armor_break_percent(Warrior), 0)
+
+    def test_player_glance_against_high_defense_enemy_creates_chipped_armor_pressure(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        enemy = create_enemy("animated_armor")
+        game._in_combat = True
+
+        first = game.apply_damage(enemy, 1, damage_type="slashing", source_actor=Warrior, apply_defense=True)
+
+        self.assertEqual(first, 0)
+        self.assertTrue(game.last_damage_was_glance())
+        self.assertEqual(enemy.conditions.get("chipped_armor"), 1)
+        self.assertEqual(game.total_armor_break_percent(enemy), 5)
+
+        second = game.apply_damage(enemy, 1, damage_type="slashing", source_actor=Warrior, apply_defense=True)
+
+        self.assertEqual(second, 0)
+        self.assertEqual(enemy.conditions.get("chipped_armor"), 2)
+        self.assertEqual(game.total_armor_break_percent(enemy), 10)
+
+    def test_low_defense_enemy_glance_does_not_create_chipped_armor_pressure(self) -> None:
+        game, Warrior = build_game_with_player(
+            "Warrior",
+            {"STR": 15, "DEX": 14, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
+        )
+        enemy = create_enemy("bandit")
+        game._in_combat = True
+
+        actual = game.apply_damage(enemy, 1, damage_type="slashing", source_actor=Warrior, apply_defense=True)
+
+        self.assertEqual(actual, 0)
+        self.assertTrue(game.last_damage_was_glance())
+        self.assertFalse(game.has_status(enemy, "chipped_armor"))
 
     def test_temp_hp_blocked_physical_hit_does_not_chip_armor(self) -> None:
         game, Warrior = build_game_with_player(
@@ -2331,13 +2607,13 @@ class CombatResolverTests(unittest.TestCase):
             {"STR": 15, "DEX": 12, "CON": 13, "INT": 8, "WIS": 12, "CHA": 10},
         )
 
-        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 40)
+        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 57)
         self.assertEqual(game.effective_avoidance(warrior), 0)
         self.assertEqual(game.effective_stability(warrior), 3)
 
         game.use_guard_stance(warrior)
 
-        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 60)
+        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 62)
         self.assertEqual(game.effective_avoidance(warrior), 0)
         self.assertEqual(game.effective_stability(warrior), 5)
         self.assertEqual(game.status_value(warrior, "attack_penalty"), 2)
@@ -2427,7 +2703,7 @@ class CombatResolverTests(unittest.TestCase):
 
         game.apply_damage(warrior, 10, damage_type="slashing", apply_defense=True)
 
-        self.assertEqual(game.last_damage_resolution().defense_percent, 40)
+        self.assertEqual(game.last_damage_resolution().defense_percent, 57)
         self.assertEqual(warrior.resources["momentum"], 1)
         self.assertEqual(warrior.resources["grit"], 2)
 
@@ -2470,7 +2746,7 @@ class CombatResolverTests(unittest.TestCase):
 
         self.assertEqual(game.current_combat_stance_key(warrior), "guard")
         self.assertTrue(game.has_status(warrior, "shoulder_in"))
-        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 65)
+        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 67)
         self.assertEqual(warrior.resources["grit"], 0)
 
         game.grant_warrior_grit(warrior, source="test refill")
@@ -2558,7 +2834,7 @@ class CombatResolverTests(unittest.TestCase):
 
         result = game.last_damage_resolution()
         self.assertEqual(result.armor_break_percent, 10)
-        self.assertEqual(result.defense_percent, 35)
+        self.assertEqual(result.defense_percent, 36)
         self.assertTrue(game.has_status(enemy, "armor_broken"))
         self.assertGreater(warrior.resources["combo"], 0)
 
@@ -2566,7 +2842,7 @@ class CombatResolverTests(unittest.TestCase):
 
         followup = game.last_damage_resolution()
         self.assertEqual(followup.armor_break_percent, 10)
-        self.assertEqual(followup.defense_percent, 35)
+        self.assertEqual(followup.defense_percent, 36)
 
     def test_hook_the_guard_clears_guard_layers_and_reels_on_strong_hit(self) -> None:
         game, warrior = build_game_with_player(
@@ -2667,7 +2943,7 @@ class CombatResolverTests(unittest.TestCase):
         self.assertTrue(game.has_status(warrior, "redline"))
         self.assertEqual(game.status_accuracy_modifier(warrior), 2)
         self.assertEqual(game.status_damage_modifier(warrior), 3)
-        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 35)
+        self.assertEqual(game.effective_defense_percent(warrior, damage_type="slashing"), 51)
         self.assertEqual(game.effective_avoidance(warrior), -1)
 
     def test_reckless_cut_adds_accuracy_and_invites_counterpressure(self) -> None:
@@ -2882,7 +3158,7 @@ class CombatResolverTests(unittest.TestCase):
 
         rendered = "\n".join(log)
         self.assertIn("Weapon Read:", rendered)
-        self.assertIn("Defense", rendered)
+        self.assertIn("Defense 15 (DR 46%)", rendered)
         self.assertIn("Avoidance", rendered)
         self.assertIn("Stability", rendered)
         self.assertIn("Best answer:", rendered)

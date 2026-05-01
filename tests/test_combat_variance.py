@@ -1,8 +1,30 @@
 from __future__ import annotations
 
+import random
 import unittest
 
-from dnd_game.gameplay.combat_variance import ActionSample, build_default_variance_report, summarize_action_samples
+from dnd_game.content import create_enemy
+from dnd_game.gameplay.combat_variance import (
+    ActionSample,
+    build_default_variance_report,
+    build_level_four_mixed_party,
+    simulate_weapon_action_once,
+    summarize_action_samples,
+)
+
+
+class ScriptedRandom(random.Random):
+    def __init__(self, rolls: list[int]) -> None:
+        super().__init__(0)
+        self.rolls = list(rolls)
+
+    def randint(self, a: int, b: int) -> int:
+        if not self.rolls:
+            return super().randint(a, b)
+        value = self.rolls.pop(0)
+        if not a <= value <= b:
+            raise AssertionError(f"Scripted randint value {value} outside {a}..{b}")
+        return value
 
 
 class CombatVarianceReportTests(unittest.TestCase):
@@ -41,6 +63,17 @@ class CombatVarianceReportTests(unittest.TestCase):
             self.assertLessEqual(profile.rounds_p50, profile.rounds_p90)
             self.assertGreaterEqual(profile.downed_allies_mean, 0)
             self.assertGreaterEqual(profile.downed_allies_p90, 0)
+
+    def test_weapon_action_harness_counts_near_miss_pressure_as_nonblank(self) -> None:
+        game, party = build_level_four_mixed_party()
+        warrior = party[0]
+        target = create_enemy("false_map_skirmisher")
+
+        sample = simulate_weapon_action_once(game, warrior, target, ScriptedRandom([3]))
+
+        self.assertEqual(sample.result_kind, "pressure")
+        self.assertFalse(sample.zero_result)
+        self.assertEqual(sample.damage, 0)
 
 
 if __name__ == "__main__":

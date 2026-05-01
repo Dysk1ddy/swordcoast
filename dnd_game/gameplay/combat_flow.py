@@ -412,8 +412,12 @@ class CombatFlowMixin:
             target = marked_target or max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["mislead_step"] = 0
             self.say(f"{actor.name} vanishes behind a survey post and steps back into the line at {target.name}'s blind angle.")
-            if not self.saving_throw(target, "DEX", 13, context=f"against {actor.name}'s mislead step"):
+            degree, _ = self.control_save_degree(target, "DEX", 13, context=f"against {actor.name}'s mislead step")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s mislead step")
+            elif degree == "close_fail":
+                self.apply_status(target, "marked", 1, source=f"{actor.name}'s mislead step")
+                self.say(f"{target.name} catches the blind angle late, leaving a readable line for the next strike.")
             else:
                 self.say(f"{target.name} refuses the wrong angle and keeps their footing.")
             return True
@@ -428,7 +432,8 @@ class CombatFlowMixin:
             )
             actor.resources["seizure_order"] = 0
             self.say(f"{actor.name} raises a seal-stamped writ and declares {target.name}'s footing unauthorized.")
-            if not self.saving_throw(target, "WIS", 14, context=f"against {actor.name}'s seizure order"):
+            degree, _ = self.control_save_degree(target, "WIS", 14, context=f"against {actor.name}'s seizure order")
+            if degree == "fail":
                 removed: list[str] = []
                 for status in ("blessed", "emboldened", "guarded"):
                     if self.has_status(target, status):
@@ -437,6 +442,9 @@ class CombatFlowMixin:
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s seizure order")
                 if removed:
                     self.say(f"{target.name}'s {', '.join(removed)} buffer collapses under the notary's verdict.")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s seizure order")
+                self.say(f"{target.name} keeps their footing, but the verdict still bites into their rhythm.")
             else:
                 self.say(f"{target.name} refuses to let paperwork become a weapon.")
             return True
@@ -481,10 +489,14 @@ class CombatFlowMixin:
             )
             actor.resources["dust_blind"] = 0
             self.say(f"{actor.name} follows the collapse with a shovel-kick of grit and lamp ash at {target.name}.")
-            if not self.saving_throw(target, "CON", 14, context=f"against {actor.name}'s dust blind"):
+            degree, _ = self.control_save_degree(target, "CON", 14, context=f"against {actor.name}'s dust blind")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s dust blind")
                 if target.is_conscious() and (self.has_status(target, "prone") or self.has_status(target, "reeling")):
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s dust blind")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s dust blind")
+                self.say(f"{target.name} keeps sight through the grit, half a beat behind the collapse.")
             else:
                 self.say(f"{target.name} keeps enough of their vision to stay dangerous.")
             return True
@@ -492,10 +504,14 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (hero.armor_class, hero.current_hp))
             actor.resources["access_denied"] = 0
             self.say(f"{actor.name} plants its spear and projects a hard ward line across {target.name}'s advance.")
-            if not self.saving_throw(target, "STR", 14, context=f"against {actor.name}'s access denied"):
+            degree, _ = self.control_save_degree(target, "STR", 14, context=f"against {actor.name}'s access denied")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s access denied")
                 if target.is_conscious() and self.has_status(target, "reeling"):
                     self.apply_status(target, "prone", 1, source=f"{actor.name}'s access denied")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s access denied")
+                self.say(f"{target.name} shoves through the ward line, but the angle is ugly.")
             else:
                 self.say(f"{target.name} holds against the ward's shove.")
             return True
@@ -511,9 +527,13 @@ class CombatFlowMixin:
             )
             actor.resources["overhear_intent"] = 0
             self.say(f"{actor.name} tilts its glass-black head and answers the thought {target.name} has not acted on yet.")
-            if not self.saving_throw(target, "WIS", 14, context=f"against {actor.name}'s overheard intent"):
+            degree, _ = self.control_save_degree(target, "WIS", 14, context=f"against {actor.name}'s overheard intent")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 1, source=f"{actor.name}'s overheard intent")
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s overheard intent")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s overheard intent")
+                self.say(f"{target.name} keeps the fear from taking hold, but the stolen thought lands anyway.")
             else:
                 self.say(f"{target.name} forces the private thought back behind steel.")
             return True
@@ -597,10 +617,14 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (hero.current_hp, hero.armor_class))
             actor.resources["drag_to_marker"] = 0
             self.say(f"{actor.name} whips a survey chain around {target.name} and hauls them toward an old, unfinished mark.")
-            if not self.saving_throw(target, "STR", 15, context=f"against {actor.name}'s drag to marker"):
+            degree, _ = self.control_save_degree(target, "STR", 15, context=f"against {actor.name}'s drag to marker")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 2, source=f"{actor.name}'s drag to marker")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s drag to marker")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s drag to marker")
+                self.say(f"{target.name} tears clear, though the chain drags one ankle out of line.")
             else:
                 self.say(f"{target.name} tears clear before the chain can set.")
             return True
@@ -608,9 +632,13 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["hush_smoke"] = 0
             self.say(f"{actor.name} swings wide, and the censer split spills hush-smoke straight into {target.name}'s lungs and eyes.")
-            if not self.saving_throw(target, "CON", 14, context=f"against {actor.name}'s hush smoke"):
+            degree, _ = self.control_save_degree(target, "CON", 14, context=f"against {actor.name}'s hush smoke")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s hush smoke")
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s hush smoke")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s hush smoke")
+                self.say(f"{target.name} coughs the smoke out, but the censer keeps the tempo crooked.")
             else:
                 self.say(f"{target.name} coughs through the smoke without fully losing the line.")
             return True
@@ -625,11 +653,15 @@ class CombatFlowMixin:
             )
             actor.resources["erase_witness"] = 0
             self.say(f"{actor.name} cuts for the part of the fight {target.name} will still remember afterward.")
-            if not self.saving_throw(target, "WIS", 14, context=f"against {actor.name}'s erase witness"):
+            degree, _ = self.control_save_degree(target, "WIS", 14, context=f"against {actor.name}'s erase witness")
+            if degree == "fail":
                 for status in ("guarded", "blessed", "emboldened"):
                     if self.has_status(target, status):
                         self.clear_status(target, status)
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s erase witness")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s erase witness")
+                self.say(f"{target.name} keeps the memory whole, but loses a step proving it.")
             else:
                 self.say(f"{target.name} keeps hold of what matters and refuses the edit.")
             return True
@@ -667,9 +699,13 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["sentence_of_entry"] = 0
             self.say(f"{actor.name} levels its pike and pronounces a sentence no trespasser was meant to survive hearing.")
-            if not self.saving_throw(target, "WIS", 15, context=f"against {actor.name}'s sentence of entry"):
+            degree, _ = self.control_save_degree(target, "WIS", 15, context=f"against {actor.name}'s sentence of entry")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 1, source=f"{actor.name}'s sentence of entry")
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s sentence of entry")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s sentence of entry")
+                self.say(f"{target.name} holds against the verdict, though the sentence still shakes the line.")
             else:
                 self.say(f"{target.name} holds their ground against the verdict.")
             return True
@@ -714,10 +750,14 @@ class CombatFlowMixin:
             )
             actor.resources["break_the_line"] = 0
             self.say(f"{actor.name} lowers its split oathblade and drives straight for the place your line expects to hold.")
-            if not self.saving_throw(target, "STR", 15, context=f"against {actor.name}'s break the line"):
+            degree, _ = self.control_save_degree(target, "STR", 15, context=f"against {actor.name}'s break the line")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=f"{actor.name}'s break the line")
                 if target.is_conscious():
                     self.apply_status(target, "frightened", 1, source=f"{actor.name}'s break the line")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s break the line")
+                self.say(f"{target.name} stops the rush from breaking the company, but the impact still jars them.")
             else:
                 self.say(f"{target.name} absorbs the rush without letting the whole company buckle.")
             return True
@@ -1962,10 +2002,14 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["ember_mark"] = 0
             self.say(f"{actor.name} traces a burning sigil toward {target.name} and lets the whole enemy line see it.")
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s ember mark"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s ember mark")
+            if degree == "fail":
                 self.apply_status(target, "marked", 2, source=f"{actor.name}'s ember mark")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s ember mark")
+            elif degree == "close_fail":
+                self.apply_status(target, "marked", 1, source=f"{actor.name}'s ember mark")
+                self.say(f"{target.name} brushes the ember sign away, but the line reads the glow for a moment.")
             else:
                 self.say(f"{target.name} shakes off the worst of the ember sign before it can settle.")
             return
@@ -2069,9 +2113,13 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["whisper_glare"] = 0
             self.say(f"{actor.name}'s eyes catch the forge-light wrong, and a whispering glare fixes on {target.name}.")
-            if not self.saving_throw(target, "WIS", 13, context=f"against {actor.name}'s whisper glare"):
+            degree, _ = self.control_save_degree(target, "WIS", 13, context=f"against {actor.name}'s whisper glare")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 1, source=f"{actor.name}'s whisper glare")
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s whisper glare")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s whisper glare")
+                self.say(f"{target.name} tears their focus loose, but the glare leaves a tremor behind.")
             else:
                 self.say(f"{target.name} tears their focus loose before the whisper can sound like their own thought.")
             return
@@ -2159,10 +2207,14 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["lure_glow"] = 0
             self.say(f"{actor.name}'s pale glow drifts close, trying to draw {target.name} one bad step off the safe line.")
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s lure glow"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s lure glow")
+            if degree == "fail":
                 self.apply_status(target, "charmed", 1, source=f"{actor.name}'s lure glow")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s lure glow")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s lure glow")
+                self.say(f"{target.name} rejects the invitation, but the pale glow leaves one step uncertain.")
             else:
                 self.say(f"{target.name} refuses the ghostlight's invitation.")
             return
@@ -2197,11 +2249,15 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (0 if self.has_status(hero, "restrained") else 1, hero.current_hp))
             actor.resources["reel_strand"] = 0
             self.say(f"{actor.name} snaps a root-web strand around {target.name} and hauls hard.")
-            if not self.saving_throw(target, "DEX", 13, context=f"against {actor.name}'s reeling strand"):
+            degree, _ = self.control_save_degree(target, "DEX", 13, context=f"against {actor.name}'s reeling strand")
+            if degree == "fail":
                 if self.has_status(target, "restrained"):
                     self.apply_status(target, "grappled", 1, source=f"{actor.name}'s reeling strand")
                 else:
                     self.apply_status(target, "restrained", 2, source=f"{actor.name}'s reeling strand")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s reeling strand")
+                self.say(f"{target.name} rips the strand loose, leaving roots wound around one boot.")
             else:
                 self.say(f"{target.name} slips the strand before it can lock down.")
             return
@@ -2209,11 +2265,15 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["carrion_tentacles"] = 0
             self.say(f"{actor.name}'s feeder tendrils lash toward {target.name} with grave-cold numbness.")
-            if not self.saving_throw(target, "CON", 13, context=f"against {actor.name}'s carrion tentacles"):
+            degree, _ = self.control_save_degree(target, "CON", 13, context=f"against {actor.name}'s carrion tentacles")
+            if degree == "fail":
                 was_poisoned = self.has_status(target, "poisoned")
                 self.apply_status(target, "poisoned", 2, source=f"{actor.name}'s carrion tentacles")
                 if was_poisoned and target.is_conscious():
                     self.apply_status(target, "paralyzed", 1, source=f"{actor.name}'s carrion tentacles")
+            elif degree == "close_fail":
+                self.apply_status(target, "poisoned", 1, source=f"{actor.name}'s carrion tentacles")
+                self.say(f"{target.name} shakes off the numbness, but the grave-cold toxin lingers.")
             else:
                 self.say(f"{target.name} shrugs off the first wave of paralysis.")
             return
@@ -2221,8 +2281,12 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (hero.current_hp, hero.armor_class))
             actor.resources["adhesive_grab"] = 0
             self.say(f"{actor.name}'s false lid splits into grasping adhesive cords around {target.name}.")
-            if not self.saving_throw(target, "STR", 13, context=f"against {actor.name}'s adhesive lash"):
+            degree, _ = self.control_save_degree(target, "STR", 13, context=f"against {actor.name}'s adhesive lash")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 2, source=f"{actor.name}'s adhesive lash")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s adhesive lash")
+                self.say(f"{target.name} tears free with adhesive still dragging from their gear.")
             else:
                 self.say(f"{target.name} tears free before the mimic can lock on.")
             return
@@ -2230,11 +2294,15 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["petrifying_gaze"] = 0
             self.say(f"{actor.name}'s milky eyes fix on {target.name} with a mineral hunger.")
-            if not self.saving_throw(target, "CON", 13, context=f"against {actor.name}'s petrifying gaze"):
+            degree, _ = self.control_save_degree(target, "CON", 13, context=f"against {actor.name}'s petrifying gaze")
+            if degree == "fail":
                 if self.has_status(target, "restrained"):
                     self.apply_status(target, "petrified", 1, source=f"{actor.name}'s petrifying gaze")
                 else:
                     self.apply_status(target, "restrained", 1, source=f"{actor.name}'s petrifying gaze")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s petrifying gaze")
+                self.say(f"{target.name} breaks eye contact, but stone-dust still stiffens the first step.")
             else:
                 self.say(f"{target.name} breaks the gaze before their limbs can lock.")
             return
@@ -2242,22 +2310,31 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["luring_song"] = 0
             self.say(f"{actor.name}'s song cuts through the fight with the ache of a false memory.")
-            if not self.saving_throw(target, "WIS", 13, context=f"against {actor.name}'s luring song"):
+            degree, _ = self.control_save_degree(target, "WIS", 13, context=f"against {actor.name}'s luring song")
+            if degree == "fail":
                 self.apply_status(target, "charmed", 1, source=f"{actor.name}'s luring song")
                 if target.is_conscious():
                     self.apply_status(target, "reeling", 1, source=f"{actor.name}'s luring song")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s luring song")
+                self.say(f"{target.name} hears the false memory and steps back from it late.")
             else:
                 self.say(f"{target.name} hears the beauty without trusting it.")
             return
         if actor.archetype == "whispermaw_blob":
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
-            if not self.saving_throw(target, "WIS", 13, context=f"against {actor.name}'s gibbering chorus"):
+            degree, _ = self.control_save_degree(target, "WIS", 13, context=f"against {actor.name}'s gibbering chorus")
+            if degree in {"fail", "close_fail"}:
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s gibbering chorus")
             if actor.resources.get("blinding_spittle", 0) > 0:
                 actor.resources["blinding_spittle"] = 0
                 self.say(f"{actor.name} spits a sheet of shining mucus at {target.name}.")
-                if not self.saving_throw(target, "DEX", 13, context=f"against {actor.name}'s blinding spittle"):
+                degree, _ = self.control_save_degree(target, "DEX", 13, context=f"against {actor.name}'s blinding spittle")
+                if degree == "fail":
                     self.apply_status(target, "blinded", 1, source=f"{actor.name}'s blinding spittle")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s blinding spittle")
+                    self.say(f"{target.name} twists clear of the worst of the spittle, blinking through the shine.")
                 else:
                     self.say(f"{target.name} twists clear of the worst of the spittle.")
                 return
@@ -2266,8 +2343,12 @@ class CombatFlowMixin:
             if target is not None:
                 actor.resources["shock_spines"] = 0
                 self.say(f"{actor.name}'s shell-spines flare and discharge into {target.name}.")
-                if not self.saving_throw(target, "CON", 13, context=f"against {actor.name}'s shock spines"):
+                degree, _ = self.control_save_degree(target, "CON", 13, context=f"against {actor.name}'s shock spines")
+                if degree == "fail":
                     self.apply_status(target, "paralyzed", 1, source=f"{actor.name}'s shock spines")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shock spines")
+                    self.say(f"{target.name} grits through the numbing pulse, muscles shaking as it fades.")
                 else:
                     self.say(f"{target.name} grits through the numbing pulse.")
                 return
@@ -2326,20 +2407,32 @@ class CombatFlowMixin:
             ray = self.rng.choice(("terror", "blinding", "binding"))
             self.say(f"{actor.name} turns and a new shard-ray locks onto {target.name}.")
             if ray == "terror":
-                if not self.saving_throw(target, "WIS", 14, context=f"against {actor.name}'s fear ray"):
+                degree, _ = self.control_save_degree(target, "WIS", 14, context=f"against {actor.name}'s fear ray")
+                if degree == "fail":
                     self.apply_status(target, "frightened", 2, source=f"{actor.name}'s fear ray")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s fear ray")
+                    self.say(f"{target.name} refuses the ray's pressure, but it still turns the breath cold.")
                 else:
                     self.say(f"{target.name} refuses the ray's pressure.")
             elif ray == "blinding":
-                if not self.saving_throw(target, "CON", 14, context=f"against {actor.name}'s blinding ray"):
+                degree, _ = self.control_save_degree(target, "CON", 14, context=f"against {actor.name}'s blinding ray")
+                if degree == "fail":
                     self.apply_status(target, "blinded", 1, source=f"{actor.name}'s blinding ray")
                     if target.is_conscious():
                         self.apply_status(target, "reeling", 1, source=f"{actor.name}'s blinding ray")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s blinding ray")
+                    self.say(f"{target.name} tears their vision back, shard-light still swimming in the way.")
                 else:
                     self.say(f"{target.name} tears their vision back out of the shard-light.")
             else:
-                if not self.saving_throw(target, "STR", 14, context=f"against {actor.name}'s binding ray"):
+                degree, _ = self.control_save_degree(target, "STR", 14, context=f"against {actor.name}'s binding ray")
+                if degree == "fail":
                     self.apply_status(target, "restrained", 1, source=f"{actor.name}'s binding ray")
+                elif degree == "close_fail":
+                    self.apply_status(target, "slowed", 1, source=f"{actor.name}'s binding ray")
+                    self.say(f"{target.name} breaks the ray's grip with hardening light still clinging to their legs.")
                 else:
                     self.say(f"{target.name} breaks the ray's grip before it hardens around them.")
             return
@@ -2348,16 +2441,24 @@ class CombatFlowMixin:
             actor.resources["shield_bash"] = 0
             self.say(f"{actor.name} marches through the line and slams a scripture-stamped shield into {target.name}.")
             hit = self.perform_enemy_attack(actor, target, heroes, enemies, dodging)
-            if hit and target.is_conscious() and not self.saving_throw(target, "STR", 14, context=f"against {actor.name}'s shield bash"):
-                self.apply_status(target, "prone", 1, source=f"{actor.name}'s shield bash")
-                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shield bash")
+            if hit and target.is_conscious():
+                degree, _ = self.control_save_degree(target, "STR", 14, context=f"against {actor.name}'s shield bash")
+                if degree == "fail":
+                    self.apply_status(target, "prone", 1, source=f"{actor.name}'s shield bash")
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shield bash")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shield bash")
             return
         if actor.archetype == "hookclaw_burrower" and actor.resources.get("shriek_pulse", 0) > 0:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["shriek_pulse"] = 0
             self.say(f"{actor.name} unleashes a shriek that bounces off every wall at once.")
-            if not self.saving_throw(target, "CON", 14, context=f"against {actor.name}'s shriek pulse"):
+            degree, _ = self.control_save_degree(target, "CON", 14, context=f"against {actor.name}'s shriek pulse")
+            if degree == "fail":
                 self.apply_status(target, "deafened", 2, source=f"{actor.name}'s shriek pulse")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shriek pulse")
+                self.say(f"{target.name} keeps enough hearing to stay oriented, though the echo staggers them.")
             else:
                 self.say(f"{target.name} keeps enough hearing to stay oriented.")
             return
@@ -2386,8 +2487,12 @@ class CombatFlowMixin:
             actor.resources["vengeance_mark"] = 0
             actor.bond_flags["marked_target"] = target.name
             self.say(f"{actor.name} points its ruined blade at {target.name} and names a debt that death did not cancel.")
-            if not self.saving_throw(target, "WIS", 14, context=f"against {actor.name}'s vengeance mark"):
+            degree, _ = self.control_save_degree(target, "WIS", 14, context=f"against {actor.name}'s vengeance mark")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s vengeance mark")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s vengeance mark")
+                self.say(f"{target.name} refuses the hatred, but the named debt still drags at the line.")
             else:
                 self.say(f"{target.name} refuses to let the revenant's hatred define the fight.")
             return
@@ -2395,8 +2500,12 @@ class CombatFlowMixin:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["hush_command"] = 0
             self.say(f"{actor.name} speaks one verdict, and the air around {target.name} goes murderously still.")
-            if not self.saving_throw(target, "WIS", 15, context=f"against {actor.name}'s hush command"):
+            degree, _ = self.control_save_degree(target, "WIS", 15, context=f"against {actor.name}'s hush command")
+            if degree == "fail":
                 self.apply_status(target, "incapacitated", 1, source=f"{actor.name}'s hush command")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s hush command")
+                self.say(f"{target.name} forces movement back into their limbs, late and shaking.")
             else:
                 self.say(f"{target.name} forces movement back into their own limbs.")
             return
@@ -2410,10 +2519,14 @@ class CombatFlowMixin:
             target = min(conscious_heroes, key=lambda hero: (hero.current_hp, hero.armor_class))
             actor.resources["shadow_web"] = 0
             self.say(f"{actor.name} hurls a shadow-thick web that blots out the light around {target.name}.")
-            if not self.saving_throw(target, "DEX", 15, context=f"against {actor.name}'s shadow web"):
+            degree, _ = self.control_save_degree(target, "DEX", 15, context=f"against {actor.name}'s shadow web")
+            if degree == "fail":
                 self.apply_status(target, "restrained", 2, source=f"{actor.name}'s shadow web")
                 if target.is_conscious():
                     self.apply_status(target, "blinded", 1, source=f"{actor.name}'s shadow web")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{actor.name}'s shadow web")
+                self.say(f"{target.name} cuts free, shadow strands still knotting around their gear.")
             else:
                 self.say(f"{target.name} cuts free before the web can cocoon them.")
             return
@@ -2452,32 +2565,52 @@ class CombatFlowMixin:
         if actor.archetype == "vaelith_marr" and actor.resources.get("grave_fear", 1) > 0:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["grave_fear"] = 0
-            if not self.saving_throw(target, "WIS", 13, context=f"against {actor.name}'s sepulchral chant"):
+            degree, _ = self.control_save_degree(target, "WIS", 13, context=f"against {actor.name}'s sepulchral chant")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 2, source=f"{actor.name}'s grave chant")
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s grave chant")
                 self.say(f"{actor.name}'s whisper turns old burial-cold into a command that rattles {target.name} badly.")
                 return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s grave chant")
+                self.say(f"{target.name} refuses the grave chant, but the cold thought still clips their footing.")
+                return
         if actor.archetype == "vaelith_marr" and actor.resources.get("ash_veil", 1) > 0:
             target = max(conscious_heroes, key=lambda hero: (hero.attack_bonus(), hero.current_hp))
             actor.resources["ash_veil"] = 0
-            if not self.saving_throw(target, "CON", 13, context=f"against {actor.name}'s choking ash veil"):
+            degree, _ = self.control_save_degree(target, "CON", 13, context=f"against {actor.name}'s choking ash veil")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s ash veil")
                 self.apply_status(target, "reeling", 1, source=f"{actor.name}'s ash veil")
                 self.say(f"{actor.name} bursts a veil of hot grave-ash across {target.name}'s face.")
                 return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s ash veil")
+                self.say(f"{target.name} spits out ash before it blinds them, still coughing in the line.")
+                return
         if actor.archetype == "gravecaller" and actor.resources.get("grave_fear", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["grave_fear"] = 0
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s sepulchral chant"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s sepulchral chant")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 2, source=f"{actor.name}'s grave chant")
                 self.say(f"{actor.name}'s whisper drags old burial-cold across {target.name}'s thoughts.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s grave chant")
+                self.say(f"{target.name} refuses the grave chant, but the cold thought still clips their footing.")
                 return
         if actor.archetype == "gravecaller" and actor.resources.get("ash_veil", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["ash_veil"] = 0
-            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s choking ash veil"):
+            degree, _ = self.control_save_degree(target, "CON", 12, context=f"against {actor.name}'s choking ash veil")
+            if degree == "fail":
                 self.apply_status(target, "blinded", 1, source=f"{actor.name}'s ash veil")
                 self.say(f"A veil of hot grave-ash bursts over {target.name}'s face.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s ash veil")
+                self.say(f"{target.name} spits out ash before it blinds them, still coughing in the line.")
                 return
         if actor.archetype == "orc_bloodchief" and actor.resources.get("war_cry", 1) > 0 and actor.current_hp <= actor.max_hp:
             actor.resources["war_cry"] = 0
@@ -2488,36 +2621,61 @@ class CombatFlowMixin:
         if actor.archetype == "nothic" and actor.resources.get("weird_insight", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["weird_insight"] = 0
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s hungry stare"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s hungry stare")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 2, source=f"{actor.name}'s weird insight")
                 self.say(f"{actor.name} speaks a private fear aloud, and {target.name} stumbles under the weight of being seen.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s weird insight")
+                self.say(f"{actor.name} finds the private fear, but {target.name} keeps it from becoming a wound.")
                 return
         if actor.archetype == "nothic" and actor.resources.get("rotting_gaze", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["rotting_gaze"] = 0
-            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s rotting gaze"):
+            degree, _ = self.control_save_degree(target, "CON", 12, context=f"against {actor.name}'s rotting gaze")
+            if degree == "fail":
                 self.apply_status(target, "poisoned", 2, source=f"{actor.name}'s rotting gaze")
                 self.say(f"{target.name} feels flesh and courage both go sick beneath {actor.name}'s stare.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "poisoned", 1, source=f"{actor.name}'s rotting gaze")
+                self.say(f"{target.name} chokes down the sickness, but it leaves a bitter edge.")
                 return
         if actor.archetype == "varyn" and actor.resources.get("silver_tongue", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["silver_tongue"] = 0
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s silver-tongued lure"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s silver-tongued lure")
+            if degree == "fail":
                 self.apply_status(target, "charmed", 1, source=actor.name)
                 self.say(f"{actor.name}'s measured voice bends the moment around {target.name}.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=actor.name)
+                self.say(f"{target.name} hears the lure and rejects it after one costly heartbeat.")
                 return
         if actor.archetype == "varyn" and actor.resources.get("binding_hex", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["binding_hex"] = 0
-            if not self.saving_throw(target, "WIS", 12, context=f"against {actor.name}'s binding hex"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {actor.name}'s binding hex")
+            if degree == "fail":
                 self.apply_status(target, "incapacitated", 1, source=f"{actor.name}'s binding hex")
                 self.say(f"A ring of ash-sigils clamps around {target.name}'s thoughts and locks them in place.")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s binding hex")
+                self.say(f"{target.name} breaks the hex before it locks, ash-sparks still crawling over their focus.")
                 return
         if actor.archetype == "varyn" and actor.resources.get("ashen_gaze", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
             actor.resources["ashen_gaze"] = 0
-            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s ash-glass gaze"):
+            degree, _ = self.control_save_degree(target, "CON", 12, context=f"against {actor.name}'s ash-glass gaze")
+            if degree == "fail":
                 self.apply_status(target, "petrified", 1, source=f"{actor.name}'s ash-glass gaze")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "restrained", 1, source=f"{actor.name}'s ash-glass gaze")
+                self.say(f"{target.name} wrenches free of the ash-glass stare before it seals.")
                 return
         if actor.archetype == "bandit_archer" and actor.resources.get("snare_shot", 1) > 0:
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
@@ -2545,8 +2703,13 @@ class CombatFlowMixin:
         if actor.archetype == "rukhar" and actor.resources.get("war_shout", 1) > 0:
             actor.resources["war_shout"] = 0
             target = min(conscious_heroes, key=lambda hero: hero.current_hp)
-            if not self.saving_throw(target, "CON", 12, context=f"against {actor.name}'s iron-bell war shout"):
+            degree, _ = self.control_save_degree(target, "CON", 12, context=f"against {actor.name}'s iron-bell war shout")
+            if degree == "fail":
                 self.apply_status(target, "deafened", 2, source=f"{actor.name}'s war shout")
+                return
+            if degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{actor.name}'s war shout")
+                self.say(f"{target.name} keeps their hearing, but the iron-bell shout still rattles bone.")
                 return
         if actor.archetype == "varyn" and actor.resources.get("rally", 1) > 0 and actor.current_hp <= actor.max_hp // 2:
             actor.resources["rally"] = 0

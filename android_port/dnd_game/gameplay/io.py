@@ -1032,6 +1032,8 @@ class GameIOMixin:
             raise ValueError("Choice lists must contain at least one option.")
         prompt_context_lines = tuple(getattr(self, "_latest_narration_lines", ()))
         sticky_count = max(0, min(sticky_trailing_options, len(options) - 1))
+        if sticky_count == 0 and options[-1].strip().lower() == "back":
+            sticky_count = 1
         sticky_options = options[-sticky_count:] if sticky_count else []
         paged_options = options[:-sticky_count] if sticky_count else options
         page_size = max(1, MENU_PAGE_SIZE - sticky_count)
@@ -1187,6 +1189,25 @@ class GameIOMixin:
             return f"{minutes}m {seconds:02d}s"
         return f"{seconds}s"
 
+    def format_save_timestamp(self, saved_at: object, *, fallback_path: Path | None = None) -> str:
+        timestamp: datetime | None = None
+        raw_saved_at = str(saved_at or "").strip()
+        if raw_saved_at:
+            for candidate in (raw_saved_at, raw_saved_at.replace("Z", "+00:00")):
+                try:
+                    timestamp = datetime.fromisoformat(candidate)
+                    break
+                except ValueError:
+                    continue
+        if timestamp is None and fallback_path is not None:
+            try:
+                timestamp = datetime.fromtimestamp(fallback_path.stat().st_mtime)
+            except OSError:
+                timestamp = None
+        if timestamp is None:
+            return "Unknown time"
+        return timestamp.strftime("%Y-%m-%d %H:%M")
+
     def party_level_from_save_data(self, data: dict[str, object]) -> int:
         companions = data.get("companions", [])
         members = [data.get("player"), *(companions if isinstance(companions, list) else [])]
@@ -1330,15 +1351,38 @@ class GameIOMixin:
             party_level = int(metadata.get("party_level") or self.party_level_from_save_data(data))
         except (TypeError, ValueError):
             party_level = self.party_level_from_save_data(data)
+        saved_at = metadata.get("saved_at", "")
         return {
             "label": self.save_display_label(path),
             "kind": str(metadata.get("kind") or ("autosave" if self.is_autosave_path(path) else "manual")).title(),
+            "saved_at": str(saved_at or ""),
+            "saved_at_label": self.format_save_timestamp(saved_at, fallback_path=path),
             "act_label": str(metadata.get("act_label") or self.act_label_from_number(act)),
             "scene_label": str(metadata.get("scene_label") or self.scene_label_from_key(scene_key)),
             "party_level": party_level,
             "playtime": self.format_playtime(playtime_seconds),
             "objective": str(objective),
         }
+
+    def save_preview_short_label(self, path: Path) -> str:
+        preview = self.save_preview_payload(path)
+        kind = str(preview["kind"])
+        kind_tag = "[Auto]" if kind.lower() == "autosave" else f"[{kind}]"
+        label = str(preview["label"])
+        for prefix in (kind_tag, "[Autosave]", "[Manual]"):
+            if label.startswith(prefix):
+                label = label[len(prefix):].strip()
+                break
+        if kind.lower() == "autosave" and " | " in label:
+            label = label.split(" | ", 1)[0].strip()
+        return f"{kind_tag} {label}"
+
+    def save_basic_menu_label(self, path: Path) -> str:
+        preview = self.save_preview_payload(path)
+        return (
+            f"{self.save_preview_short_label(path)} | "
+            f"Saved {preview['saved_at_label']} | Lv {preview['party_level']}"
+        )
 
     def save_preview_menu_label(self, path: Path) -> str:
         preview = self.save_preview_payload(path)
@@ -1361,6 +1405,7 @@ class GameIOMixin:
         preview = self.save_preview_payload(path)
         return (
             f"Type: {preview['kind']}\n"
+            f"Saved: {preview['saved_at_label']}\n"
             f"Act: {preview['act_label']}\n"
             f"Scene: {preview['scene_label']}\n"
             f"Party level: {preview['party_level']}\n"

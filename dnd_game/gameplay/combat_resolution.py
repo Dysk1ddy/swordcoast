@@ -11,6 +11,18 @@ from ..ui.rich_render import Group, Panel, box
 from .class_framework import CLASS_RESOURCE_COLORS, CLASS_RESOURCE_LABELS, CLASS_RESOURCE_ORDER
 from .class_framework import actor_uses_class_resource, class_resource_cap, clear_class_combat_state
 from .class_framework import synchronize_class_resources
+from .defense_formula import (
+    DEFENSE_POINT_CAP,
+    DEFENSE_POINT_DR_CAP,
+    DEFENSE_POINT_FLOOR,
+    BOSS_ENEMY_DEFENSE_LEVEL_SCALING_RATE,
+    ORDINARY_ENEMY_DEFENSE_LEVEL_SCALING_RATE,
+    PLAYER_DEFENSE_LEVEL_SCALING_RATE,
+    base_damage_reduction_for_defense,
+    damage_reduction_for_defense,
+    defense_points_for_damage_reduction,
+    defense_level_scaling_multiplier,
+)
 from .difficulty_policy import ACT_DIFFICULTY_BANDS, clamp_dc_to_band
 from .magic_points import current_magic_points, magic_point_cost, spend_magic_points
 from .status_effects import STANCE_STATUS_BY_KEY, STANCE_STATUS_NAMES
@@ -30,12 +42,12 @@ STANCE_LABELS = {
 }
 STANCE_SUMMARIES = {
     "neutral": "No stance modifiers.",
-    "guard": "+20% Defense, +2 Stability, -2 Accuracy.",
-    "brace": "+10% Defense, +4 Stability, -1 Avoidance, -1 Accuracy.",
-    "mobile": "+2 Avoidance, +2 retreat checks, -5% Defense, -1 Stability.",
-    "aggressive": "+2 Accuracy, +2 weapon damage, -10% Defense, -1 Avoidance.",
-    "aim": "+2 Accuracy, -5% Defense, -2 Avoidance, -1 Stability.",
-    "press": "+1 Accuracy, +10% Armor Break, +1 Stability, -5% Defense, -1 Avoidance.",
+    "guard": "+1 Defense, +2 Stability, -2 Accuracy.",
+    "brace": "+1 Defense, +4 Stability, -1 Avoidance, -1 Accuracy.",
+    "mobile": "+2 Avoidance, +2 retreat checks, -1 Defense, -1 Stability.",
+    "aggressive": "+2 Accuracy, +2 weapon damage, -2 Defense, -1 Avoidance.",
+    "aim": "+2 Accuracy, -1 Defense, -2 Avoidance, -1 Stability.",
+    "press": "+1 Accuracy, +10% Armor Break, +1 Stability, -1 Defense, -1 Avoidance.",
 }
 STANCE_ORDER = ("neutral", "guard", "brace", "mobile", "aggressive", "aim", "press")
 WEAPON_MASTER_STYLE_LABELS = {
@@ -317,7 +329,31 @@ class CombatResolutionMixin:
     def damage_type_uses_defense(self, damage_type: str) -> bool:
         return (damage_type or "").lower() in PHYSICAL_DEFENSE_DAMAGE_TYPES
 
-    def armor_defense_percent(self, armor) -> int:
+    def armor_uses_defense_points(self, armor) -> bool:
+        if armor is None:
+            return True
+        if getattr(armor, "defense_points", None) is not None:
+            return True
+        return getattr(armor, "defense_percent", None) is None
+
+    def actor_uses_defense_points(self, actor) -> bool:
+        if self.armor_uses_defense_points(getattr(actor, "armor", None)):
+            return True
+        profile = getattr(actor, "bond_flags", {}).get("combat_profile", {})
+        if isinstance(profile, dict) and "defense" in profile:
+            return True
+        point_keys = {
+            "defense_points",
+            "defense_cap_points",
+            "shield_defense_points",
+            "raised_shield_defense_points",
+        }
+        for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
+            if any(int(bonuses.get(key, 0) or 0) for key in point_keys):
+                return True
+        return False
+
+    def legacy_armor_defense_percent(self, armor) -> int:
         if armor is None:
             return 0
         explicit = getattr(armor, "defense_percent", None)
@@ -335,7 +371,37 @@ class CombatResolutionMixin:
             return min(25, 10 + max(0, base_ac - 11) * 5)
         return min(70, max(0, (base_ac - 10) * 5))
 
+    def armor_defense_points(self, armor) -> int:
+        if armor is None:
+            return DEFENSE_POINT_FLOOR
+        explicit = getattr(armor, "defense_points", None)
+        if explicit is not None:
+            return max(0, int(explicit))
+        legacy_percent = getattr(armor, "defense_percent", None)
+        if legacy_percent is not None:
+            return defense_points_for_damage_reduction(int(legacy_percent))
+        base_ac = int(getattr(armor, "base_ac", DEFENSE_POINT_FLOOR))
+        return max(DEFENSE_POINT_FLOOR, base_ac)
+
+    def armor_defense_percent(self, armor) -> int:
+        if self.armor_uses_defense_points(armor):
+            return round(base_damage_reduction_for_defense(self.armor_defense_points(armor)))
+        return self.legacy_armor_defense_percent(armor)
+
+    def defense_bonus_points(self, actor) -> int:
+        total = 0
+        for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
+            total += int(bonuses.get("defense_points", 0))
+            total += int(bonuses.get("defense", 0))
+            total += int(bonuses.get("AC", 0))
+            legacy_percent = int(bonuses.get("defense_percent", 0))
+            if legacy_percent:
+                total += int(legacy_percent / 5)
+        return max(0, min(2, total))
+
     def defense_bonus_percent(self, actor) -> int:
+        if self.actor_uses_defense_points(actor):
+            return self.defense_bonus_points(actor)
         total = 0
         for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
             total += int(bonuses.get("defense_percent", 0))
@@ -348,7 +414,19 @@ class CombatResolutionMixin:
             total += 5
         return total
 
-    def defense_cap_percent(self, actor) -> int:
+    def defense_cap_points(self, actor) -> int:
+        bonus_cap = 0
+        for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
+            cap = int(bonuses.get("defense_cap_points", bonuses.get("defense_cap", 0)))
+            if cap > 0:
+                bonus_cap = max(bonus_cap, cap)
+        armor = getattr(actor, "armor", None)
+        armor_cap = int(getattr(armor, "defense_cap_points", 0) or 0)
+        if armor_cap <= 0:
+            armor_cap = DEFENSE_POINT_CAP
+        return max(bonus_cap, armor_cap)
+
+    def legacy_defense_cap_percent(self, actor) -> int:
         bonus_cap = 0
         for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
             cap = int(bonuses.get("defense_cap_percent", bonuses.get("defense_cap", 0)))
@@ -368,7 +446,33 @@ class CombatResolutionMixin:
             armor_cap = max(armor_cap, 80)
         return max(bonus_cap, armor_cap)
 
+    def defense_cap_percent(self, actor) -> int:
+        if self.actor_uses_defense_points(actor):
+            cap_points = self.defense_cap_points(actor)
+            return damage_reduction_for_defense(
+                cap_points,
+                int(getattr(actor, "level", 1)),
+                int(getattr(actor, "level", 1)),
+                defender_is_enemy="enemy" in getattr(actor, "tags", []),
+                boss=self.enemy_uses_boss_defense_scaling(actor),
+            )
+        return self.legacy_defense_cap_percent(actor)
+
+    def shield_defense_points(self, actor) -> int:
+        if not getattr(actor, "shield", False):
+            return 0
+        total = 0
+        for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
+            total += int(bonuses.get("shield_defense_points", 0))
+            total += int(bonuses.get("shield_defense", 0))
+            legacy_percent = int(bonuses.get("shield_defense_percent", 0))
+            if legacy_percent:
+                total += max(1, round(legacy_percent / 5))
+        return total if total > 0 else 1
+
     def shield_defense_percent(self, actor) -> int:
+        if self.actor_uses_defense_points(actor):
+            return self.shield_defense_points(actor)
         if not getattr(actor, "shield", False):
             return 0
         total = 0
@@ -377,12 +481,48 @@ class CombatResolutionMixin:
             total += int(bonuses.get("shield_defense", 0)) * 5
         return total if total > 0 else 5
 
+    def raised_shield_defense_points(self, actor) -> int:
+        total = 0
+        for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
+            total += int(bonuses.get("raised_shield_defense_points", 0))
+            total += int(bonuses.get("raised_shield_defense", 0))
+            legacy_percent = int(bonuses.get("raised_shield_defense_percent", 0))
+            if legacy_percent:
+                total += max(1, round(legacy_percent / 10))
+        return total if total > 0 else 1
+
     def raised_shield_defense_percent(self, actor) -> int:
+        if self.actor_uses_defense_points(actor):
+            return self.raised_shield_defense_points(actor)
         total = 0
         for bonuses in (actor.equipment_bonuses, actor.gear_bonuses, actor.relationship_bonuses):
             total += int(bonuses.get("raised_shield_defense_percent", 0))
             total += int(bonuses.get("raised_shield_defense", 0)) * 5
         return total if total > 0 else 10
+
+    def status_defense_bonus_points(self, actor) -> int:
+        total = self.status_value(actor, "defense_bonus_points")
+        legacy_percent = self.status_value(actor, "defense_bonus_percent")
+        if legacy_percent:
+            total += int(legacy_percent / 5)
+        if self.has_status(actor, "anchor_shell") and int(actor.resources.get("ward", 0)) > 0:
+            total += 1
+        return total
+
+    def enemy_uses_boss_defense_scaling(self, actor) -> bool:
+        profile = getattr(actor, "bond_flags", {}).get("combat_profile", {})
+        if isinstance(profile, dict):
+            return profile.get("role") == "boss"
+        return False
+
+    def effective_defense_points(self, actor) -> int:
+        defense = self.armor_defense_points(getattr(actor, "armor", None))
+        defense += self.shield_defense_points(actor)
+        defense += self.defense_bonus_points(actor)
+        if self.has_status(actor, "raised_shield") and getattr(actor, "shield", False):
+            defense += self.raised_shield_defense_points(actor)
+        defense += self.status_defense_bonus_points(actor)
+        return max(0, min(defense, self.defense_cap_points(actor)))
 
     def total_armor_break_percent(self, target, *, source_actor=None, incoming_percent: int = 0, incoming_steps: int = 0) -> int:
         total = max(0, int(incoming_percent)) + max(0, int(incoming_steps)) * 10
@@ -407,9 +547,21 @@ class CombatResolutionMixin:
         *,
         damage_type: str = "",
         armor_break_percent: int = 0,
+        source_actor=None,
     ) -> int:
         if not self.damage_type_uses_defense(damage_type):
             return 0
+        if self.actor_uses_defense_points(actor):
+            attacker_level = int(getattr(source_actor, "level", getattr(actor, "level", 1)))
+            defense = damage_reduction_for_defense(
+                self.effective_defense_points(actor),
+                int(getattr(actor, "level", 1)),
+                attacker_level,
+                defender_is_enemy="enemy" in getattr(actor, "tags", []),
+                boss=self.enemy_uses_boss_defense_scaling(actor),
+            )
+            defense -= max(0, int(armor_break_percent))
+            return max(0, min(defense, int(DEFENSE_POINT_DR_CAP)))
         defense = self.armor_defense_percent(getattr(actor, "armor", None))
         defense += self.shield_defense_percent(actor)
         defense += self.defense_bonus_percent(actor)
@@ -835,7 +987,7 @@ class CombatResolutionMixin:
             self.say(f"{self.style_name(actor)} has no Pattern Read training.")
             return False
         ability, save_bonus = self.mage_lowest_resist_lane(target)
-        defense = self.effective_defense_percent(target, damage_type="slashing")
+        defense = self.combat_defense_label(target, source_actor=actor)
         avoidance = self.effective_avoidance(target)
         ward = int(getattr(target, "resources", {}).get("ward", 0))
         pattern_charge = self.total_arcanist_pattern_charges(target)
@@ -854,7 +1006,7 @@ class CombatResolutionMixin:
         charge_text = f", Pattern Charge {pattern_charge}" if pattern_charge else ""
         self.say(
             f"Pattern Read: {self.style_name(target)} shows {ability_label(ability, include_code=True)} "
-            f"{save_bonus:+d}, Defense {defense}%, Avoidance {avoidance:+d}{ward_text}{charge_text}."
+            f"{save_bonus:+d}, {defense}, Avoidance {avoidance:+d}{ward_text}{charge_text}."
         )
         self.record_opening_tutorial_combat_event("combat_pattern_read", actor=actor, target=target)
         return True
@@ -919,6 +1071,7 @@ class CombatResolutionMixin:
                 + self.status_accuracy_modifier(actor)
                 + self.attack_focus_modifier(actor, target)
                 + self.target_accuracy_modifier(target)
+                + self.karmic_accuracy_bonus(actor)
             )
             d20 = self.roll_check_d20(
                 actor,
@@ -931,6 +1084,7 @@ class CombatResolutionMixin:
                 context_label=f"{actor.name} casts {channel} at {target.name}",
             )
             total = d20.kept + total_modifier
+            self.consume_attack_pressure(target)
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and total < target_number):
                 if not self.handle_empty_hostile_attack(
@@ -1606,11 +1760,16 @@ class CombatResolutionMixin:
     def stability_target_label(self, target_number: int) -> str:
         return f"Stability {target_number}"
 
+    def combat_defense_label(self, actor, *, damage_type: str = "slashing", source_actor=None) -> str:
+        dr = self.effective_defense_percent(actor, damage_type=damage_type, source_actor=source_actor)
+        if self.actor_uses_defense_points(actor):
+            return f"Defense {self.effective_defense_points(actor)} (DR {dr}%)"
+        return f"Defense DR {dr}%"
+
     def combat_defense_summary(self, actor) -> str:
-        defense = self.effective_defense_percent(actor, damage_type="slashing")
         avoidance = self.effective_avoidance(actor)
         stability = self.effective_stability(actor)
-        return f"Defense {defense}%, Avoidance {avoidance:+d}, Stability {stability:+d}"
+        return f"{self.combat_defense_label(actor)}, Avoidance {avoidance:+d}, Stability {stability:+d}"
 
     def combat_resource_summary_line(self, actor, *, width: int | None = None) -> str | None:
         resource_lines: list[str] = []
@@ -1668,7 +1827,7 @@ class CombatResolutionMixin:
         if not changed:
             return False
         self.say(
-            f"{self.style_name(actor)} sets a guarded lane: +20% Defense, +2 Stability, and -2 Accuracy while the stance holds."
+            f"{self.style_name(actor)} sets a guarded lane: +1 Defense, +2 Stability, and -2 Accuracy while the stance holds."
         )
         self.record_opening_tutorial_combat_event("combat_guard_stance", actor=actor)
         return True
@@ -1678,11 +1837,12 @@ class CombatResolutionMixin:
 
     def use_raise_shield(self, actor) -> None:
         self.apply_status(actor, "raised_shield", 2, source=f"{actor.name}'s raised shield")
-        defense = self.raised_shield_defense_percent(actor)
-        self.say(f"{self.style_name(actor)} raises a shield and gains +{defense}% Defense until their next turn.")
+        defense = self.raised_shield_defense_points(actor)
+        self.say(f"{self.style_name(actor)} raises a shield and gains +{defense} Defense until their next turn.")
 
     def use_weapon_read(self, actor, target) -> None:
-        defense = self.effective_defense_percent(target, damage_type="slashing")
+        defense = self.effective_defense_percent(target, damage_type="slashing", source_actor=actor)
+        defense_label = self.combat_defense_label(target, source_actor=actor)
         avoidance = self.effective_avoidance(target)
         stability = self.effective_stability(target)
         armor_break = self.total_armor_break_percent(target)
@@ -1711,7 +1871,7 @@ class CombatResolutionMixin:
             answer = "shove, prone, or pin pressure"
         break_text = f", Armor Break {armor_break}%" if armor_break else ""
         self.say(
-            f"Weapon Read: {self.style_name(target)} has {defense_band} Defense ({defense}%), "
+            f"Weapon Read: {self.style_name(target)} has {defense_band} {defense_label}, "
             f"{avoidance_band} Avoidance ({avoidance:+d}), and {stability_band} Stability ({stability:+d}){break_text}. "
             f"Best answer: {answer}."
         )
@@ -2066,25 +2226,76 @@ class CombatResolutionMixin:
         )
 
     def karmic_accuracy_bonus(self, actor) -> int:
-        return 0
+        if not getattr(self, "_in_combat", False) or not self.is_party_member_actor(actor):
+            return 0
+        return max(0, min(2, int(getattr(actor, "bond_flags", {}).get("combat_bad_streak", 0) or 0)))
 
     def record_karmic_hostile_action_result(self, actor, *, meaningful: bool) -> None:
-        return
+        if not getattr(self, "_in_combat", False) or not self.is_party_member_actor(actor):
+            return
+        flags = getattr(actor, "bond_flags", {})
+        if meaningful:
+            flags.pop("combat_bad_streak", None)
+            return
+        previous = max(0, int(flags.get("combat_bad_streak", 0) or 0))
+        current = min(2, previous + 1)
+        flags["combat_bad_streak"] = current
+        if current > previous:
+            self.say(f"{self.style_name(actor)} reads the miss and tightens the next line. Accuracy +{current}.")
+            self.grant_karmic_resource_progress(actor)
 
     def grant_karmic_resource_progress(self, actor) -> None:
-        return
+        current_round = int(getattr(self, "_active_round_number", 0) or 0)
+        key = "combat_bad_streak_resource_round"
+        if int(getattr(actor, "bond_flags", {}).get(key, -1)) == current_round:
+            return
+        actor.bond_flags[key] = current_round
+        if self.actor_uses_class_resource(actor, "grit"):
+            self.grant_warrior_grit(actor, source="reading the miss")
+        elif self.actor_uses_class_resource(actor, "focus"):
+            self.grant_mage_focus(actor, source="reading the miss")
+        elif self.actor_uses_class_resource(actor, "edge"):
+            self.grant_rogue_edge(actor, source="reading the miss")
 
     def attack_near_miss_margin(self, total: int, target_number: int) -> int:
         return target_number - total
 
     def can_apply_pressure_result(self, actor, target, *, total: int, target_number: int) -> bool:
-        return False
+        if not getattr(self, "_in_combat", False) or not self.is_party_member_actor(actor):
+            return False
+        if target is None or not getattr(target, "is_conscious", lambda: False)():
+            return False
+        if "enemy" not in getattr(target, "tags", []):
+            return False
+        margin = self.attack_near_miss_margin(total, target_number)
+        return 1 <= margin <= 3
 
     def apply_chipped_armor_pressure(self, target, *, source: str = "") -> bool:
-        return False
+        if target is None or not getattr(target, "is_conscious", lambda: False)():
+            return False
+        current = max(0, int(getattr(target, "conditions", {}).get("chipped_armor", 0) or 0))
+        if current >= 2:
+            return False
+        target.conditions["chipped_armor"] = current + 1
+        source_text = f" from {source}" if source else ""
+        self.say(f"{self.style_name(target)} is now {self.status_name('chipped_armor')}{source_text}.")
+        return True
 
     def apply_pressure_result(self, actor, target, *, source: str, physical: bool = True) -> bool:
-        return False
+        if target is None or not getattr(target, "is_conscious", lambda: False)():
+            return False
+        self.apply_status(target, "pressured", 99, source=f"{actor.name}'s {source} pressure")
+        if not physical:
+            self.add_arcanist_pattern_charge(actor, target, source=f"{source} pressure")
+        self.record_karmic_hostile_action_result(actor, meaningful=True)
+        self.say(f"{self.style_name(actor)} turns the miss into Pressure. The next attack into {self.style_name(target)} gains +1 Accuracy.")
+        return True
+
+    def consume_attack_pressure(self, target) -> bool:
+        if not self.has_status(target, "pressured"):
+            return False
+        self.clear_status(target, "pressured")
+        return True
 
     def handle_empty_hostile_attack(
         self,
@@ -2097,6 +2308,9 @@ class CombatResolutionMixin:
         physical: bool = True,
         allow_pressure: bool = True,
     ) -> bool:
+        if allow_pressure and self.can_apply_pressure_result(actor, target, total=total, target_number=target_number):
+            return self.apply_pressure_result(actor, target, source=source, physical=physical)
+        self.record_karmic_hostile_action_result(actor, meaningful=False)
         return False
 
     def use_iron_draw(self, actor, target) -> None:
@@ -2113,7 +2327,7 @@ class CombatResolutionMixin:
         self.apply_status(actor, "shoulder_in", 2, source=f"{actor.name}'s Shoulder In")
         if already_guarding:
             self.grant_juggernaut_momentum(actor, source="doubling down in Guard")
-        self.say(f"{self.style_name(actor)} shoulders into the line and tightens Guard by +5% Defense.")
+        self.say(f"{self.style_name(actor)} shoulders into the line and tightens Guard by +1 Defense.")
         return True
 
     def is_weapon_master_actor(self, actor) -> bool:
@@ -2307,6 +2521,8 @@ class CombatResolutionMixin:
             + self.status_accuracy_modifier(actor)
             + self.attack_focus_modifier(actor, target)
             + self.weapon_master_style_accuracy_modifier(actor, target)
+            + self.target_accuracy_modifier(target)
+            + self.karmic_accuracy_bonus(actor)
             + accuracy_bonus
         )
         d20 = self.roll_check_d20(
@@ -2320,6 +2536,7 @@ class CombatResolutionMixin:
             context_label=f"{actor.name} uses {label} on {target.name}",
         )
         total = d20.kept + total_modifier
+        self.consume_attack_pressure(target)
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
             if self.handle_empty_hostile_attack(
@@ -2432,7 +2649,7 @@ class CombatResolutionMixin:
         spend_text = f" and burns {spend} Fury" if spend else ""
         damage_text = f"+{spend} damage" if spend else "no extra damage"
         self.say(
-            f"{self.style_name(actor)} hits Redline{spend_text}: +2 Accuracy, {damage_text}, -5% Defense, and -1 Avoidance."
+            f"{self.style_name(actor)} hits Redline{spend_text}: +2 Accuracy, {damage_text}, -1 Defense, and -1 Avoidance."
         )
         return True
 
@@ -2477,6 +2694,7 @@ class CombatResolutionMixin:
             + self.attack_focus_modifier(actor, target)
             + self.weapon_master_style_accuracy_modifier(actor, target)
             + self.target_accuracy_modifier(target)
+            + self.karmic_accuracy_bonus(actor)
             + accuracy_bonus
         )
         d20 = self.roll_check_d20(
@@ -2490,6 +2708,7 @@ class CombatResolutionMixin:
             context_label=f"{actor.name} uses {label} on {target.name}",
         )
         total = d20.kept + total_modifier
+        self.consume_attack_pressure(target)
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if apply_reckless_opening:
             self.apply_status(actor, "reckless_opening", 2, source=label)
@@ -2690,6 +2909,7 @@ class CombatResolutionMixin:
             + self.attack_focus_modifier(actor, target)
             + self.weapon_master_style_accuracy_modifier(actor, target)
             + self.target_accuracy_modifier(target)
+            + self.karmic_accuracy_bonus(actor)
             + accuracy_bonus
         )
         d20 = self.roll_check_d20(
@@ -2703,6 +2923,7 @@ class CombatResolutionMixin:
             context_label=f"{actor.name} uses {label} on {target.name}",
         )
         total = d20.kept + total_modifier
+        self.consume_attack_pressure(target)
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
             if self.handle_empty_hostile_attack(
@@ -2888,7 +3109,7 @@ class CombatResolutionMixin:
         if not self.can_make_hostile_action(actor):
             self.say(f"{self.style_name(actor)} can't read an enemy for harm while Charmed.")
             return False
-        defense = self.effective_defense_percent(target, damage_type="slashing")
+        defense = self.combat_defense_label(target, source_actor=actor)
         avoidance = self.effective_avoidance(target)
         stability = self.effective_stability(target)
         armor_break = self.total_armor_break_percent(target)
@@ -2901,7 +3122,7 @@ class CombatResolutionMixin:
         poison_text = f", Poison stacks {poison_stacks}" if poison_stacks else ""
         break_text = f", Armor Break {armor_break}%" if armor_break else ""
         self.say(
-            f"Tool Read: {self.style_name(target)} shows Defense {defense}%, "
+            f"Tool Read: {self.style_name(target)} shows {defense}, "
             f"Avoidance {avoidance:+d}, Stability {stability:+d}{break_text}{poison_text}."
         )
         return True
@@ -3001,6 +3222,7 @@ class CombatResolutionMixin:
                 + self.weapon_master_style_accuracy_modifier(actor, target)
                 + self.assassin_accuracy_modifier(actor, target, heroes)
                 + self.target_accuracy_modifier(target)
+                + self.karmic_accuracy_bonus(actor)
                 + accuracy_bonus
             )
             d20 = self.roll_check_d20(
@@ -3014,6 +3236,7 @@ class CombatResolutionMixin:
                 context_label=f"{actor.name} uses {label} on {target.name}",
             )
             total = d20.kept + total_modifier
+            self.consume_attack_pressure(target)
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
                 if self.handle_empty_hostile_attack(
@@ -3282,6 +3505,7 @@ class CombatResolutionMixin:
                 + self.weapon_master_style_accuracy_modifier(actor, target)
                 + self.assassin_accuracy_modifier(actor, target, heroes)
                 + self.target_accuracy_modifier(target)
+                + self.karmic_accuracy_bonus(actor)
                 + accuracy_bonus
             )
             d20 = self.roll_check_d20(
@@ -3295,6 +3519,7 @@ class CombatResolutionMixin:
                 context_label=f"{actor.name} uses {label} on {target.name}",
             )
             total = d20.kept + total_modifier
+            self.consume_attack_pressure(target)
             critical_hit = d20.kept >= self.critical_threshold(actor)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
                 if self.handle_empty_hostile_attack(
@@ -3914,7 +4139,12 @@ class CombatResolutionMixin:
                 self.grant_juggernaut_momentum(target, source="armor taking the force")
             if source_actor is not None and self.target_is_fixated_by(target, source_actor):
                 self.grant_juggernaut_momentum(target, source="a Fixated enemy pressing in")
-        if source_actor is not None and self.damage_resolution_creates_glance_pressure(result, damage_type=damage_type):
+        if (
+            source_actor is not None
+            and "enemy" in getattr(target, "tags", [])
+            and "enemy" not in getattr(source_actor, "tags", [])
+            and self.damage_resolution_creates_glance_pressure(result, damage_type=damage_type)
+        ):
             self.apply_chipped_armor_pressure(target, source=f"{source_actor.name}'s Glance pressure")
         if source_actor is not None and result.wound:
             self.trigger_on_wound_hooks(source_actor, target, result)
@@ -3923,6 +4153,8 @@ class CombatResolutionMixin:
         if not self.damage_type_uses_defense(damage_type):
             return False
         if result.raw_damage <= 0 or result.resisted_damage <= 0 or result.hp_damage > 0:
+            return False
+        if result.defense_percent < 30:
             return False
         if result.glance:
             return True
@@ -3950,6 +4182,7 @@ class CombatResolutionMixin:
                 + actor.gear_bonuses.get("attack", 0)
                 + actor.relationship_bonuses.get("attack", 0)
                 + self.status_accuracy_modifier(actor)
+                + self.karmic_accuracy_bonus(actor)
             )
         d20 = self.roll_check_d20(
             actor,
@@ -3963,10 +4196,12 @@ class CombatResolutionMixin:
         )
         total = d20.kept + total_modifier
         if d20.kept == 1 or (d20.kept != 20 and total < target_number):
+            self.record_karmic_hostile_action_result(actor, meaningful=False)
             self.say(f"{self.style_name(actor)} shoves into {self.style_name(target)}, but the footing holds.")
             return
         margin = total - target_number
         self.apply_status(target, "prone", 1, source=f"{actor.name}'s shove")
+        self.record_karmic_hostile_action_result(actor, meaningful=True)
         self.say(f"{self.style_name(actor)} breaks {self.style_name(target)}'s footing with a shove.")
         if margin >= 5 and target.is_conscious():
             self.apply_status(target, "reeling", 1, source=f"{actor.name}'s shove")
@@ -3984,6 +4219,7 @@ class CombatResolutionMixin:
             + self.status_accuracy_modifier(actor)
             + self.attack_focus_modifier(actor, target)
             + self.target_accuracy_modifier(target)
+            + self.karmic_accuracy_bonus(actor)
         )
         d20 = self.roll_check_d20(
             actor,
@@ -3996,6 +4232,7 @@ class CombatResolutionMixin:
             context_label=f"{actor.name} pins {target.name}",
         )
         total = d20.kept + total_modifier
+        self.consume_attack_pressure(target)
         critical_hit = d20.kept >= self.critical_threshold(actor)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
             if self.handle_empty_hostile_attack(
@@ -4067,6 +4304,7 @@ class CombatResolutionMixin:
                 + self.weapon_master_style_accuracy_modifier(attacker, target)
                 + self.assassin_accuracy_modifier(attacker, target, heroes)
                 + self.target_accuracy_modifier(target)
+                + self.karmic_accuracy_bonus(attacker)
             )
             d20 = self.roll_check_d20(
                 attacker,
@@ -4079,6 +4317,7 @@ class CombatResolutionMixin:
                 context_label=f"{attacker.name} attacks {target.name}",
             )
             total = d20.kept + total_modifier
+            self.consume_attack_pressure(target)
             if d20.kept == 1:
                 self.handle_empty_hostile_attack(
                     attacker,
@@ -4231,6 +4470,7 @@ class CombatResolutionMixin:
             context_label=f"{attacker.name} attacks {target.name}",
         )
         total = d20.kept + total_modifier
+        self.consume_attack_pressure(target)
         critical_hit = d20.kept == 20 and not target.gear_bonuses.get("crit_immunity", 0)
         if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
             false_target_triggered = self.maybe_trigger_false_target_miss(
@@ -4375,19 +4615,31 @@ class CombatResolutionMixin:
             self.say(f"{attacker.name} turns the first clean opening into {self.style_damage(extra)} extra ambush damage.")
             self.announce_downed_target(target)
         if attacker.archetype in {"wolf", "worg"} and target.is_conscious():
-            if not self.saving_throw(target, "STR", 11, context=f"against {attacker.name}'s mauling rush"):
+            degree, _ = self.control_save_degree(target, "STR", 11, context=f"against {attacker.name}'s mauling rush")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=attacker.name)
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=attacker.name)
         if attacker.archetype == "briar_twig" and target.is_conscious():
-            if not self.saving_throw(target, "STR", 11, context=f"against {attacker.name}'s snagging thorns"):
+            degree, _ = self.control_save_degree(target, "STR", 11, context=f"against {attacker.name}'s snagging thorns")
+            if degree == "fail":
                 self.apply_status(target, "reeling", 2, source=f"{attacker.name}'s snagging thorns")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{attacker.name}'s snagging thorns")
         if actual > 0 and attacker.archetype == "carrion_stalker" and target.is_conscious():
             self.apply_status(target, "bleeding", 2, source=f"{attacker.name}'s serrated talons")
         if attacker.archetype == "bandit" and d20.kept >= 18 and target.is_conscious():
-            if not self.saving_throw(target, "STR", 11, context=f"against {attacker.name}'s clinch"):
+            degree, _ = self.control_save_degree(target, "STR", 11, context=f"against {attacker.name}'s clinch")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 1, source=attacker.name)
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=attacker.name)
         if attacker.archetype == "acidmaw_burrower" and target.is_conscious():
-            if not self.saving_throw(target, "STR", 12, context=f"against {attacker.name}'s burrowing clamp"):
+            degree, _ = self.control_save_degree(target, "STR", 12, context=f"against {attacker.name}'s burrowing clamp")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 1, source=f"{attacker.name}'s burrowing clamp")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{attacker.name}'s burrowing clamp")
         if attacker.archetype == "rust_shell_scuttler" and target.is_conscious():
             if self.has_status(target, "acid"):
                 extra = self.apply_damage(
@@ -4404,18 +4656,27 @@ class CombatResolutionMixin:
                 self.announce_downed_target(target)
             self.apply_status(target, "acid", 2, source=f"{attacker.name}'s rust-bite")
         if attacker.archetype == "ogre_brute" and d20.kept >= 18 and target.is_conscious():
-            if not self.saving_throw(target, "STR", 12, context=f"against {attacker.name}'s club smash"):
+            degree, _ = self.control_save_degree(target, "STR", 12, context=f"against {attacker.name}'s club smash")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=attacker.name)
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=attacker.name)
         if attacker.archetype == "nothic" and d20.kept >= 18 and target.is_conscious():
-            if not self.saving_throw(target, "WIS", 12, context=f"against {attacker.name}'s invasive whisper"):
+            degree, _ = self.control_save_degree(target, "WIS", 12, context=f"against {attacker.name}'s invasive whisper")
+            if degree == "fail":
                 self.apply_status(target, "frightened", 1, source=attacker.name)
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=attacker.name)
         if actual > 0 and attacker.archetype in {"rukhar", "varyn", "mireweb_spider", "ettervine_webherd", "duskmire_matriarch"}:
             self.apply_poison_on_hit(attacker, target)
         if attacker.archetype == "cache_mimic" and target.is_conscious():
             if attacker.resources.get("adhesive_grab", 0) > 0:
                 attacker.resources["adhesive_grab"] = 0
-            if not self.saving_throw(target, "STR", 13, context=f"against {attacker.name}'s adhesive bite"):
+            degree, _ = self.control_save_degree(target, "STR", 13, context=f"against {attacker.name}'s adhesive bite")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 2, source=f"{attacker.name}'s adhesive bite")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{attacker.name}'s adhesive bite")
         if attacker.archetype == "stonegaze_skulker" and target.is_conscious() and self.has_status(target, "restrained"):
             extra = self.apply_damage(
                 target,
@@ -4431,14 +4692,20 @@ class CombatResolutionMixin:
             self.announce_downed_target(target)
         if attacker.archetype == "grimlock_tunneler" and target.is_conscious():
             if self.has_status(target, "reeling") or d20.kept >= 18:
-                if not self.saving_throw(target, "STR", 12, context=f"against {attacker.name}'s hooked drag"):
+                degree, _ = self.control_save_degree(target, "STR", 12, context=f"against {attacker.name}'s hooked drag")
+                if degree == "fail":
                     self.apply_status(target, "grappled", 2, source=f"{attacker.name}'s hooked drag")
+                elif degree == "close_fail":
+                    self.apply_status(target, "reeling", 1, source=f"{attacker.name}'s hooked drag")
         if attacker.archetype == "hookclaw_burrower" and target.is_conscious():
-            if not self.saving_throw(target, "STR", 14, context=f"against {attacker.name}'s cave drag"):
+            degree, _ = self.control_save_degree(target, "STR", 14, context=f"against {attacker.name}'s cave drag")
+            if degree == "fail":
                 already_grappled = self.has_status(target, "grappled")
                 self.apply_status(target, "grappled", 2, source=f"{attacker.name}'s cave drag")
                 if already_grappled:
                     self.apply_status(target, "prone", 1, source=f"{attacker.name}'s cave drag")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{attacker.name}'s cave drag")
         if attacker.archetype == "stirge_swarm" and target.is_conscious():
             attacker.bond_flags["attached_to"] = target.name
             self.apply_status(target, "grappled", 2, source=f"{attacker.name}'s feeding swarm")
@@ -4458,21 +4725,36 @@ class CombatResolutionMixin:
             self.apply_status(target, "acid", 2, source=f"{attacker.name}'s corrosive slime")
             self.announce_downed_target(target)
         if attacker.archetype == "animated_armor" and target.is_conscious() and d20.kept >= 18:
-            if not self.saving_throw(target, "STR", 13, context=f"against {attacker.name}'s driving slam"):
+            degree, _ = self.control_save_degree(target, "STR", 13, context=f"against {attacker.name}'s driving slam")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=f"{attacker.name}'s driving slam")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{attacker.name}'s driving slam")
         if attacker.archetype == "cliff_harpy" and target.is_conscious() and attacker.resources.get("swoop", 0) > 0:
             attacker.resources["swoop"] = 0
-            if not self.saving_throw(target, "STR", 12, context=f"against {attacker.name}'s swooping pass"):
+            degree, _ = self.control_save_degree(target, "STR", 12, context=f"against {attacker.name}'s swooping pass")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=f"{attacker.name}'s swoop")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{attacker.name}'s swoop")
         if attacker.archetype == "whispermaw_blob" and target.is_conscious() and d20.kept >= 18:
-            if not self.saving_throw(target, "STR", 13, context=f"against {attacker.name}'s warped bulk"):
+            degree, _ = self.control_save_degree(target, "STR", 13, context=f"against {attacker.name}'s warped bulk")
+            if degree == "fail":
                 self.apply_status(target, "prone", 1, source=f"{attacker.name}'s warped bulk")
+            elif degree == "close_fail":
+                self.apply_status(target, "reeling", 1, source=f"{attacker.name}'s warped bulk")
         if attacker.archetype == "blacklake_pincerling" and target.is_conscious():
-            if not self.saving_throw(target, "STR", 13, context=f"against {attacker.name}'s pincer hold"):
+            degree, _ = self.control_save_degree(target, "STR", 13, context=f"against {attacker.name}'s pincer hold")
+            if degree == "fail":
                 self.apply_status(target, "grappled", 2, source=f"{attacker.name}'s pincer hold")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{attacker.name}'s pincer hold")
         if attacker.archetype == "thunderroot_mound" and target.is_conscious():
-            if not self.saving_throw(target, "STR", 14, context=f"against {attacker.name}'s grasping roots"):
+            degree, _ = self.control_save_degree(target, "STR", 14, context=f"against {attacker.name}'s grasping roots")
+            if degree == "fail":
                 self.apply_status(target, "restrained", 2, source=f"{attacker.name}'s grasping roots")
+            elif degree == "close_fail":
+                self.apply_status(target, "slowed", 1, source=f"{attacker.name}'s grasping roots")
         if attacker.archetype == "oathbroken_revenant" and target.is_conscious():
             if target.name == str(attacker.bond_flags.get("marked_target", "")):
                 extra = self.apply_damage(
@@ -4527,6 +4809,7 @@ class CombatResolutionMixin:
                 + self.status_accuracy_modifier(attacker)
                 + self.attack_focus_modifier(attacker, target)
                 + self.target_accuracy_modifier(target)
+                + self.karmic_accuracy_bonus(attacker)
             )
             d20 = self.roll_check_d20(
                 attacker,
@@ -4539,6 +4822,7 @@ class CombatResolutionMixin:
                 context_label=f"{attacker.name} off-hand attack",
             )
             total = d20.kept + total_modifier
+            self.consume_attack_pressure(target)
             critical_hit = d20.kept >= self.critical_threshold(attacker)
             if d20.kept == 1 or (not critical_hit and d20.kept != 20 and total < target_number):
                 if not self.handle_empty_hostile_attack(
@@ -4784,6 +5068,7 @@ class CombatResolutionMixin:
                 target,
                 damage_type=damage_type,
                 armor_break_percent=total_armor_break_percent,
+                source_actor=source_actor,
             )
             damage = damage * (100 - defense_percent) // 100
         mitigated_damage = damage
@@ -5037,6 +5322,8 @@ class CombatResolutionMixin:
         outcome = self.saving_throw_result(actor, ability, dc, context=context, against_poison=against_poison)
         if outcome.success:
             return ("close_success" if outcome.margin <= 4 else "success"), outcome
+        if outcome.margin >= -4:
+            return "close_fail", outcome
         return "fail", outcome
 
     def roll_with_advantage(self, actor, advantage_state: int) -> D20Outcome:

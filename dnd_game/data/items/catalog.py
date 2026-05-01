@@ -5,6 +5,7 @@ from pathlib import Path
 import random
 import re
 
+from ...gameplay.defense_formula import DEFENSE_POINT_CAP, base_damage_reduction_for_defense
 from ...models import Armor, Character, Weapon
 from ...ui.colors import colorize, rarity_color
 
@@ -71,9 +72,13 @@ class Item:
     ac_bonus: int = 0
     defense_percent: int = 0
     defense_cap_percent: int = 0
+    defense_points: int = 0
+    defense_cap_points: int = 0
     shield_bonus: int = 0
     shield_defense_percent: int = 0
     raised_shield_defense_percent: int = 0
+    shield_defense_points: int = 0
+    raised_shield_defense_points: int = 0
     attack_bonus: int = 0
     damage_bonus: int = 0
     initiative_bonus: int = 0
@@ -475,6 +480,12 @@ ARMOR_BASES = [
         "heavy": False,
         "defense_percent": 30,
         "defense_cap_percent": 75,
+        "defense_points_by_rarity": {
+            "common": 14,
+            "uncommon": 15,
+            "rare": 16,
+            "epic": 16,
+        },
         "weight": 20.0,
         "value": 400,
         "description": "A polished cuirass that protects without slowing the wearer much.",
@@ -488,6 +499,7 @@ ARMOR_BASES = [
         "heavy": True,
         "defense_percent": 35,
         "defense_cap_percent": 80,
+        "defense_points": 15,
         "stealth_disadvantage": True,
         "weight": 55.0,
         "value": 75,
@@ -527,7 +539,7 @@ SHIELD_BASES = [
 
 GEAR_BASES = [
     {"slug": "traveler_hood", "name": "Traveler's Hood", "slot": "head", "item_type": "helmet", "weight": 1.0, "value": 5, "description": "A practical hood and cap for road dust.", "skill_bonuses": {"Perception": 1}, "rarities": {"common", "uncommon"}},
-    {"slug": "iron_cap", "name": "Iron Cap", "slot": "head", "item_type": "helmet", "weight": 2.0, "value": 12, "description": "A metal cap favored by caravan guards.", "ac_bonus": 1, "rarities": {"common", "uncommon", "rare"}},
+    {"slug": "iron_cap", "name": "Iron Cap", "slot": "head", "item_type": "helmet", "weight": 2.0, "value": 12, "description": "A metal cap favored by caravan guards.", "defense_points": 1, "rarities": {"common", "uncommon", "rare"}},
     {"slug": "delver_lantern_hood", "name": "Delver Lantern Hood", "slot": "head", "item_type": "helmet", "weight": 1.2, "value": 18, "description": "A miner's hood stitched around a shuttered crystal lantern and polished brow mirror.", "skill_bonuses": {"Investigation": 1, "Perception": 1}, "rarities": {"uncommon", "rare"}, "source": "Resonant Vault side chambers, expedition quartermasters, and recovered survey caches."},
     {"slug": "wayfarer_boots", "name": "Wayfarer Boots", "slot": "boots", "item_type": "boots", "weight": 2.0, "value": 8, "description": "Boots made for trail miles and rocky ground.", "skill_bonuses": {"Survival": 1}, "rarities": {"common", "uncommon"}},
     {"slug": "silent_step_boots", "name": "Silent Step Boots", "slot": "boots", "item_type": "boots", "weight": 2.0, "value": 18, "description": "Soft-soled boots stitched for scouts and burglars.", "skill_bonuses": {"Stealth": 1}, "rarities": {"uncommon", "rare", "epic"}},
@@ -535,7 +547,7 @@ GEAR_BASES = [
     {"slug": "work_gloves", "name": "Work Gloves", "slot": "gloves", "item_type": "gloves", "weight": 1.0, "value": 4, "description": "Tough gloves that help with climbing and hauling.", "skill_bonuses": {"Athletics": 1}, "rarities": {"common", "uncommon"}},
     {"slug": "scribe_gloves", "name": "Scribe Gloves", "slot": "gloves", "item_type": "gloves", "weight": 0.5, "value": 10, "description": "Fine gloves marked with ink-proof sigils.", "skill_bonuses": {"Arcana": 1, "Investigation": 1}, "rarities": {"uncommon", "rare"}},
     {"slug": "forgehand_gauntlets", "name": "Forgehand Gauntlets", "slot": "gloves", "item_type": "gloves", "weight": 2.0, "value": 20, "description": "Rune-etched work gauntlets built for hauling ore, bracing shields, and striking through sparks.", "skill_bonuses": {"Athletics": 1}, "rarities": {"uncommon", "rare"}, "source": "Collapsed smithies, Compact work camps, and Resonant Vault tool lockers."},
-    {"slug": "reinforced_breeches", "name": "Reinforced Cloak", "slot": "cape", "item_type": "cloak", "weight": 2.0, "value": 7, "description": "A travel cloak with patchwork reinforcement stitched into the lining.", "ac_bonus": 1, "rarities": {"common", "uncommon"}},
+    {"slug": "reinforced_breeches", "name": "Reinforced Cloak", "slot": "cape", "item_type": "cloak", "weight": 2.0, "value": 7, "description": "A travel cloak with patchwork reinforcement stitched into the lining.", "defense_points": 1, "rarities": {"common", "uncommon"}},
     {"slug": "trail_leggings", "name": "Trail Mantle", "slot": "cape", "item_type": "cloak", "weight": 1.5, "value": 9, "description": "A flexible mantle cut to stay out of the way on rough roads.", "skill_bonuses": {"Acrobatics": 1}, "rarities": {"common", "uncommon"}},
     {"slug": "copper_ring", "name": "Copper Ring", "slot": "ring", "item_type": "ring", "weight": 0.1, "value": 6, "description": "A cheap ring carried for luck or sentiment.", "skill_bonuses": {"Persuasion": 1}, "rarities": {"common", "uncommon"}},
     {"slug": "watcher_ring", "name": "Watcher's Ring", "slot": "ring", "item_type": "ring", "weight": 0.1, "value": 20, "description": "A ring etched with tiny all-seeing eyes.", "skill_bonuses": {"Insight": 1, "Perception": 1}, "rarities": {"uncommon", "rare", "epic"}},
@@ -851,7 +863,7 @@ UNIQUE_REWARD_ITEMS = [
         "slot": "cape",
         "properties": ["cloak", "quest_reward"],
         "skill_bonuses": {"Survival": 1},
-        "ac_bonus": 1,
+        "defense_points": 1,
         "notes": ["A practical badge of road service that helps the wearer travel and keep their guard up."],
     },
     {
@@ -1490,6 +1502,12 @@ def build_weapon_item(base: dict[str, object], rarity: str) -> Item:
 def build_armor_item(base: dict[str, object], rarity: str) -> Item:
     defense_bonus = RARITY_ARMOR_DEFENSE_BONUS[rarity]
     magic = armor_enchantment_for(base, rarity)
+    defense_by_rarity = base.get("defense_points_by_rarity")
+    if isinstance(defense_by_rarity, dict) and rarity in defense_by_rarity:
+        defense_points = int(defense_by_rarity[rarity])
+    else:
+        defense_points = int(base.get("defense_points", base["base_ac"])) + RARITY_ARMOR_BONUS[rarity]
+    defense_points += int(magic.get("defense_points_bonus", 0))
     armor = Armor(
         name=f"{RARITY_PREFIX[rarity]} {base['name']}",
         base_ac=int(base["base_ac"]),
@@ -1499,6 +1517,8 @@ def build_armor_item(base: dict[str, object], rarity: str) -> Item:
         stealth_disadvantage=bool(magic.get("stealth_disadvantage", base.get("stealth_disadvantage", False))),
         defense_percent=int(base.get("defense_percent", 0)) + defense_bonus,
         defense_cap_percent=int(base.get("defense_cap_percent", 75 if base.get("armor_type") in {"medium", "heavy"} else 45)),
+        defense_points=defense_points,
+        defense_cap_points=int(base.get("defense_cap_points", 22)),
     )
     return Item(
         item_id=f"{base['slug']}_{rarity}",
@@ -1523,8 +1543,11 @@ def build_armor_item(base: dict[str, object], rarity: str) -> Item:
 
 def build_shield_item(base: dict[str, object], rarity: str) -> Item:
     ac_bonus = 0 if rarity == "common" else 1 if rarity in {"uncommon", "rare"} else 2 if rarity == "epic" else 3
-    defense_bonus = RARITY_SHIELD_DEFENSE_BONUS[rarity]
     magic = shield_enchantment_for(rarity)
+    shield_points = int(base.get("shield_defense_points", 1)) + (1 if rarity in {"rare", "epic", "legendary"} else 0)
+    raised_shield_points = int(base.get("raised_shield_defense_points", 1))
+    shield_defense_percent = shield_points * 5
+    raised_shield_defense_percent = raised_shield_points * 5
     return Item(
         item_id=f"{base['slug']}_{rarity}",
         name=f"{RARITY_PREFIX[rarity]} {base['name']}",
@@ -1538,8 +1561,10 @@ def build_shield_item(base: dict[str, object], rarity: str) -> Item:
         slot=str(base["slot"]),
         properties=list(base.get("properties", [])),
         shield_bonus=int(base["shield_bonus"]) + ac_bonus,
-        shield_defense_percent=int(base.get("shield_defense_percent", 5)) + defense_bonus,
-        raised_shield_defense_percent=int(base.get("raised_shield_defense_percent", 10)),
+        shield_defense_percent=shield_defense_percent,
+        raised_shield_defense_percent=raised_shield_defense_percent,
+        shield_defense_points=shield_points,
+        raised_shield_defense_points=raised_shield_points,
         enchantment=magic.get("enchantment"),
         initiative_bonus=int(magic.get("initiative_bonus", 0)),
         skill_bonuses=dict(magic.get("skill_bonuses") or {}) or None,
@@ -1552,6 +1577,7 @@ def build_gear_item(base: dict[str, object], rarity: str) -> Item:
     skill_bonuses = dict(base.get("skill_bonuses", {}))
     save_bonuses = dict(base.get("save_bonuses", {}))
     ac_bonus = int(base.get("ac_bonus", 0))
+    defense_points = int(base.get("defense_points", ac_bonus))
     rarity_scale = RARITY_ORDER.index(rarity)
     magic = gear_enchantment_for(base, rarity)
     if rarity_scale >= 2 and skill_bonuses:
@@ -1560,9 +1586,10 @@ def build_gear_item(base: dict[str, object], rarity: str) -> Item:
     if rarity_scale >= 3 and save_bonuses:
         first_key = next(iter(save_bonuses))
         save_bonuses[first_key] += 1
-    if rarity_scale >= 4:
+    if defense_points and rarity_scale >= 4:
         ac_bonus += 1
-    defense_percent = int(base.get("defense_percent", 0)) + ac_bonus * 5
+        defense_points += 1
+    defense_percent = int(base.get("defense_percent", 0)) + defense_points * 5
     for key, bonus in dict(magic.get("skill_bonuses") or {}).items():
         skill_bonuses[key] = skill_bonuses.get(key, 0) + bonus
     for key, bonus in dict(magic.get("save_bonuses") or {}).items():
@@ -1584,6 +1611,8 @@ def build_gear_item(base: dict[str, object], rarity: str) -> Item:
         ac_bonus=ac_bonus,
         defense_percent=defense_percent,
         defense_cap_percent=int(base.get("defense_cap_percent", 0)),
+        defense_points=defense_points,
+        defense_cap_points=int(base.get("defense_cap_points", 0)),
         initiative_bonus=int(magic.get("initiative_bonus", 0)),
         healing_bonus=int(magic.get("healing_bonus", 0)),
         enchantment=magic.get("enchantment"),
@@ -2233,6 +2262,43 @@ def ability_label_for_weapon(item: Item) -> str:
     return item.weapon.ability.title()
 
 
+def armor_defense_points(armor: Armor) -> int:
+    explicit = getattr(armor, "defense_points", None)
+    if explicit is not None:
+        return max(0, int(explicit))
+    return max(0, int(getattr(armor, "base_ac", 10)))
+
+
+def item_defense_points_bonus(item: Item) -> int:
+    if item.defense_points:
+        return max(0, int(item.defense_points))
+    if item.ac_bonus:
+        return max(0, int(item.ac_bonus))
+    if item.defense_percent:
+        return max(1, round(int(item.defense_percent) / 5))
+    return 0
+
+
+def shield_defense_points(item: Item) -> int:
+    if item.shield_defense_points:
+        return max(0, int(item.shield_defense_points))
+    if item.shield_defense_percent:
+        return max(1, round(int(item.shield_defense_percent) / 5))
+    return 0
+
+
+def raised_shield_defense_points(item: Item) -> int:
+    if item.raised_shield_defense_points:
+        return max(0, int(item.raised_shield_defense_points))
+    if item.raised_shield_defense_percent:
+        return max(1, round(int(item.raised_shield_defense_percent) / 10))
+    return 0
+
+
+def defense_points_rules_text(defense: int) -> str:
+    return f"Defense {defense} (DR {base_damage_reduction_for_defense(defense):.1f}%)"
+
+
 def item_rules_text(item: Item) -> str:
     rules: list[str] = []
     if item.weapon is not None:
@@ -2246,30 +2312,31 @@ def item_rules_text(item: Item) -> str:
         if item.weapon.to_hit_bonus or item.weapon.damage_bonus:
             rules.append(f"tuned +{item.weapon.to_hit_bonus} strike / +{item.weapon.damage_bonus} damage")
     if item.armor is not None:
-        defense = item.armor.defense_percent
-        if defense is None:
-            defense = max(0, (item.armor.base_ac - 10) * 5)
-        armor_bits = [f"Defense {defense}%"]
-        if item.armor.defense_cap_percent:
-            armor_bits.append(f"cap {item.armor.defense_cap_percent}%")
-        if item.armor.dex_cap is None and item.item_type != "clothing":
+        defense = armor_defense_points(item.armor)
+        armor_bits = [defense_points_rules_text(defense)]
+        if item.armor.defense_cap_points and item.armor.defense_cap_points < DEFENSE_POINT_CAP:
+            armor_bits.append(f"cap {item.armor.defense_cap_points}")
+        if item.armor.dex_cap is None:
             armor_bits.append("full Dex")
         elif item.armor.dex_cap is not None:
             armor_bits.append(f"Dex cap +{item.armor.dex_cap}")
         if item.armor.stealth_disadvantage:
             armor_bits.append("Stealth strain")
         rules.append(", ".join(armor_bits))
-    if item.shield_defense_percent:
-        shield_text = f"shield Defense +{item.shield_defense_percent}%"
-        if item.raised_shield_defense_percent:
-            shield_text += f", raised +{item.raised_shield_defense_percent}%"
+    shield_points = shield_defense_points(item)
+    if shield_points:
+        shield_text = f"shield Defense +{shield_points}"
+        raised_points = raised_shield_defense_points(item)
+        if raised_points:
+            shield_text += f", raised +{raised_points}"
         rules.append(shield_text)
-    if item.shield_bonus and not item.shield_defense_percent:
+    if item.shield_bonus and not shield_points:
         rules.append(f"legacy shield AC +{item.shield_bonus}")
-    if item.defense_percent:
-        rules.append(f"Defense +{item.defense_percent}%")
+    defense_bonus = item_defense_points_bonus(item)
+    if defense_bonus:
+        rules.append(f"Defense +{defense_bonus}")
     elif item.ac_bonus:
-        rules.append(f"Defense +{item.ac_bonus * 5}%")
+        rules.append(f"Defense +{item.ac_bonus}")
     if item.heal_dice is not None:
         rules.append(f"restores {item.heal_dice}+{item.heal_bonus}")
     if item.revive_hp:

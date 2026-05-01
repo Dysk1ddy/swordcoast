@@ -32,7 +32,7 @@ CLASSES = {
         "skill_choices": ["Arcana", "History", "Insight", "Investigation", "Medicine", "Nature", "Perception", "Religion"],
         "skill_picks": 3,
         "weapon": Weapon(name="Quarterstaff", damage="1d6", ability="STR"),
-        "armor": Armor(name="Warded Coat", base_ac=11, armor_type="light", defense_percent=10, defense_cap_percent=45),
+        "armor": Armor(name="Warded Coat", base_ac=11, armor_type="light", defense_percent=10, defense_cap_percent=45, defense_points=11, defense_cap_points=22),
         "shield": False,
         "features": ["mage_charge", "mage_focus", "arcane_bolt", "minor_channel", "pattern_read", "ground", "focused_eye"],
         "resources": {},

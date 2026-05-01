@@ -9,6 +9,7 @@ saves, tests, and creation flow remain stable during the retcon.
 
 from collections.abc import Mapping
 
+from ...gameplay.defense_formula import base_damage_reduction_for_defense
 from ...models import SKILL_TO_ABILITY
 from .character_options.backgrounds import BACKGROUNDS
 from .character_options.classes import CLASSES, CLASS_LEVEL_PROGRESSION
@@ -789,7 +790,8 @@ def format_armor_summary(class_name: str) -> str:
     shield = "shield included" if CLASSES[class_name]["shield"] else "no shield"
     if armor is None:
         return f"Starts unarmored with {shield}."
-    armor_bits = [f"{armor.name} (base Defense {armor.base_ac})", shield]
+    defense = int(getattr(armor, "defense_points", armor.base_ac) or armor.base_ac)
+    armor_bits = [f"{armor.name} (Defense {defense}, DR {base_damage_reduction_for_defense(defense):.1f}%)", shield]
     if armor.heavy:
         armor_bits.append("heavy shell")
     elif armor.dex_cap is None:

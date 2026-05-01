@@ -263,19 +263,22 @@ class InventoryManagementMixin:
 
     def equipment_comparison_summary(self, before: Character, after: Character) -> str:
         parts: list[str] = []
+        defense_uses_points = self.actor_uses_defense_points(after) or self.actor_uses_defense_points(before)
+        defense_delta = (
+            self.effective_defense_points(after) - self.effective_defense_points(before)
+            if defense_uses_points
+            else self.effective_defense_percent(after, damage_type="slashing")
+            - self.effective_defense_percent(before, damage_type="slashing")
+        )
         core_stats = [
-            (
-                "Defense",
-                self.effective_defense_percent(after, damage_type="slashing")
-                - self.effective_defense_percent(before, damage_type="slashing"),
-            ),
+            ("Defense", defense_delta),
             ("strike", after.attack_bonus() - before.attack_bonus()),
             ("damage", after.damage_bonus() - before.damage_bonus()),
             ("initiative", self.initiative_bonus(after) - self.initiative_bonus(before)),
         ]
         for label, delta in core_stats:
             if delta:
-                suffix = "%" if label == "Defense" else ""
+                suffix = "%" if label == "Defense" and not defense_uses_points else ""
                 parts.append(self.format_delta(label, delta, suffix=suffix))
         if before.weapon.name != after.weapon.name:
             parts.append(f"weapon: {before.weapon.name} -> {after.weapon.name}")

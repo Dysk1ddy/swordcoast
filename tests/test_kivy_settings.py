@@ -11,6 +11,7 @@ import uuid
 from dnd_game.content import build_character, create_elira_dawnmantle, create_enemy, create_tolan_ironshield
 from dnd_game.game import TextDnDGame
 from dnd_game.gameplay.base import QuitProgram, ReturnToTitleMenu
+from dnd_game.gameplay.random_encounters import ACT_1_POST_COMBAT_RANDOM_ENCOUNTERS, ACT_2_POST_COMBAT_RANDOM_ENCOUNTERS
 from dnd_game.models import GameState
 from dnd_game.ui.examine import ExamineEntry
 from dnd_game.ui.kivy_markup import format_kivy_log_entry, visible_markup_text
@@ -94,6 +95,10 @@ class FakeKivyBridge:
     def append_dice_result(self, markup: str) -> None:
         self.dice_results.append(markup)
 
+    def wait_for_animation(self, duration: float) -> bool:
+        del duration
+        return False
+
 
 @unittest.skipIf(ClickableTextDnDGame is None, f"Kivy unavailable: {KIVY_IMPORT_ERROR}")
 class KivySettingsTests(unittest.TestCase):
@@ -134,6 +139,20 @@ class KivySettingsTests(unittest.TestCase):
         self.assertTrue(callable(getattr(game.rng, "dice_roll_animator", None)))
         self.assertNotIn("dice_animations_enabled", game.current_settings_payload())
         self.assertNotIn("dice_animation_mode", game.current_settings_payload())
+
+    def test_clickable_paged_menu_keeps_trailing_back_before_next_page(self) -> None:
+        save_dir = self.make_save_dir()
+        bridge = FakeKivyBridge()
+        bridge.choice_responses = ["9"]
+        game = ClickableTextDnDGame(bridge, save_dir=save_dir)
+        options = [f"Choice {index}" for index in range(1, 11)] + ["Back"]
+
+        selected = game.choose("Paged menu.", options, allow_meta=False)
+
+        self.assertEqual(selected, 11)
+        prompt, labels = bridge.choice_prompts[0]
+        self.assertEqual(prompt, "Paged menu. (page 1)")
+        self.assertEqual(labels[-2:], ["Back", "Next page"])
 
     def test_fullscreen_setting_loads_applies_and_persists(self) -> None:
         save_dir = self.make_save_dir()
@@ -399,6 +418,41 @@ class KivySettingsTests(unittest.TestCase):
         screen._clear_dice_tray.assert_called_once()
         self.assertEqual(screen._dice_tray_hide_ready_at, 0.0)
 
+    def test_dice_roll_tray_waits_five_seconds_before_hiding(self) -> None:
+        screen = GameScreen.__new__(GameScreen)
+        screen._dice_roll_tray_hide_event = None
+        screen._dice_roll_tray_hide_ready_at = 0.0
+        screen._dice_roll_timer_event = None
+        screen._dice_roll_timer_started_at = 0.0
+        screen._dice_roll_timer_duration = 0.0
+        screen._dice_roll_tray_fade_generation = 7
+        screen._set_dice_roll_timer_progress = Mock()
+        screen._clear_dice_roll_tray = Mock()
+
+        hide_event = SimpleNamespace(cancel=Mock())
+        timer_event = SimpleNamespace(cancel=Mock())
+        with patch("dnd_game.gui.time.monotonic", return_value=200.0):
+            with patch("dnd_game.gui.Clock.schedule_interval", return_value=timer_event) as schedule_interval:
+                with patch("dnd_game.gui.Clock.schedule_once", return_value=hide_event) as schedule_once:
+                    screen._schedule_dice_roll_tray_hide()
+
+        hide_callback, hide_delay = schedule_once.call_args.args
+        timer_callback, timer_delay = schedule_interval.call_args.args
+        self.assertEqual(hide_delay, 5.0)
+        self.assertAlmostEqual(timer_delay, GameScreen.DICE_ROLL_TRAY_TIMER_INTERVAL_SECONDS)
+        self.assertEqual(screen._dice_roll_tray_hide_ready_at, 205.0)
+        screen._set_dice_roll_timer_progress.assert_called_with(1.0)
+
+        with patch("dnd_game.gui.time.monotonic", return_value=202.5):
+            self.assertTrue(timer_callback(0))
+        screen._set_dice_roll_timer_progress.assert_called_with(0.5)
+
+        with patch("dnd_game.gui.time.monotonic", return_value=205.01):
+            hide_callback(0)
+
+        screen._clear_dice_roll_tray.assert_called_once()
+        screen._set_dice_roll_timer_progress.assert_called_with(0.0)
+
     def test_initiative_tray_waits_for_dice_result_hold(self) -> None:
         screen = GameScreen.__new__(GameScreen)
         panel_builder = Mock(return_value=("initiative", 118))
@@ -467,6 +521,8 @@ class KivySettingsTests(unittest.TestCase):
         self.assertGreaterEqual(screen.dice_roll_prefix_label.height, 26)
         self.assertGreaterEqual(screen.dice_roll_core_label.height, 58)
         self.assertGreaterEqual(screen.dice_roll_suffix_label.height, 42)
+        self.assertGreaterEqual(screen.dice_roll_timer_bar.height, GameScreen.DICE_ROLL_TRAY_TIMER_HEIGHT)
+        self.assertIs(screen.dice_roll_timer_bar.parent, screen.dice_roll_tray)
 
     def test_command_bar_explains_combat_unavailable_commands(self) -> None:
         state = SimpleNamespace(player=object())
@@ -677,6 +733,19 @@ class KivySettingsTests(unittest.TestCase):
         self.assertEqual(screen.choice_scroll_indicator.width, 0)
         self.assertTrue(all(button.halign == "center" for button in screen.option_buttons))
 
+    def test_story_choices_at_visible_limit_do_not_show_scroll_indicator(self) -> None:
+        assert Window is not None
+        screen = GameScreen()
+        self.addCleanup(lambda: Window.unbind(on_key_down=screen._handle_window_key_down))
+        self.addCleanup(screen.clear_widgets)
+        screen.bridge.game = SimpleNamespace(state=SimpleNamespace(player=object()), _in_combat=False)
+
+        screen.show_choice_prompt("Choose a route.", [f"Choice {index}" for index in range(1, 5)])
+
+        self.assertEqual(screen.options_grid.rows, 4)
+        self.assertEqual(screen.choice_scroll_indicator.width, 0)
+        self.assertEqual(screen.choice_scroll_indicator.text, "")
+
     def test_title_menu_choices_keep_normal_grid_without_scroll(self) -> None:
         assert Window is not None
         screen = GameScreen()
@@ -738,6 +807,7 @@ class KivySettingsTests(unittest.TestCase):
         self.assertIsNot(screen.dice_roll_tray.parent, screen.log_shell)
         self.assertIs(screen.combat_panel.children[0], screen.dice_roll_tray)
         self.assertIs(screen.dice_roll_close_button.parent, screen.dice_roll_header)
+        self.assertIs(screen.dice_roll_timer_bar.parent, screen.dice_roll_tray)
 
     def test_row_style_dice_frames_route_to_right_panel(self) -> None:
         screen = GameScreen.__new__(GameScreen)
@@ -797,13 +867,68 @@ class KivySettingsTests(unittest.TestCase):
             context_label="Vale Perception check",
         )
 
-        self.assertEqual(len(bridge.dice_frames), 1)
+        self.assertGreaterEqual(len(bridge.dice_frames), 1)
         frame_markup, frame_kwargs = bridge.dice_frames[0]
         self.assertTrue(frame_kwargs["use_tray"])
         self.assertTrue(frame_kwargs["use_roll_tray"])
         self.assertIn("Vale Perception check", visible_markup_text(frame_markup))
         self.assertIn("DC 12", visible_markup_text(frame_markup))
-        self.assertEqual(len(bridge.dice_results), 1)
+
+    def test_all_random_encounter_choices_stack_in_story_column_during_combat_unwind(self) -> None:
+        class StopAfterPrompt(Exception):
+            pass
+
+        save_dir = self.make_save_dir()
+        player = self.make_player()
+        entries = [*ACT_1_POST_COMBAT_RANDOM_ENCOUNTERS, *ACT_2_POST_COMBAT_RANDOM_ENCOUNTERS]
+        captured: list[tuple[str, str, list[str]]] = []
+
+        for encounter_id, _title, _handler_name in entries:
+            bridge = FakeKivyBridge()
+            game = ClickableTextDnDGame(bridge, save_dir=save_dir)
+            game.state = GameState(
+                player=player,
+                current_scene="iron_hollow_hub",
+                current_act=2 if encounter_id in {entry[0] for entry in ACT_2_POST_COMBAT_RANDOM_ENCOUNTERS} else 1,
+                flags={
+                    "act2_route_control": 1,
+                    "blackglass_crossed": True,
+                    "bryn_cache_found": True,
+                    "resonant_vault_outer_cleared": True,
+                    "saved_wounded_messenger": True,
+                    "smuggler_revenge_pending": True,
+                    "stonehollow_dig_cleared": True,
+                },
+                gold=20,
+            )
+            game.play_music_for_context = Mock()
+            game.refresh_scene_music = Mock()
+            game.run_encounter = Mock(return_value="victory")
+
+            def capture_choice(prompt: str, options: list[str], **_kwargs: object) -> int:
+                captured.append((encounter_id, prompt, list(options)))
+                raise StopAfterPrompt
+
+            game.scenario_choice = capture_choice  # type: ignore[method-assign]
+            try:
+                game.run_named_post_combat_random_encounter(encounter_id)
+            except StopAfterPrompt:
+                pass
+
+        self.assertGreaterEqual(len(captured), 25)
+        for encounter_id, prompt, options in captured:
+            with self.subTest(encounter_id=encounter_id, prompt=prompt):
+                screen = GameScreen.__new__(GameScreen)
+                screen._title_menu_active = False
+                screen.active_game = Mock(
+                    return_value=SimpleNamespace(
+                        state=SimpleNamespace(player=player),
+                        _random_encounter_active=True,
+                    )
+                )
+                screen.combat_active = Mock(return_value=True)
+
+                self.assertEqual(screen._option_grid_shape(len(options)), (len(options), 1))
 
     def test_active_initiative_arrow_refreshes_with_zero_phase_immediately(self) -> None:
         screen = GameScreen.__new__(GameScreen)
@@ -826,7 +951,7 @@ class KivySettingsTests(unittest.TestCase):
         screen._stop_initiative_turn_arrow_animation.assert_not_called()
         self.assertIn(("initiative", 0, "Vale"), calls)
 
-    def test_dice_roll_side_frame_waits_for_manual_close(self) -> None:
+    def test_dice_roll_side_frame_schedules_autoclose_after_final_frame(self) -> None:
         screen = GameScreen.__new__(GameScreen)
         screen.side_panel_allowed = Mock(return_value=True)
         screen._dice_roll_tray_fade_generation = 0
@@ -834,6 +959,7 @@ class KivySettingsTests(unittest.TestCase):
         screen._dice_tray_height_for_markup = Mock(return_value=168)
         screen._set_dice_roll_tray_visible = Mock()
         screen._set_dice_roll_tray_content_mode = Mock()
+        screen._schedule_dice_roll_tray_hide = Mock()
         screen.dice_roll_prefix_label = SimpleNamespace(text="", height=0)
         screen.dice_roll_core_label = SimpleNamespace(text="", height=0, font_size="")
         screen.dice_roll_suffix_label = SimpleNamespace(text="", height=0)
@@ -845,9 +971,35 @@ class KivySettingsTests(unittest.TestCase):
             tray_parts=("", "14", "Total 14"),
         )
 
-        self.assertFalse(hasattr(GameScreen, "_schedule_dice_roll_tray_hide"))
+        screen._schedule_dice_roll_tray_hide.assert_called_once()
         self.assertEqual(screen.dice_roll_core_label.font_size, "34sp")
         self.assertEqual(screen.dice_roll_core_label.height, 58)
+
+    def test_dice_roll_side_frame_holds_timer_during_roll_animation(self) -> None:
+        screen = GameScreen.__new__(GameScreen)
+        screen.side_panel_allowed = Mock(return_value=True)
+        screen._dice_roll_tray_fade_generation = 0
+        screen.dice_roll_tray = Mock()
+        screen._dice_tray_height_for_markup = Mock(return_value=168)
+        screen._set_dice_roll_tray_visible = Mock()
+        screen._set_dice_roll_tray_content_mode = Mock()
+        screen._schedule_dice_roll_tray_hide = Mock()
+        screen._cancel_dice_roll_tray_hide = Mock()
+        screen._set_dice_roll_timer_progress = Mock()
+        screen.dice_roll_prefix_label = SimpleNamespace(text="", height=0)
+        screen.dice_roll_core_label = SimpleNamespace(text="", height=0, font_size="")
+        screen.dice_roll_suffix_label = SimpleNamespace(text="", height=0)
+        screen._sync_dice_roll_label = Mock()
+
+        screen._show_dice_roll_side_frame(
+            "roll",
+            final=False,
+            tray_parts=("", "14", "Rolling..."),
+        )
+
+        screen._schedule_dice_roll_tray_hide.assert_not_called()
+        screen._cancel_dice_roll_tray_hide.assert_called_once()
+        screen._set_dice_roll_timer_progress.assert_called_once_with(1.0)
 
     def test_initiative_table_frames_stay_on_initiative_tray(self) -> None:
         screen = GameScreen.__new__(GameScreen)

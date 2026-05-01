@@ -46,7 +46,8 @@ class CharacterCreationMixin:
         play_music_for_context = getattr(self, "play_music_for_context", None)
         if callable(play_music_for_context):
             play_music_for_context("main_menu")
-        self.prompt_for_new_game_difficulty()
+        if not self.prompt_for_new_game_difficulty():
+            return
         while True:
             self.banner("Character Creation")
             mode = self.choose(
@@ -69,10 +70,13 @@ class CharacterCreationMixin:
                 return
             self.say("Let's rebuild them from the start.")
 
-    def prompt_for_new_game_difficulty(self) -> None:
-        options = [self.difficulty_mode_label(mode) for mode in self.DIFFICULTY_MODES]
+    def prompt_for_new_game_difficulty(self) -> bool:
+        options = [self.difficulty_mode_label(mode) for mode in self.DIFFICULTY_MODES] + [BACK_OPTION]
         choice = self.choose("Choose a difficulty for this new game.", options, allow_meta=False)
+        if choice == len(options):
+            return False
         self.set_difficulty_mode(self.DIFFICULTY_MODES[choice - 1])
+        return True
 
     def create_custom_character(self) -> Character | None:
         name = ""

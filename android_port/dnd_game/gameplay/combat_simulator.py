@@ -391,6 +391,7 @@ def simulate_weapon_damage(
         target,
         damage_type=damage_type,
         armor_break_percent=total_armor_break,
+        source_actor=attacker,
     )
     damage_bonus = attacker.damage_bonus() + game.status_damage_modifier(attacker)
     normal_distribution = add_damage_bonus(dice_total_distribution(attacker.weapon.damage), damage_bonus)

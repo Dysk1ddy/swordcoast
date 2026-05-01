@@ -103,12 +103,12 @@ class FullEncounterPassTests(unittest.TestCase):
             party_armor_break_percent=20,
         )
 
-        self.assertEqual(base.max_enemy_defense_percent, 55)
+        self.assertEqual(base.max_enemy_defense_percent, 51)
         self.assertGreater(broken.party_expected_damage_per_round, base.party_expected_damage_per_round)
         self.assertLess(broken.rounds_to_clear, base.rounds_to_clear * 0.9)
         self.assertTrue(
             any(
-                action.armor_break_percent >= 20 and action.defense_percent <= 35
+                action.armor_break_percent >= 20 and action.defense_percent <= 31
                 for action in broken.party_actions
                 if action.action_name.startswith("Weapon:")
             )
